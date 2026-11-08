@@ -450,6 +450,7 @@ namespace QuestShade
                     if (l == 5 || n.IndexOf("UI", StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("Menu", StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("Overlay", StringComparison.OrdinalIgnoreCase) >= 0)
                         mask |= 1 << l;
                 }
+            mask |= 1 << UiLayer;
             _uiMask = mask;
             return mask;
         }
@@ -505,6 +506,32 @@ namespace QuestShade
                 if (Vector3.Dot(hf, to / d) > 0.55f) { LastMenu = cv.name; return true; }
             }
             return false;
+        }
+
+        private const int UiLayer = 5;
+        private static float _menuLayerAt;
+        private static bool _menuLayerLogged;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void KeepMenusOffCamera()
+        {
+            if (Time.unscaledTime < _menuLayerAt) return;
+            _menuLayerAt = Time.unscaledTime + 1f;
+            int moved = 0;
+            var rig = BoneLib.Player.UIRig;
+            if (rig != null && rig.popUpMenu != null && rig.popUpMenu.preferencesPanelView != null)
+                moved += ToUiLayer(rig.popUpMenu.preferencesPanelView.transform);
+            var tut = Il2CppSLZ.Bonelab.TutorialRig.Instance;
+            if (tut != null && tut.headTitles != null) moved += ToUiLayer(tut.headTitles.transform);
+            if (moved > 0 && !_menuLayerLogged) { _menuLayerLogged = true; Mod.Log.Msg($"Menus: moved {moved} BoneMenu / notification parts onto the UI layer (the camera never films them now)"); }
+        }
+
+        private static int ToUiLayer(Transform root)
+        {
+            int n = 0;
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t != null && t.gameObject.layer == 0) { t.gameObject.layer = UiLayer; n++; }
+            return n;
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

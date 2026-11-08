@@ -98,6 +98,7 @@ namespace QuestShade
                 Updater.Tick();
                 if (_boneLib)
                 {
+                    try { BoneMenuUi.KeepMenusOffCamera(); } catch { }
                     bool was = EyeAdaptation.Hold;
                     try { EyeAdaptation.Hold = BoneMenuUi.MenuInView(_fx.BoundCamera != null ? _fx.BoundCamera.transform : null); } catch { EyeAdaptation.Hold = false; }
                     if (EyeAdaptation.Hold && !was && _cfg.EyeAdapt) Log.Msg($"Eye adaptation paused while menu '{BoneMenuUi.LastMenu}' is open");
