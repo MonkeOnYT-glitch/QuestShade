@@ -151,7 +151,8 @@
 </nav>
 
 <header class="hero">
-  <video autoplay muted loop playsinline poster="media/poster.jpg">
+  <video id="reel" autoplay muted loop playsinline webkit-playsinline preload="auto" disablepictureinpicture disableremoteplayback poster="media/poster.jpg">
+    <source src="media/reel-m.mp4" type="video/mp4" media="(max-width: 760px)">
     <source src="media/reel.mp4" type="video/mp4">
   </video>
   <div class="bar top"></div><div class="bar bot"></div>
@@ -257,6 +258,16 @@
     const r = c.getBoundingClientRect();
     c.style.setProperty("--mx", (e.clientX - r.left) + "px"); c.style.setProperty("--my", (e.clientY - r.top) + "px");
   }));
+
+  const reel = document.getElementById("reel");
+  if (reel) {
+    reel.muted = true; reel.defaultMuted = true;
+    const kick = () => { const p = reel.play(); if (p && p.catch) p.catch(() => {}); };
+    kick();
+    reel.addEventListener("canplay", kick, { once: true });
+    ["touchstart", "pointerdown", "scroll", "keydown"].forEach(ev => addEventListener(ev, kick, { once: true, passive: true }));
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) kick(); });
+  }
 
   fetch("https://api.github.com/repos/MonkeOnYT-glitch/QuestShade/releases?per_page=100")
     .then(r => r.ok ? r.json() : null)
