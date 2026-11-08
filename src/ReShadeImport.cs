@@ -11,7 +11,7 @@ namespace QuestShade
     {
         public static string Dir => Path.Combine(Config.Root, "ReShade");
         public const string Suffix = " (ReShade)";
-        private const int Version = 7;
+        private const int Version = 8;
 
         private static readonly string[] Heavy = { "MXAO", "RTGI", "SSR", "AmbientLight", "MotionBlur", "Deband", "SMAA", "FXAA",
             "TAA", "DisplayDepth", "Reflective", "GloomAO", "SSDO", "HBAO", "PPFX", "DeepFry", "Bokeh", "AdaptiveFog",
@@ -246,7 +246,7 @@ namespace QuestShade
         private static bool TryPort(string file, string outFile)
         {
             string name = Path.GetFileNameWithoutExtension(file);
-            if (name.IndexOf("limit", StringComparison.OrdinalIgnoreCase) < 0) return false;
+            if (name.IndexOf("limit", StringComparison.OrdinalIgnoreCase) < 0 && name.IndexOf("beckcam", StringComparison.OrdinalIgnoreCase) < 0) return false;
             string want = Key(name);
             var asm = System.Reflection.Assembly.GetExecutingAssembly();
             const string prefix = "QuestShade.Ports.";
