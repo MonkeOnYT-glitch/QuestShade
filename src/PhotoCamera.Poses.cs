@@ -117,7 +117,7 @@ namespace QuestShade
                     lp = AvoidWalls(chestPivot, lp);
                     {
                         var off = lp - chestPivot; float d = off.magnitude;
-                        if (d > 1e-3f) { var dir = off / d; lp = chestPivot + dir * BackOffForHands(chestPivot, dir, d, 0.04f, dt); }
+                        if (d > 1e-3f) BackOffForHands(chestPivot, off / d, d, d, dt);
                     }
                     break;
                 default:
