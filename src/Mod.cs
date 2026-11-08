@@ -283,6 +283,22 @@ namespace QuestShade
             Sharing.Like(id, (likes, err) => Notify(err != null ? "Couldn't like: " + err : $"Liked \"{_cfg.PresetName}\" ({likes} likes)", 2f));
         }
 
+        internal void NewPresetFrom(string source)
+        {
+            var name = _cfg.NewPresetFrom(source);
+            if (name == null) { Notify("Couldn't make the copy"); return; }
+            AfterPresetChange();
+            Notify($"\"{name}\" is yours: edit, rename and share it in Effects > Edit preset", 3f);
+        }
+
+        internal void ResetBuiltInPreset()
+        {
+            if (!_cfg.ResetBuiltIn()) { Notify("Only built-in presets can be reset"); return; }
+            _fx.MarkDirty();
+            RefreshPresetMenu();
+            Notify($"\"{_cfg.PresetName}\" is back to how it shipped", 2f);
+        }
+
         internal void DeletePreset()
         {
             var name = _cfg.PresetName;

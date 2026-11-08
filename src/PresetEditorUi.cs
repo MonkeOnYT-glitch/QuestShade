@@ -11,7 +11,7 @@ namespace QuestShade
     {
         private static Mod _mod;
         private static Config _cfg;
-        private static Page _editor, _light, _color, _lens, _retro;
+        private static Page _editor, _light, _color, _lens, _retro, _startFrom;
 
         private sealed class Knob
         {
@@ -31,11 +31,11 @@ namespace QuestShade
 
         private static readonly Knob[] LightKnobs =
         {
-            new Knob { Label = "Exposure",   Section = "Color", Key = "Exposure",   Min = -2f,   Max = 2f,   Step = 0.1f },
+            new Knob { Label = "Exposure (brightness)",   Section = "Color", Key = "Exposure",   Min = -2f,   Max = 2f,   Step = 0.1f },
             new Knob { Label = "Contrast",   Section = "Color", Key = "Contrast",   Min = -60f,  Max = 60f,  Step = 2f },
-            new Knob { Label = "Shadows",    Section = "LiftGammaGain", Key = "Lift",  Min = -0.2f, Max = 0.2f, Step = 0.01f, Vec4W = true },
-            new Knob { Label = "Midtones",   Section = "LiftGammaGain", Key = "Gamma", Min = -0.5f, Max = 0.5f, Step = 0.02f, Vec4W = true },
-            new Knob { Label = "Highlights", Section = "LiftGammaGain", Key = "Gain",  Min = -0.4f, Max = 0.4f, Step = 0.02f, Vec4W = true },
+            new Knob { Label = "Shadows (dark parts)",    Section = "LiftGammaGain", Key = "Lift",  Min = -0.2f, Max = 0.2f, Step = 0.01f, Vec4W = true },
+            new Knob { Label = "Midtones (in-between)",   Section = "LiftGammaGain", Key = "Gamma", Min = -0.5f, Max = 0.5f, Step = 0.02f, Vec4W = true },
+            new Knob { Label = "Highlights (bright parts)", Section = "LiftGammaGain", Key = "Gain",  Min = -0.4f, Max = 0.4f, Step = 0.02f, Vec4W = true },
         };
         private static readonly Knob[] ColorKnobs =
         {
@@ -49,7 +49,7 @@ namespace QuestShade
             new Knob { Label = "Sharpness",     Section = "Sharpen",  Key = "Amount",    Min = 0f, Max = 1f, Step = 0.05f, Def = 0.5f },
             new Knob { Label = "Bloom (glow)",  Section = "Bloom",    Key = "Intensity", Min = 0f, Max = 3f, Step = 0.1f },
             new Knob { Label = "Vignette",      Section = "Vignette", Key = "Intensity", Min = 0f, Max = 1f, Step = 0.05f },
-            new Knob { Label = "Colour fringe", Section = "ChromaticAberration", Key = "Intensity", Min = 0f, Max = 1f, Step = 0.05f },
+            new Knob { Label = "Colour fringe (edges)", Section = "ChromaticAberration", Key = "Intensity", Min = 0f, Max = 1f, Step = 0.05f },
         };
         private static readonly Knob[] RetroKnobs =
         {
@@ -69,10 +69,11 @@ namespace QuestShade
         {
             _mod = mod; _cfg = cfg;
             _editor = effects.CreatePage("Edit preset", Color.yellow);
-            _light = _editor.CreatePage("Light", Color.white, 0, false);
-            _color = _editor.CreatePage("Colour", Color.white, 0, false);
-            _lens = _editor.CreatePage("Lens", Color.white, 0, false);
-            _retro = _editor.CreatePage("Retro (CRT, grain)", Color.white, 0, false);
+            _light = _editor.CreatePage("Light: brightness, contrast", Color.white, 0, false);
+            _color = _editor.CreatePage("Colour: saturation, warmth", Color.white, 0, false);
+            _lens = _editor.CreatePage("Lens: sharpness, glow", Color.white, 0, false);
+            _retro = _editor.CreatePage("Retro: CRT, scanlines, grain", Color.white, 0, false);
+            _startFrom = _editor.CreatePage("Copy a different preset...", Color.cyan, 0, false);
             BrowserUi.Build(effects, mod, cfg);
             Refresh();
         }
@@ -83,19 +84,50 @@ namespace QuestShade
             if (_editor == null) return;
             _editor.RemoveAll();
             bool builtIn = Config.IsBuiltIn(_cfg.PresetName);
-            _editor.CreateFunction("New preset", Color.green, () => _mod.NewPreset(false));
+            var heading = new Color(1f, 0.75f, 0.35f);
+            void Heading(string text, string help) => _editor.CreateFunction(text, heading, () => BoneMenuUi.Notify(help, 4f));
+
             if (builtIn)
-                _editor.CreateFunction($"\"{_cfg.PresetName}\" (built-in: Copy it to rename)", Color.gray,
-                    () => BoneMenuUi.Notify("Built-in presets keep their name. Press \"Copy this preset\" and name the copy.", 3f));
+            {
+                Heading($"Editing: {_cfg.PresetName} (built-in)",
+                    "This preset comes with QuestShade. You can change it, and \"Reset to original\" undoes that. To rename or share it, make your own copy below.");
+            }
             else
-                _editor.CreateString("Name", Color.yellow, _cfg.PresetName, v => _mod.RenamePreset(v));
-            _editor.CreateFunction("Copy this preset", Color.cyan, () => _mod.NewPreset(true));
+            {
+                Heading($"Editing: {_cfg.PresetName}", "Your own preset. Every change saves by itself, there's no save button.");
+                _editor.CreateString("Rename", Color.yellow, _cfg.PresetName, v => _mod.RenamePreset(v));
+            }
+
+            Heading("- CHANGE THE LOOK -", "Open a group and move the sliders. You see every change live.");
             _editor.CreatePageLink(_light);
             _editor.CreatePageLink(_color);
             _editor.CreatePageLink(_lens);
             _editor.CreatePageLink(_retro);
-            _editor.CreateFunction("Share publicly", new Color(0.35f, 0.4f, 0.95f), SharePressed);
-            _editor.CreateFunction("Delete this preset", Color.red, DeletePressed);
+
+            Heading("- MAKE A NEW PRESET -", "Start from nothing, from the one you have on, or from any other preset (built-in ones too).");
+            _editor.CreateFunction("New blank preset", Color.green, () => _mod.NewPreset(false));
+            _editor.CreateFunction($"Copy {Short(_cfg.PresetName)}", Color.cyan, () => _mod.NewPreset(true));
+            _editor.CreatePageLink(_startFrom);
+
+            if (builtIn)
+            {
+                Heading("- UNDO -", "Puts this built-in preset back the way it came.");
+                _editor.CreateFunction("Reset to original", new Color(1f, 0.6f, 0.2f), ResetPressed);
+            }
+            else
+            {
+                Heading("- SHARE OR REMOVE -", "Share puts it in everyone's Preset browser and on the QuestShade website.");
+                _editor.CreateFunction("Share publicly", new Color(0.35f, 0.4f, 0.95f), SharePressed);
+                _editor.CreateFunction("Delete this preset", Color.red, DeletePressed);
+            }
+
+            _startFrom.RemoveAll();
+            _startFrom.CreateFunction("Pick one. You get your own copy to edit, rename and share", new Color(1f, 0.75f, 0.35f), () => { });
+            foreach (var preset in _cfg.Presets)
+            {
+                var src = preset;
+                _startFrom.CreateFunction(Config.IsBuiltIn(src) ? src + "  (built-in)" : src, Color.white, () => _mod.NewPresetFrom(src));
+            }
 
             Fill(_light, LightKnobs);
             Fill(_color, ColorKnobs);
@@ -103,12 +135,17 @@ namespace QuestShade
             Fill(_retro, RetroKnobs);
         }
 
+        private static string Short(string s) => s.Length <= 22 ? s : s.Substring(0, 19) + "...";
+
         private static void DeletePressed()
         {
             var name = _cfg.PresetName;
             if (Config.IsBuiltIn(name)) { BoneMenuUi.Notify($"\"{name}\" comes with QuestShade and can't be deleted", 2.5f); return; }
             Menu.DisplayDialog("Delete preset?", $"\"{name}\" will be gone for good.", null, () => _mod.DeletePreset());
         }
+
+        private static void ResetPressed()
+            => Menu.DisplayDialog("Reset preset?", $"\"{_cfg.PresetName}\" goes back to how it came with QuestShade.", null, () => _mod.ResetBuiltInPreset());
 
         private static void SharePressed()
         {
@@ -174,7 +211,7 @@ namespace QuestShade
         private static Sort _sort = Sort.Newest;
         private static string _search = "";
         private static List<Sharing.Entry> _results;
-        private static string _status = "Press Refresh to load presets";
+        private static string _status = "Press Refresh list to see shared presets";
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void Build(Page effects, Mod mod, Config cfg)
@@ -201,13 +238,17 @@ namespace QuestShade
         private static void Draw()
         {
             _page.RemoveAll();
-            _page.CreateFunction("Refresh", Color.green, Load);
-            _page.CreateEnum("Sort", Color.white, _sort, v => { _sort = (Sort)v; Load(); });
+            var heading = new Color(1f, 0.75f, 0.35f);
+            _page.CreateFunction(_status, heading, () => BoneMenuUi.Notify("Presets other players shared. Click one to get it: it's saved to your presets and switched on.", 4f));
+            _page.CreateFunction("Refresh list", Color.green, Load);
+            _page.CreateEnum("Sort by", Color.white, _sort, v => { _sort = (Sort)v; Load(); });
             _page.CreateString("Search", Color.white, _search, v => { _search = v ?? ""; Load(); });
+            _page.CreateFunction("- THE PRESET YOU HAVE ON -", heading, () => BoneMenuUi.Notify("These work on a preset you got from this browser.", 3f));
+            _page.CreateFunction("Like it", Color.magenta, () => _mod.LikeCurrentPreset());
+            _page.CreateFunction("Report it", Color.red, () => _mod.ReportCurrentPreset());
+            _page.CreateFunction("- YOU -", heading, () => BoneMenuUi.Notify("The name shown on presets you share. Leave it empty to be Anonymous.", 3f));
             _page.CreateString("Your creator name", Color.yellow, _cfg.ShareAuthor, v => _mod.SetShareAuthor(v));
-            _page.CreateFunction("Like the preset you're using", Color.magenta, () => _mod.LikeCurrentPreset());
-            _page.CreateFunction("Report the preset you're using", Color.red, () => _mod.ReportCurrentPreset());
-            _page.CreateFunction(_status, Color.gray, () => { });
+            if (_results != null && _results.Count > 0) _page.CreateFunction("- PRESETS (click one to get it) -", heading, () => { });
             if (_results == null) return;
             foreach (var e in _results)
             {

@@ -263,23 +263,57 @@ namespace QuestShade
             _presetTime = Mtime(PresetFile);
         }
 
-        public string NewPreset(bool copyCurrent)
+        public string NewPreset(bool copyCurrent) => NewPresetFrom(copyCurrent ? PresetName : null);
+
+        public string NewPresetFrom(string source)
         {
+            string srcFile = source != null ? Path.Combine(PresetDir, source + ".ini") : null;
+            bool copy = srcFile != null && File.Exists(srcFile);
+            string stem = copy ? (CleanName(source + " edit") ?? "My preset") : "My preset";
             string name = null;
             for (int i = 1; i < 1000; i++)
             {
-                var n = "My preset " + i;
+                var n = copy ? (i == 1 ? stem : $"{stem} {i}") : $"{stem} {i}";
                 if (!File.Exists(Path.Combine(PresetDir, n + ".ini"))) { name = n; break; }
             }
             if (name == null) return null;
-            string text;
-            if (copyCurrent && PresetFile != null && File.Exists(PresetFile))
-                text = $"; {name} - copy of {PresetName}, made in game\n" + File.ReadAllText(PresetFile).TrimStart('﻿');
-            else
-                text = $"; {name} - made in game with QuestShade's preset editor\n[Color]\nExposure = 0\nContrast = 0\nSaturation = 0\n";
+            string text = copy
+                ? $"; {name} - made in game from {source}\n" + StripShared(File.ReadAllText(srcFile).TrimStart('\uFEFF'))
+                : $"; {name} - made in game with QuestShade's preset editor\n[Color]\nExposure = 0\nContrast = 0\nSaturation = 0\n";
             File.WriteAllText(Path.Combine(PresetDir, name + ".ini"), text);
             SelectPreset(name);
             return name;
+        }
+
+        private static string StripShared(string text)
+        {
+            var sb = new System.Text.StringBuilder();
+            bool skip = false;
+            foreach (var raw in text.Split('\n'))
+            {
+                var line = raw.TrimEnd('\r');
+                var tr = line.Trim();
+                if (tr.StartsWith("[") && tr.EndsWith("]")) skip = tr.Equals("[Shared]", StringComparison.OrdinalIgnoreCase);
+                if (!skip) sb.Append(line).Append('\n');
+            }
+            return sb.ToString();
+        }
+
+        public bool ResetBuiltIn()
+        {
+            if (PresetFile == null || !IsBuiltIn(PresetName)) return false;
+            var asm = Assembly.GetExecutingAssembly();
+            foreach (var r in asm.GetManifestResourceNames())
+            {
+                var n = r.Replace('\\', '/');
+                if (!n.Equals("QuestShade.Defaults.Presets/" + PresetName + ".ini", StringComparison.OrdinalIgnoreCase) &&
+                    !n.Equals("QuestShade.Defaults.Presets." + PresetName + ".ini", StringComparison.OrdinalIgnoreCase)) continue;
+                using (var s = asm.GetManifestResourceStream(r))
+                using (var f = File.Create(PresetFile)) s.CopyTo(f);
+                LoadPreset(PresetName);
+                return true;
+            }
+            return false;
         }
 
         public static bool IsBuiltIn(string name)
