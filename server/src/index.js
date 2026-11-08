@@ -175,5 +175,8 @@ async function notify(env, content) {
       body: JSON.stringify({ username: "QuestShade Presets", content, allowed_mentions: { parse: [] } }) });
   } catch { }
 }
-function json(o, status = 200) { return new Response(JSON.stringify(o), { status, headers: { "Content-Type": "application/json; charset=utf-8" } }); }
+function json(o, status = 200) {
+  return new Response(JSON.stringify(o), { status, headers: {
+    "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+}
 function err(status, message) { return json({ error: message }, status); }
