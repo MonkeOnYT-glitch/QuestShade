@@ -53,14 +53,13 @@ namespace QuestShade
         private static void Send(string method, string path, string json, Action<string, string> done)
         {
             var server = _cfg?.ShareServer ?? DefaultServer;
-            UnityWebRequest req;
+            string url = server + path;
             if (json != null)
             {
-                req = UnityWebRequest.Put(server + path, (Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<byte>)Encoding.UTF8.GetBytes(json));
-                req.method = method;
-                req.SetRequestHeader("Content-Type", "application/json");
+                var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(json)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+                url += (path.Contains("?") ? "&" : "?") + "d=" + b64;
             }
-            else req = UnityWebRequest.Get(server + path);
+            var req = UnityWebRequest.Get(url);
             req.timeout = 20;
             req.SetRequestHeader("User-Agent", "QuestShade");
             req.SetRequestHeader("X-QuestShade-Client", _cfg?.ShareClientId ?? "");
@@ -94,7 +93,7 @@ namespace QuestShade
         public static void Publish(string name, string author, string ini, Action<string, string> done)
         {
             var json = JsonSerializer.Serialize(new Dictionary<string, string> { ["name"] = name, ["author"] = author, ["ini"] = CleanIni(ini) });
-            Send("POST", "/api/presets", json, (body, err) =>
+            Send("GET", "/api/presets/share", json, (body, err) =>
             {
                 if (err != null) { done(null, err); return; }
                 using var d = JsonDocument.Parse(body);
@@ -103,7 +102,7 @@ namespace QuestShade
         }
 
         public static void Like(string id, Action<int, string> done)
-            => Send("POST", "/api/presets/" + Uri.EscapeDataString(id) + "/like", "{}", (body, err) =>
+            => Send("GET", "/api/presets/" + Uri.EscapeDataString(id) + "/like", null, (body, err) =>
             {
                 if (err != null) { done(0, err); return; }
                 using var d = JsonDocument.Parse(body);
@@ -111,7 +110,7 @@ namespace QuestShade
             });
 
         public static void Report(string id, Action<string> done)
-            => Send("POST", "/api/presets/" + Uri.EscapeDataString(id) + "/report", "{}", (body, err) => done(err));
+            => Send("GET", "/api/presets/" + Uri.EscapeDataString(id) + "/report", null, (body, err) => done(err));
 
         private static Entry Read(JsonElement e) => new Entry
         {

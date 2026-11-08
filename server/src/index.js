@@ -33,6 +33,14 @@ export default {
       if (parts.length === 0) return json({ ok: true, service: "QuestShade presets" });
       if (parts[0] !== "api" || parts[1] !== "presets") return err(404, "Not found");
       const id = parts[2], action = parts[3];
+      if (req.method === "GET" && id === "share" && !action) {
+        if (!clientId(req)) return err(400, "Bad request");
+        let body = null;
+        try { body = JSON.parse(new TextDecoder().decode(b64url(url.searchParams.get("d") || ""))); } catch { }
+        return share(req, env, body);
+      }
+      if (req.method === "GET" && action === "like") return like(req, id, env);
+      if (req.method === "GET" && action === "report") return report(req, id, env);
       if (req.method === "GET" && !id) return list(url, env);
       if (req.method === "GET" && id && !action) return getOne(id, env);
       if (req.method === "POST" && !id) return share(req, env);
@@ -63,8 +71,8 @@ async function getOne(id, env) {
   return json(p);
 }
 
-async function share(req, env) {
-  const body = await req.json().catch(() => null);
+async function share(req, env, given) {
+  const body = given !== undefined ? given : await req.json().catch(() => null);
   if (!body) return err(400, "Bad request");
   const name = oneLine(body.name, MAX_NAME), author = oneLine(body.author, MAX_AUTHOR) || "Anonymous";
   if (!name) return err(400, "Give your preset a name first");
@@ -156,6 +164,10 @@ function safeValue(v) {
 
 function oneLine(s, max) {
   return String(s || "").replace(/[\u0000-\u001f\u007f<>\[\];=\\/:*?"|]/g, "").replace(/\s+/g, " ").trim().slice(0, max).trim();
+}
+function b64url(s) {
+  const b = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4));
+  return Uint8Array.from(b, c => c.charCodeAt(0));
 }
 function esc(s) { return String(s).replace(/[*_`~|>@]/g, ""); }
 function clientId(req) { const c = req.headers.get("X-QuestShade-Client") || ""; return /^[0-9a-f]{16,64}$/i.test(c) ? c.toLowerCase() : null; }
