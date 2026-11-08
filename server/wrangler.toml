@@ -5,4 +5,4 @@ compatibility_date = "2025-06-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "questshade-presets"
-database_id = "FILL_IN_AFTER_wrangler_d1_create"
+database_id = "1c6ad308-4dd2-4c3e-8b1b-4409de47d26c"

@@ -9,7 +9,7 @@ namespace QuestShade
 {
     internal static class Sharing
     {
-        public const string DefaultServer = "https://questshade-presets.monkeonyt.workers.dev";
+        public const string DefaultServer = "https://questshade-presets.questshade.workers.dev";
 
         public sealed class Entry
         {
