@@ -9,3 +9,10 @@ trailer/
 unity/Library/
 unity/Temp/
 unity/Logs/
+dist/QuestShade/Plugins/
+updater/bin/
+updater/obj/
+dist/thunderstore/
+dist/discord/
+docs/
+discord/

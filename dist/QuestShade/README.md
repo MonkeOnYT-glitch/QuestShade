@@ -42,6 +42,7 @@ I wanted my Quest footage to look like the stuff people make on PC with ReShade,
 
 - **Quest:** put `QuestShade.dll` in `/sdcard/MelonLoader/com.StressLevelZero.BONELAB/Mods/`
 - **PC:** put it in `BONELAB/Mods/`
+- **Optional, recommended:** also put `QuestShadeUpdater.dll` in the `Plugins/` folder next to `Mods/`. It updates QuestShade while the game boots, so new versions load right away. (QuestShade adds it for you on its next update if you skip this.)
 
 You'll want **BoneLib**, which gives you the menu and the grabbable camera.
 

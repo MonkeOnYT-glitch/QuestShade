@@ -28,6 +28,12 @@ namespace QuestShade
         private const string AssetName = "QuestShade-PC.dll";
 #endif
         private const string DllName = "QuestShade.dll";
+#if QUEST
+        private const string PluginAsset = "QuestShadeUpdater.dll";
+#else
+        private const string PluginAsset = "QuestShadeUpdater-PC.dll";
+#endif
+        private static string _pluginUrl, _pluginDigest;
 
         public static string Notice;
 
@@ -65,7 +71,7 @@ namespace QuestShade
                 {
                     string url = ReadRelease(_req.downloadHandler.text);
                     Done();
-                    if (url == null) { _stage = 3; return; }
+                    if (url == null) { if (!StartPlugin()) _stage = 3; return; }
                     Mod.Log.Msg($"Updates: downloading QuestShade {_tag} (you have {_current})");
                     _req = Get(url);
                     _req.SendWebRequest();
@@ -78,9 +84,48 @@ namespace QuestShade
                     Done();
                     _stage = 3;
                     Install(bytes);
+                    StartPlugin();
+                    return;
+                }
+                if (_stage == 4)
+                {
+                    byte[] bytes = _req.downloadHandler.data;
+                    Done();
+                    _stage = 3;
+                    InstallPlugin(bytes);
                 }
             }
             catch (Exception e) { Mod.Log.Warning("Update check failed: " + e.Message); Done(); _stage = 3; }
+        }
+
+        private static string PluginPath => Path.Combine(MelonLoader.Utils.MelonEnvironment.PluginsDirectory, "QuestShadeUpdater.dll");
+        private static bool StartPlugin()
+        {
+            if (_pluginUrl == null || File.Exists(PluginPath)) return false;
+            Mod.Log.Msg("Updates: adding the boot-time updater (Plugins/QuestShadeUpdater.dll)");
+            _req = Get(_pluginUrl);
+            _req.SendWebRequest();
+            _stage = 4;
+            return true;
+        }
+
+        private static void InstallPlugin(byte[] bytes)
+        {
+            try
+            {
+                if (bytes == null || bytes.Length < 4 * 1024) throw new Exception("download too small");
+                if (_pluginDigest != null && _pluginDigest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase)
+                    && !Convert.ToHexString(SHA256.HashData(bytes)).Equals(_pluginDigest.Substring(7), StringComparison.OrdinalIgnoreCase))
+                    throw new Exception("doesn't match GitHub's checksum");
+                Directory.CreateDirectory(Path.GetDirectoryName(PluginPath));
+                string tmp = PluginPath + ".download";
+                File.WriteAllBytes(tmp, bytes);
+                try { if (AssemblyName.GetAssemblyName(tmp).Name != "QuestShadeUpdater") throw new Exception("not the QuestShade updater"); }
+                catch { TryDelete(tmp); throw; }
+                File.Move(tmp, PluginPath);
+                Mod.Log.Msg("Updates: boot-time updater added, new versions now load the same launch");
+            }
+            catch (Exception e) { Mod.Log.Warning("Updates: couldn't add the boot-time updater: " + e.Message); }
         }
 
         private static UnityWebRequest Get(string url)
@@ -98,6 +143,13 @@ namespace QuestShade
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             _tag = root.GetProperty("tag_name").GetString() ?? "";
+            foreach (var a in root.GetProperty("assets").EnumerateArray())
+            {
+                if (a.GetProperty("name").GetString() != PluginAsset) continue;
+                var pu = a.GetProperty("browser_download_url").GetString();
+                if (pu != null && pu.StartsWith("https://github.com/" + Repo + "/releases/download/", StringComparison.OrdinalIgnoreCase))
+                { _pluginUrl = pu; _pluginDigest = a.TryGetProperty("digest", out var pd) && pd.ValueKind == JsonValueKind.String ? pd.GetString() : null; }
+            }
             if (!TryVersion(_tag, out var latest) || !TryVersion(_current, out var current)) { Mod.Log.Msg($"Updates: can't compare '{_tag}' with {_current}"); return null; }
             if (latest <= current) { Mod.Log.Msg($"Updates: up to date ({_current})"); return null; }
             string url = null;

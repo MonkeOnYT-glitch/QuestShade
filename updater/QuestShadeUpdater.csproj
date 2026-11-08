@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <QSTarget Condition="'$(QSTarget)' == ''">Quest</QSTarget>
+    <TargetFramework Condition="'$(QSTarget)' == 'Quest'">net8.0</TargetFramework>
+    <TargetFramework Condition="'$(QSTarget)' == 'PC'">net6.0</TargetFramework>
+    <DefineConstants Condition="'$(QSTarget)' == 'Quest'">$(DefineConstants);QUEST</DefineConstants>
+    <OutputPath>bin\$(QSTarget)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AssemblyName>QuestShadeUpdater</AssemblyName>
+    <RootNamespace>QuestShadeUpdater</RootNamespace>
+    <Version>1.0.0</Version>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\BONELAB</GameDir>
+    <ML Condition="'$(QSTarget)' == 'Quest'">C:\QSBuild\quest\ml</ML>
+    <ML Condition="'$(QSTarget)' == 'PC'">$(GameDir)\MelonLoader\net6</ML>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="MelonLoader"><HintPath>$(ML)\MelonLoader.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+</Project>

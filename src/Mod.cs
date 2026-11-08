@@ -3,7 +3,7 @@ using System.Linq;
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.4.2", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.4.3", "QuestShade")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
 [assembly: MelonOptionalDependencies("BoneLib")]
@@ -98,6 +98,7 @@ namespace QuestShade
                 Updater.Tick();
                 Sharing.Tick();
                 if (Updater.Notice != null && _noticeAt < 0f) { Notify(Updater.Notice, 6f); Updater.Notice = null; }
+                if (!_justUpdatedChecked && now > 12f) { _justUpdatedChecked = true; ShowJustUpdated(); }
                 if (_noticeAt > 0f && now > _noticeAt && _startNotice != null) { Notify(_startNotice, 6f); _startNotice = null; _noticeAt = -1f; }
                 TimelineTick();
                 FusionTick();
@@ -328,6 +329,20 @@ namespace QuestShade
                 Log.Warning("Couldn't open the Discord link: " + e.Message);
                 Notify("Join the Discord: discord.gg/g2X4cjjEqM", 5f);
             }
+        }
+
+        private bool _justUpdatedChecked;
+        private void ShowJustUpdated()
+        {
+            try
+            {
+                var f = System.IO.Path.Combine(Config.Root, "just-updated.txt");
+                if (!System.IO.File.Exists(f)) return;
+                var v = System.IO.File.ReadAllText(f).Trim();
+                System.IO.File.Delete(f);
+                if (v.Length > 0 && v.Length < 20) Notify($"QuestShade updated to {v}", 5f);
+            }
+            catch { }
         }
 
         internal void ReloadAll()
