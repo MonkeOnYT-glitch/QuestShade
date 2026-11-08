@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System;
 using System.IO;
 using Il2CppInterop.Runtime;
@@ -31,6 +31,7 @@ namespace QuestShade
         private bool _origPost, _hooked, _postChanged;
 
         private bool _dirty = true, _hasAnything, _hasHQ;
+        private float _baseExposure, _tonemap, _appliedEv = float.NaN, _adaptStrength = -1f;
         private int _frame;
 
         private static bool IsQuest => Application.platform == RuntimePlatform.Android;
@@ -439,12 +440,27 @@ namespace QuestShade
             }
             CalibrationTick();
             if (!Active || _mat == null) return;
+            TickEyeAdaptation(cfg);
 
             _frame++;
             var tv = new Vector4(Time.unscaledTime % 1000f, _frame % 4096, 0, 0);
             _mat.SetVector(ID.Time, tv); _matMono.SetVector(ID.Time, tv);
             if (_post != null && _hasHQ) _post.SetVector(ID.Time, tv);
             if ((_frame & 31) == 0) SetTexel();
+        }
+
+        private void TickEyeAdaptation(Config cfg)
+        {
+            float strength = _adaptStrength >= 0f ? _adaptStrength : cfg.EyeAdaptStrength;
+            EyeAdaptation.Tick(_cam != null ? _cam.transform : null, cfg.EyeAdapt, strength, cfg.EyeAdaptSpeed, Time.unscaledDeltaTime);
+            float ev = EyeAdaptation.Ev;
+            if (!float.IsNaN(_appliedEv) && Mathf.Abs(ev - _appliedEv) < 0.004f) return;
+            _appliedEv = ev;
+            var tone = new Vector4(MathF.Pow(2f, _baseExposure + ev), _tonemap, 0, 0);
+            _mat.SetVector(ID.Tone, tone);
+            _matMono.SetVector(ID.Tone, tone);
+            if (_matPre != null) _matPre.SetVector(ID.Tone, tone);
+            if (_post != null) _post.SetVector(ID.Tone, tone);
         }
 
         private void SetTexel()
@@ -503,8 +519,10 @@ BokehIntensity = 0.3
                 var mode = (p.Str("Tonemapping", "Mode", "Neutral") ?? "").ToLowerInvariant();
                 tm = mode == "aces" ? 2 : mode == "none" ? 0 : 1;
             }
-            m.SetVector(ID.Tone, new Vector4(MathF.Pow(2f, exposure), tm, 0, 0));
-            if (exposure != 0 || tm > 0) n++;
+            _baseExposure = exposure; _tonemap = tm; _appliedEv = float.NaN;
+            _adaptStrength = p.Has("EyeAdaptation") ? (p.Enabled("EyeAdaptation") ? Mathf.Clamp(p.Float("EyeAdaptation", "Strength", cfg.EyeAdaptStrength), 0f, 1.5f) : 0f) : -1f;
+            m.SetVector(ID.Tone, new Vector4(MathF.Pow(2f, exposure + EyeAdaptation.Ev), tm, 0, 0));
+            if (exposure != 0 || tm > 0 || (cfg.EyeAdapt && _adaptStrength != 0f)) n++;
 
             if (p.Enabled("Vignette") && string.Equals(p.Str("Vignette", "Mode", ""), "reshade", StringComparison.OrdinalIgnoreCase))
             {

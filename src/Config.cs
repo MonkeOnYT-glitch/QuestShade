@@ -24,6 +24,8 @@ namespace QuestShade
         public bool BloomDofHeadset = false, BloomDofPreview = true, BloomDofCapture = true, BloomDofAll = true;
         public bool MatchPreview = true;
         public float BloomStrength = 1f, BlurStrength = 1f, GripAngle = 0f;
+        public bool EyeAdapt = true;
+        public float EyeAdaptStrength = 0.7f, EyeAdaptSpeed = 1f;
         public bool TimelineFollow = false, TimelineAutoRecord = true;
 
         public Binding ToggleEffects, NextPreset, PrevPreset, ToggleCamera, TakePhoto, CameraMode, HideCamera, Record;
@@ -123,6 +125,9 @@ namespace QuestShade
             MatchPreview = ini.Bool("General", "MatchPreview", true);
             BloomDofAll = ini.Bool("General", "BloomDofEveryPreset", true);
             BloomStrength = Mathf.Clamp(ini.Float("General", "BloomStrength", 1f), 0f, 4f);
+            EyeAdapt = ini.Bool("General", "EyeAdaptation", true);
+            EyeAdaptStrength = Mathf.Clamp(ini.Float("General", "EyeAdaptationStrength", 0.7f), 0f, 1.5f);
+            EyeAdaptSpeed = Mathf.Clamp(ini.Float("General", "EyeAdaptationSpeed", 1f), 0.1f, 4f);
             BlurStrength = Mathf.Clamp(ini.Float("General", "BlurStrength", 1f), 0f, 3f);
             GripAngle = Mathf.Clamp(ini.Float("Camera", "GripAngle", 0f), -90f, 90f);
             TimelineFollow = ini.Bool("Camera", "TimelineFollow", false);
@@ -448,6 +453,9 @@ namespace QuestShade
             SetKey("General", "BloomDofEveryPreset", BloomDofAll ? "true" : "false");
             SetKey("General", "BloomStrength", BloomStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "BlurStrength", BlurStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            SetKey("General", "EyeAdaptation", EyeAdapt ? "true" : "false");
+            SetKey("General", "EyeAdaptationStrength", EyeAdaptStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            SetKey("General", "EyeAdaptationSpeed", EyeAdaptSpeed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Camera", "GripAngle", GripAngle.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Camera", "TimelineFollow", TimelineFollow ? "true" : "false");
             SetKey("Camera", "TimelineAutoRecord", TimelineAutoRecord ? "true" : "false");

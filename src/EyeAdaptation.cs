@@ -1,0 +1,88 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+namespace QuestShade
+{
+    internal static class EyeAdaptation
+    {
+        public static float Ev { get; private set; }
+        public static float Measured { get; private set; } = -1f;
+        public static float Reference { get; private set; } = -1f;
+
+        private const float MaxUp = 2.0f, MaxDown = 1.5f;
+        private static int _probeCount = -1;
+        private static float _nextSample, _target, _smoothLum = -1f;
+        private static bool _logged;
+
+        public static void Tick(Transform head, bool on, float strength, float speed, float dt)
+        {
+            if (!on || head == null || strength <= 0f)
+            {
+                Ev = Mathf.MoveTowards(Ev, 0f, dt * 2f);
+                return;
+            }
+            float now = Time.unscaledTime;
+            if (now >= _nextSample)
+            {
+                _nextSample = now + 0.1f;
+                Sample(head, strength);
+            }
+            float rate = (_target > Ev ? 0.55f : 1.4f) * Mathf.Max(0.05f, speed);
+            Ev += (_target - Ev) * (1f - Mathf.Exp(-rate * dt));
+        }
+
+        public static void Reset() { _probeCount = -1; _smoothLum = -1f; Ev = 0f; _target = 0f; _logged = false; }
+
+        private static void Sample(Transform head, float strength)
+        {
+            try
+            {
+                var lp = LightmapSettings.lightProbes;
+                int count = lp != null ? lp.count : 0;
+                if (count != _probeCount) { _probeCount = count; Reference = MapReference(lp); _smoothLum = -1f; _logged = false; }
+                if (Reference <= 0f) { _target = 0f; return; }
+
+                LightProbes.GetInterpolatedProbe(head.position, null, out var sh);
+                var d = head.forward;
+                float lum = Mathf.Max(1e-5f, Lum(sh) + 0.35f * Directional(sh, d));
+                _smoothLum = _smoothLum < 0f ? lum : Mathf.Lerp(_smoothLum, lum, 0.35f);
+                Measured = _smoothLum;
+                _target = Mathf.Clamp(strength * Mathf.Log(Reference / _smoothLum, 2f), -MaxDown, MaxUp);
+                if (!_logged) { _logged = true; Mod.Log.Msg($"Eye adaptation: {count} light probes, map light {Reference:0.###}, here {_smoothLum:0.###}"); }
+            }
+            catch (Exception e)
+            {
+                if (!_logged) { _logged = true; Mod.Log.Warning("Eye adaptation off for this map: " + e.Message); }
+                Reference = -1f; _target = 0f;
+            }
+        }
+
+        private static float MapReference(LightProbes lp)
+        {
+            if (lp == null || lp.count == 0) return -1f;
+            var probes = lp.bakedProbes;
+            if (probes == null || probes.Length == 0) return -1f;
+            int n = probes.Length, step = Math.Max(1, n / 4096);
+            var lums = new List<float>(Math.Min(n, 4096) + 1);
+            for (int i = 0; i < n; i += step)
+            {
+                float l = Lum(probes[i]);
+                if (l > 1e-4f) lums.Add(l);
+            }
+            if (lums.Count == 0) return -1f;
+            lums.Sort();
+            return lums[(int)(lums.Count * 0.6f)];
+        }
+
+        private static float Lum(SphericalHarmonicsL2 s) => 0.2126f * s.shr0 + 0.7152f * s.shg0 + 0.0722f * s.shb0;
+        private static float Directional(SphericalHarmonicsL2 s, Vector3 d)
+        {
+            float r = s.shr3 * d.x + s.shr1 * d.y + s.shr2 * d.z;
+            float g = s.shg3 * d.x + s.shg1 * d.y + s.shg2 * d.z;
+            float b = s.shb3 * d.x + s.shb1 * d.y + s.shb2 * d.z;
+            return 0.2126f * r + 0.7152f * g + 0.0722f * b;
+        }
+    }
+}

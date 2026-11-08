@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.CompilerServices;
 using BoneLib.BoneMenu;
 using BoneLib.Notifications;
@@ -73,6 +73,11 @@ namespace QuestShade
             fxMore.CreateBool("On every preset", Color.green, cfg.BloomDofAll, v => { cfg.BloomDofAll = v; mod.ReapplyEffects(); });
             fxMore.CreateFloat("Bloom strength", Color.white, cfg.BloomStrength, 0.25f, 0f, 4f, v => { cfg.BloomStrength = v; mod.ReapplyEffects(); });
             fxMore.CreateFloat("Blur strength", Color.white, cfg.BlurStrength, 0.25f, 0f, 3f, v => { cfg.BlurStrength = v; mod.ReapplyEffects(); });
+            var eye = fx.CreatePage("Eye adaptation (dark rooms)", Color.white);
+            eye.CreateFunction("What's this?", new Color(1f, 0.75f, 0.35f), () => Notify("Walk into a dark room: it starts dark, then your eyes adjust and it brightens. Walk back out: it's blinding for a moment, then settles.", 5f));
+            eye.CreateBool("Eye adaptation", Color.green, cfg.EyeAdapt, v => { cfg.EyeAdapt = v; mod.ReapplyEffects(); });
+            eye.CreateFloat("How much", Color.white, cfg.EyeAdaptStrength, 0.1f, 0f, 1.5f, v => { cfg.EyeAdaptStrength = v; mod.ReapplyEffects(); });
+            eye.CreateFloat("How fast", Color.white, cfg.EyeAdaptSpeed, 0.25f, 0.25f, 3f, v => cfg.EyeAdaptSpeed = v);
             fxMore.CreateBool("Photos + video", Color.white, cfg.BloomDofCapture, v => { cfg.BloomDofCapture = v; mod.ReapplyEffects(); });
             fxMore.CreateBool("Camera preview", Color.white, cfg.BloomDofPreview, v => { cfg.BloomDofPreview = v; mod.ReapplyEffects(); });
             _importPage = fx.CreatePage("ReShade presets", Color.cyan);

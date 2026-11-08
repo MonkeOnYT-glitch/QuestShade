@@ -19,6 +19,7 @@ const ALLOWED = {
   Noise: ["Enabled", "Intensity"],
   Glitch: ["Enabled", "Amount", "Rows", "Speed"],
   Posterize: ["Enabled", "Levels"],
+  EyeAdaptation: ["Enabled", "Strength"],
 };
 const WORDS = new Set(["true", "false", "on", "off", "aces", "neutral", "none"]);
 const BAD = /(n[i1!]gg|f[a@]g|retard|\bkys\b|rap(e|ist)|nazi|hitler|cunt|whore|porn|\bsex|dick|cock|puss(y|ie)|penis|vagina|f+u+c+k|sh[i1]t|b[i1]tch|slut|\bcum\b)/i;
