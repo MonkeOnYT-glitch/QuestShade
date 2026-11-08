@@ -11,7 +11,8 @@ namespace QuestShade
         public static float Measured { get; private set; } = -1f;
         public static float Reference { get; private set; } = -1f;
 
-        private const float MaxUp = 2.0f, MaxDown = 1.5f;
+        private const float MaxUp = 2.0f, MaxDown = 0.5f;
+        private const float DeadZone = 0.6f;
         private static int _probeCount = -1;
         private static float _nextSample, _target, _smoothLum = -1f;
         private static bool _logged;
@@ -29,7 +30,7 @@ namespace QuestShade
                 _nextSample = now + 0.1f;
                 Sample(head, strength);
             }
-            float rate = (_target > Ev ? 0.55f : 1.4f) * Mathf.Max(0.05f, speed);
+            float rate = (_target > Ev ? 0.55f : 0.9f) * Mathf.Max(0.05f, speed);
             Ev += (_target - Ev) * (1f - Mathf.Exp(-rate * dt));
         }
 
@@ -45,11 +46,17 @@ namespace QuestShade
                 if (Reference <= 0f) { _target = 0f; return; }
 
                 LightProbes.GetInterpolatedProbe(head.position, null, out var sh);
-                var d = head.forward;
-                float lum = Mathf.Max(1e-5f, Lum(sh) + 0.35f * Directional(sh, d));
-                _smoothLum = _smoothLum < 0f ? lum : Mathf.Lerp(_smoothLum, lum, 0.35f);
+                float amb = Lum(sh);
+                if (!(amb > Reference * 0.005f) || amb > Reference * 200f || float.IsNaN(amb)) return;
+                float dir = Mathf.Clamp(0.25f * Directional(sh, head.forward), -0.3f * amb, 0.3f * amb);
+                float lum = Mathf.Max(1e-5f, amb + dir);
+                float l = Mathf.Log(lum, 2f);
+                _smoothLum = _smoothLum < 0f ? lum : Mathf.Pow(2f, Mathf.Lerp(Mathf.Log(_smoothLum, 2f), l, 0.18f));
                 Measured = _smoothLum;
-                _target = Mathf.Clamp(strength * Mathf.Log(Reference / _smoothLum, 2f), -MaxDown, MaxUp);
+                float e = Mathf.Log(Reference / _smoothLum, 2f);
+                e = Mathf.Sign(e) * Mathf.Max(0f, Mathf.Abs(e) - DeadZone);
+                if (e < 0f) e *= 0.4f;
+                _target = Mathf.Clamp(strength * e, -MaxDown, MaxUp);
                 if (!_logged) { _logged = true; Mod.Log.Msg($"Eye adaptation: {count} light probes, map light {Reference:0.###}, here {_smoothLum:0.###}"); }
             }
             catch (Exception e)
