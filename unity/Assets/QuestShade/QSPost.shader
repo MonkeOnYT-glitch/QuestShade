@@ -17,6 +17,10 @@ Shader "Hidden/QuestShade/Post"
         TEXTURE2D(_QS_BloomTex);   SAMPLER(sampler_QS_BloomTex);
         float4 _QS_Bloom;
         float4 _QS_BloomTint;
+        TEXTURE2D(_QS_FlareTex);   SAMPLER(sampler_QS_FlareTex);
+        TEXTURE2D(_QS_DirtTex);    SAMPLER(sampler_QS_DirtTex);
+        float4 _QS_Flare;
+        float4 _QS_Dirt;
         float4 _QS_DofPx;
 
         struct A { float4 pos : POSITION; float2 uv : TEXCOORD0; };
@@ -146,8 +150,19 @@ Shader "Hidden/QuestShade/Post"
                 }
                 else c = SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv, 0).rgb;
                 c = Safe(c);
-                UNITY_BRANCH if (_QS_Bloom.x > 0)
-                    c += SAMPLE_TEXTURE2D_LOD(_QS_BloomTex, sampler_QS_BloomTex, uv, 0).rgb * _QS_Bloom.x * _QS_BloomTint.rgb;
+                UNITY_BRANCH if (_QS_Bloom.x > 0 || _QS_Flare.x > 0 || _QS_Dirt.x > 0)
+                {
+                    half3 glow = SAMPLE_TEXTURE2D_LOD(_QS_BloomTex, sampler_QS_BloomTex, uv, 0).rgb;
+                    half3 add = glow * _QS_Bloom.x * _QS_BloomTint.rgb;
+                    UNITY_BRANCH if (_QS_Flare.x > 0)
+                        add += SAMPLE_TEXTURE2D_LOD(_QS_FlareTex, sampler_QS_FlareTex, uv, 0).rgb * _QS_Flare.x;
+                    UNITY_BRANCH if (_QS_Dirt.x > 0)
+                    {
+                        half dirt = SAMPLE_TEXTURE2D_LOD(_QS_DirtTex, sampler_QS_DirtTex, uv, 0).r;
+                        add += (glow * 1.5 + add) * dirt * _QS_Dirt.x;
+                    }
+                    c += add;
+                }
                 return c;
             }
             #define QS_FETCH(uv) FetchPost(uv)
@@ -178,5 +193,39 @@ Shader "Hidden/QuestShade/Post"
                 return half4(lerp(c.rgb, s / 16, saturate((R - 1.5) / 3)), c.a);
             }
             ENDHLSL
-        }    }
+        }
+        Pass
+        {
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            half3 Fringe(float2 uv, float2 dir)
+            {
+                float2 o = dir * _QS_Flare.w * 0.012;
+                return half3(SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv + o, 0).r,
+                             SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv, 0).g,
+                             SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv - o, 0).b);
+            }
+            half4 Frag(V i) : SV_Target
+            {
+                float2 uv = 1 - i.uv;
+                float2 toC = (0.5 - uv) * _QS_Flare.y;
+                float2 dir = normalize(0.5 - uv + 1e-5);
+                half3 acc = 0;
+                const half3 tints[5] = { half3(1.0, 0.75, 0.45), half3(0.55, 0.8, 1.0), half3(0.85, 0.55, 1.0), half3(0.6, 1.0, 0.7), half3(1.0, 0.9, 0.7) };
+                [unroll] for (int k = 0; k < 5; k++)
+                {
+                    float2 o = frac(uv + toC * (k + 1) * 0.9);
+                    half w = pow(saturate(1 - length(0.5 - o) / 0.707), 6);
+                    acc += Fringe(o, dir) * w * tints[k];
+                }
+                float2 hv = dir * 0.42;
+                float2 ho = frac(uv + hv);
+                half hw = pow(saturate(1 - length(0.5 - ho) / 0.707), 4);
+                acc += Fringe(ho, dir) * hw * _QS_Flare.z * half3(1.0, 0.85, 0.7);
+                return half4(Safe(acc), 1);
+            }
+            ENDHLSL
+        }
+    }
 }

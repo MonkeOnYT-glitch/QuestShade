@@ -31,6 +31,10 @@ namespace QuestShade
         private bool _origPost, _hooked, _postChanged;
 
         private bool _dirty = true, _hasAnything, _hasHQ;
+        private Vector4 _flareVec;
+        private float _dirtAmt;
+        private Texture2D _dirtTex;
+        private bool LensFx => _flareVec.x > 0f || _dirtAmt > 0f;
         private float _baseExposure, _tonemap, _appliedEv = float.NaN, _adaptStrength = -1f;
         private int _frame;
 
@@ -61,7 +65,7 @@ namespace QuestShade
         public bool CanPost => Active && _post != null && _cfg != null;
         public bool PhotoHQ;
         private Config _cfg;
-        private bool HQReady => Active && _post != null && _cfg != null && (_bloomIntensity > 0f || _dofStrength > 0f);
+        private bool HQReady => Active && _post != null && _cfg != null && (_bloomIntensity > 0f || _dofStrength > 0f || LensFx);
         public bool WantsHQ => HQReady && _cfg.BloomDofCapture;
         public bool WantsPreviewHQ => HQReady && _cfg.BloomDofPreview;
         public bool WantsDepth => _dofStrength > 0f;
@@ -120,7 +124,7 @@ namespace QuestShade
         {
             if (raw == null || dst == null || _post == null) return;
             int w = raw.width, h = raw.height;
-            RenderTexture src = raw, dof = null, dof2 = null;
+            RenderTexture src = raw, dof = null, dof2 = null, flare = null, flare2 = null;
             int levels = 0;
             try
             {
@@ -131,6 +135,10 @@ namespace QuestShade
                 if (extras && _bloomIntensity > 0f && !_calDone) Calibrate(raw);
                 var bloomV = BloomEff();
                 _post.SetVector(ID.Bloom, extras ? bloomV : Vector4.zero);
+                bool lens = extras && LensFx;
+                _post.SetVector(ID.Flare, lens ? _flareVec : Vector4.zero);
+                _post.SetVector(ID.Dirt, lens ? new Vector4(_dirtAmt, 0, 0, 0) : Vector4.zero);
+                if (lens && _dirtAmt > 0f) _post.SetTexture(ID.DirtTex, DirtTexture());
                 if (extras && _dofStrength > 0f)
                 {
                     _post.SetVector(ID.DofPx, new Vector4(_dofMaxBlur * h / 1080f * MotionScale, _dofBokeh, light ? 20 : 0, 0));
@@ -144,7 +152,7 @@ namespace QuestShade
                         src = dof2;
                     }
                 }
-                if (extras && _bloomIntensity > 0f)
+                if (extras && (_bloomIntensity > 0f || lens))
                 {
                     int bw = Math.Max(1, w / 2), bh = Math.Max(1, h / 2);
                     for (; levels < _down.Length && Math.Min(bw, bh) >= 8; levels++, bw /= 2, bh /= 2)
@@ -160,6 +168,15 @@ namespace QuestShade
                         low = _up[i];
                     }
                     _post.SetTexture(ID.BloomTex, low);
+                    if (lens && _flareVec.x > 0f && levels >= 2)
+                    {
+                        flare = RenderTexture.GetTemporary(_down[1].width, _down[1].height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
+                        Graphics.Blit(_down[1], flare, _post, 6);
+                        flare2 = RenderTexture.GetTemporary(Math.Max(1, flare.width / 2), Math.Max(1, flare.height / 2), 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
+                        Graphics.Blit(flare, flare2, _post, 2);
+                        _post.SetTexture(ID.FlareTex, flare2);
+                    }
+                    else _post.SetTexture(ID.FlareTex, Texture2D.blackTexture);
                     float norm = 0, wgt = 1; for (int i = 0; i < levels; i++) { norm += wgt; wgt *= bloomV.w; }
                     _post.SetVector(ID.Bloom, new Vector4(bloomV.x * 1.8f / Mathf.Max(1f, norm), bloomV.y, bloomV.z, bloomV.w));
                 }
@@ -170,6 +187,8 @@ namespace QuestShade
             {
                 if (dof != null) RenderTexture.ReleaseTemporary(dof);
                 if (dof2 != null) RenderTexture.ReleaseTemporary(dof2);
+                if (flare != null) RenderTexture.ReleaseTemporary(flare);
+                if (flare2 != null) RenderTexture.ReleaseTemporary(flare2);
                 for (int i = 0; i < _down.Length; i++)
                 {
                     if (_down[i] != null) { RenderTexture.ReleaseTemporary(_down[i]); _down[i] = null; }
@@ -267,6 +286,12 @@ namespace QuestShade
             _post.SetVector(ID.BloomTint, new Vector4(tint.r, tint.g, tint.b, 1));
             _post.SetTexture(ID.BloomTex, Texture2D.blackTexture);
 
+            float fl = p.Enabled("LensFlare") ? Mathf.Clamp(p.Float("LensFlare", "Intensity", 0f), 0f, 3f) : 0f;
+            _flareVec = new Vector4(fl * 0.6f, Mathf.Clamp(p.Float("LensFlare", "Spacing", 0.35f), 0.05f, 1f),
+                                    Mathf.Clamp(p.Float("LensFlare", "Halo", 0.5f), 0f, 2f), Mathf.Clamp(p.Float("LensFlare", "Fringe", 0.5f), 0f, 2f));
+            _dirtAmt = p.Enabled("LensDirt") ? Mathf.Clamp(p.Float("LensDirt", "Intensity", 0f), 0f, 3f) : 0f;
+            _post.SetTexture(ID.FlareTex, Texture2D.blackTexture);
+
             _dofStrength = p.Enabled("DepthOfField") ? Mathf.Max(0f, p.Float("DepthOfField", "Strength", 1f)) : 0f;
             _dofMaxBlur = Mathf.Clamp(p.Float("DepthOfField", "MaxBlur", 20f) * (_cfg != null ? _cfg.BlurStrength : 1f), 0f, 48f);
             if (_dofMaxBlur < 0.5f) _dofStrength = 0f;
@@ -285,8 +310,8 @@ namespace QuestShade
 
             foreach (var id in ID.Stack) _post.SetVector(id, _mat.GetVector(id));
             if (_lut != null) _post.SetTexture(ID.Lut, _lut);
-            if (_bloomIntensity > 0f || _dofStrength > 0f)
-                Mod.Log.Msg($"Photo/video extras: bloom {_bloomIntensity:0.##}, depth of field {_dofStrength:0.##} (focus {(focus > 0 ? focus.ToString("0.0") + " m" : "auto")})");
+            if (_bloomIntensity > 0f || _dofStrength > 0f || LensFx)
+                Mod.Log.Msg($"Photo/video extras: bloom {_bloomIntensity:0.##}, depth of field {_dofStrength:0.##} (focus {(focus > 0 ? focus.ToString("0.0") + " m" : "auto")}), lens flare {_flareVec.x:0.##}, lens dirt {_dirtAmt:0.##}");
         }
         public void EnsureCamera(Config cfg)
         {
@@ -463,6 +488,36 @@ namespace QuestShade
             if (_post != null) _post.SetVector(ID.Tone, tone);
         }
 
+        private Texture2D DirtTexture()
+        {
+            if (_dirtTex != null) return _dirtTex;
+            const int W = 320, H = 180;
+            var v = new float[W * H];
+            var rng = new System.Random(1337);
+            void Blob(float cx, float cy, float r, float a)
+            {
+                int x0 = Math.Max(0, (int)(cx - r)), x1 = Math.Min(W - 1, (int)(cx + r)), y0 = Math.Max(0, (int)(cy - r)), y1 = Math.Min(H - 1, (int)(cy + r));
+                for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++)
+                {
+                    float d = MathF.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy)) / r;
+                    if (d < 1f) v[y * W + x] += a * (1f - d * d) * (1f - d * d);
+                }
+            }
+            for (int i = 0; i < 40; i++) Blob((float)rng.NextDouble() * W, (float)rng.NextDouble() * H, 6f + (float)rng.NextDouble() * 28f, 0.15f + (float)rng.NextDouble() * 0.45f);
+            for (int i = 0; i < 160; i++) Blob((float)rng.NextDouble() * W, (float)rng.NextDouble() * H, 1f + (float)rng.NextDouble() * 2.5f, 0.4f + (float)rng.NextDouble() * 0.6f);
+            for (int s = 0; s < 3; s++)
+            {
+                float sx = (float)rng.NextDouble() * W, sy = (float)rng.NextDouble() * H, ang = (float)(rng.NextDouble() * Math.PI);
+                for (int k = 0; k < 60; k++) Blob(sx + MathF.Cos(ang) * k * 2.5f, sy + MathF.Sin(ang) * k * 2.5f, 5f, 0.05f);
+            }
+            var px = new Color32[W * H];
+            for (int i = 0; i < px.Length; i++) { byte b = (byte)(Mathf.Clamp01(v[i]) * 255f); px[i] = new Color32(b, b, b, 255); }
+            _dirtTex = new Texture2D(W, H, TextureFormat.RGBA32, false, true) { name = "QuestShade_LensDirt", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave };
+            _dirtTex.SetPixels32(px);
+            _dirtTex.Apply(false, true);
+            return _dirtTex;
+        }
+
         private void SetTexel()
         {
             int w, h;
@@ -566,7 +621,7 @@ BokehIntensity = 0.3
             if (cfg.BloomDofAll && p.Str("Import", "Answer", "") != "compress") p = p.WithFallback(DefaultExtras, "Bloom", "DepthOfField");
             try { RebuildHQ(p); } catch (Exception e) { _bloomIntensity = _dofStrength = 0f; Mod.Log.Warning("Bloom/DOF setup failed: " + e.Message); }
             try { SetLive(cfg, p); } catch (Exception e) { _liveDof = false; Mod.Log.Warning("Headset bloom/DOF setup failed: " + e.Message); }
-            _hasHQ = _bloomIntensity > 0f || _dofStrength > 0f;
+            _hasHQ = _bloomIntensity > 0f || _dofStrength > 0f || LensFx;
             if (_hasHQ) n++;
             _hasAnything = n > 0;
             Mod.Log.Msg($"Preset '{cfg.PresetName}' applied ({n} effect{(n == 1 ? "" : "s")})");
@@ -609,6 +664,8 @@ BokehIntensity = 0.3
                 Dof = Shader.PropertyToID("_QS_Dof"), DofAF = Shader.PropertyToID("_QS_DofAF"), DofPx = Shader.PropertyToID("_QS_DofPx"),
                 Bloom = Shader.PropertyToID("_QS_Bloom"), BloomTint = Shader.PropertyToID("_QS_BloomTint"),
                 BloomTex = Shader.PropertyToID("_QS_BloomTex"), BloomLow = Shader.PropertyToID("_QS_BloomLow"),
+                Flare = Shader.PropertyToID("_QS_Flare"), FlareTex = Shader.PropertyToID("_QS_FlareTex"),
+                Dirt = Shader.PropertyToID("_QS_Dirt"), DirtTex = Shader.PropertyToID("_QS_DirtTex"),
                 SS = Shader.PropertyToID("_QS_SS"),
                 Live = Shader.PropertyToID("_QS_Live"), LiveBloom = Shader.PropertyToID("_QS_LiveBloom"), LiveTint = Shader.PropertyToID("_QS_LiveTint");
             public static readonly int[] Stack = { LutParams, Tone, Vignette, VignetteColor, VignetteCenter, Sharpen, CA, Distort,

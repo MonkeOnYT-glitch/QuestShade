@@ -143,6 +143,8 @@ namespace QuestShade
             ["Glitch"] = new[] { "Enabled", "Amount", "Rows", "Speed" },
             ["Posterize"] = new[] { "Enabled", "Levels" },
             ["EyeAdaptation"] = new[] { "Enabled", "Strength" },
+            ["LensFlare"] = new[] { "Enabled", "Intensity", "Spacing", "Halo", "Fringe" },
+            ["LensDirt"] = new[] { "Enabled", "Intensity" },
         };
         private static readonly HashSet<string> Words = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "true", "false", "on", "off", "aces", "neutral", "none" };
 

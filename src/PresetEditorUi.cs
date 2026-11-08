@@ -50,6 +50,8 @@ namespace QuestShade
             new Knob { Label = "Bloom (glow)",  Section = "Bloom",    Key = "Intensity", Min = 0f, Max = 3f, Step = 0.1f },
             new Knob { Label = "Vignette",      Section = "Vignette", Key = "Intensity", Min = 0f, Max = 1f, Step = 0.05f },
             new Knob { Label = "Colour fringe (edges)", Section = "ChromaticAberration", Key = "Intensity", Min = 0f, Max = 1f, Step = 0.05f },
+            new Knob { Label = "Lens flare (camera only)", Section = "LensFlare", Key = "Intensity", Min = 0f, Max = 2f, Step = 0.1f },
+            new Knob { Label = "Lens dirt (camera only)", Section = "LensDirt", Key = "Intensity", Min = 0f, Max = 2f, Step = 0.1f },
         };
         private static readonly Knob[] RetroKnobs =
         {
