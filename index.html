@@ -46,8 +46,6 @@
 
   .hero { position: relative; height: 100svh; min-height: 620px; overflow: hidden; display: grid; place-items: center; }
   .hero video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1.04); }
-  .hero video::-webkit-media-controls, .hero video::-webkit-media-controls-start-playback-button, .hero video::-webkit-media-controls-overlay-play-button { display: none !important; -webkit-appearance: none; opacity: 0; }
-  .hero video { pointer-events: none; }
   .hero::before { content: ""; position: absolute; inset: 0; z-index: 1;
     background: radial-gradient(ellipse at center, rgba(11,11,13,.15) 0%, rgba(11,11,13,.7) 75%), linear-gradient(180deg, rgba(11,11,13,.2), rgba(11,11,13,.35) 60%, var(--bg)); }
   .bar { position: absolute; left: 0; right: 0; height: 9vh; background: #000; z-index: 2; }
@@ -153,7 +151,7 @@
 </nav>
 
 <header class="hero">
-  <video id="reel" autoplay muted loop playsinline webkit-playsinline preload="auto" disablepictureinpicture disableremoteplayback poster="media/poster.jpg">
+  <video autoplay muted loop playsinline poster="media/poster.jpg">
     <source src="media/reel.mp4" type="video/mp4">
   </video>
   <div class="bar top"></div><div class="bar bot"></div>
@@ -259,19 +257,6 @@
     const r = c.getBoundingClientRect();
     c.style.setProperty("--mx", (e.clientX - r.left) + "px"); c.style.setProperty("--my", (e.clientY - r.top) + "px");
   }));
-
-  const reel = document.getElementById("reel");
-  if (reel) {
-    reel.muted = true; reel.defaultMuted = true;
-    const evs = ["touchend", "click", "keydown", "pointerup"];
-    const kick = () => { const p = reel.play(); if (p && p.catch) p.catch(() => {}); };
-    const done = () => evs.forEach(ev => removeEventListener(ev, kick, true));
-    evs.forEach(ev => addEventListener(ev, kick, { capture: true, passive: true }));
-    reel.addEventListener("playing", done);
-    reel.addEventListener("canplay", kick, { once: true });
-    kick();
-    document.addEventListener("visibilitychange", () => { if (!document.hidden && reel.paused) kick(); });
-  }
 
   fetch("https://api.github.com/repos/MonkeOnYT-glitch/QuestShade/releases?per_page=100")
     .then(r => r.ok ? r.json() : null)
