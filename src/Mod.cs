@@ -233,6 +233,24 @@ namespace QuestShade
             Notify($"Deleted \"{name}\". Now on {_cfg.PresetName}", 2.5f);
         }
 
+        internal const string DiscordInvite = "https://discord.gg/g2X4cjjEqM";
+
+        internal void OpenDiscord()
+        {
+            try
+            {
+                Application.OpenURL(DiscordInvite);
+                Notify(Application.platform == RuntimePlatform.Android
+                    ? "Opening the QuestShade Discord in the browser..."
+                    : "Opened the QuestShade Discord in your browser", 3f);
+            }
+            catch (Exception e)
+            {
+                Log.Warning("Couldn't open the Discord link: " + e.Message);
+                Notify("Join the Discord: discord.gg/g2X4cjjEqM", 5f);
+            }
+        }
+
         internal void ReloadAll()
         {
             _cfg.LoadAll();

@@ -77,6 +77,7 @@ namespace QuestShade
             fxMore.CreateBool("Camera preview", Color.white, cfg.BloomDofPreview, v => { cfg.BloomDofPreview = v; mod.ReapplyEffects(); });
             _importPage = fx.CreatePage("ReShade presets", Color.cyan);
             RefreshPresets(cfg);
+            root.CreateFunction("Join the QuestShade Discord", new Color(0.35f, 0.4f, 0.95f), () => mod.OpenDiscord());
             root.CreateFunction("Save settings to ini", Color.yellow, () => { cfg.SaveMenuSettings(); Notify("Settings saved to QuestShade.ini"); });
             _root = root;
         }
