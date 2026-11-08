@@ -170,7 +170,7 @@
       </a>
       <a class="btn ghost" href="#install">How to install</a>
     </div>
-    <div class="meta">Free · MelonLoader · needs <a href="https://thunderstore.io/c/bonelab/p/bonelib/BoneLib/">BoneLib</a> · <a href="https://github.com/MonkeOnYT-glitch/QuestShade/releases">all versions</a></div>
+    <div class="meta">Free<span id="dls" hidden> · <b id="dln"></b> downloads</span> · MelonLoader · needs <a href="https://thunderstore.io/c/bonelab/p/bonelib/BoneLib/">BoneLib</a> · <a href="https://github.com/MonkeOnYT-glitch/QuestShade/releases">all versions</a></div>
   </div>
 </header>
 
@@ -257,6 +257,16 @@
     const r = c.getBoundingClientRect();
     c.style.setProperty("--mx", (e.clientX - r.left) + "px"); c.style.setProperty("--my", (e.clientY - r.top) + "px");
   }));
+
+  fetch("https://api.github.com/repos/MonkeOnYT-glitch/QuestShade/releases?per_page=100")
+    .then(r => r.ok ? r.json() : null)
+    .then(rs => {
+      if (!Array.isArray(rs)) return;
+      const n = rs.reduce((t, r) => t + (r.assets || []).reduce((a, x) => a + (x.download_count || 0), 0), 0);
+      document.getElementById("dln").textContent = n.toLocaleString();
+      document.getElementById("dls").hidden = false;
+    })
+    .catch(() => {});
 
   fetch("https://api.github.com/repos/MonkeOnYT-glitch/QuestShade/releases/latest")
     .then(r => r.ok ? r.json() : null)
