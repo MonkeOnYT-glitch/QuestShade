@@ -10,6 +10,7 @@ namespace QuestShade
         public static float Ev { get; private set; }
         public static float Measured { get; private set; } = -1f;
         public static float Reference { get; private set; } = -1f;
+        public static bool Hold;
 
         private const float MaxUp = 2.0f, MaxDown = 0.5f;
         private const float DeadZone = 0.6f;
@@ -30,6 +31,7 @@ namespace QuestShade
                 _nextSample = now + 0.1f;
                 Sample(head, strength);
             }
+            if (Hold) { Ev += (0f - Ev) * (1f - Mathf.Exp(-9f * dt)); return; }
             float rate = (_target > Ev ? 0.55f : 0.9f) * Mathf.Max(0.05f, speed);
             Ev += (_target - Ev) * (1f - Mathf.Exp(-rate * dt));
         }

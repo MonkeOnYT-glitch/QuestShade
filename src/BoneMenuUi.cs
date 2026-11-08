@@ -478,6 +478,35 @@ namespace QuestShade
             _uiOff.Clear(); _uiROff.Clear();
         }
 
+        private static readonly System.Collections.Generic.List<Canvas> _menuCanvases = new System.Collections.Generic.List<Canvas>();
+        private static float _menuScanAt; private static int _menuRigId;
+        public static string LastMenu;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static bool MenuInView(Transform head)
+        {
+            if (head == null) return false;
+            Component rig = BoneLib.Player.UIRig;
+            if (rig == null) return false;
+            if (rig.GetInstanceID() != _menuRigId || Time.unscaledTime > _menuScanAt)
+            {
+                _menuRigId = rig.GetInstanceID(); _menuScanAt = Time.unscaledTime + 1f;
+                _menuCanvases.Clear();
+                foreach (var cv in rig.GetComponentsInChildren<Canvas>(false))
+                    if (cv != null && cv.isRootCanvas && cv.renderMode == RenderMode.WorldSpace) _menuCanvases.Add(cv);
+            }
+            var hp = head.position; var hf = head.forward;
+            foreach (var cv in _menuCanvases)
+            {
+                if (cv == null || !cv.enabled || !cv.gameObject.activeInHierarchy) continue;
+                var to = cv.transform.position - hp;
+                float d = to.magnitude;
+                if (d > 1.5f || d < 0.05f) continue;
+                if (Vector3.Dot(hf, to / d) > 0.55f) { LastMenu = cv.name; return true; }
+            }
+            return false;
+        }
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void DumpUi()
         {

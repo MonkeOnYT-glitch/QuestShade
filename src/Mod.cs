@@ -96,6 +96,12 @@ namespace QuestShade
                 TimerTick(now);
                 FocusGuard(now);
                 Updater.Tick();
+                if (_boneLib)
+                {
+                    bool was = EyeAdaptation.Hold;
+                    try { EyeAdaptation.Hold = BoneMenuUi.MenuInView(_fx.BoundCamera != null ? _fx.BoundCamera.transform : null); } catch { EyeAdaptation.Hold = false; }
+                    if (EyeAdaptation.Hold && !was && _cfg.EyeAdapt) Log.Msg($"Eye adaptation paused while menu '{BoneMenuUi.LastMenu}' is open");
+                }
                 Sharing.Tick();
                 if (Updater.Notice != null && _noticeAt < 0f) { Notify(Updater.Notice, 6f); Updater.Notice = null; }
                 if (!_justUpdatedChecked && now > 12f) { _justUpdatedChecked = true; ShowJustUpdated(); }
