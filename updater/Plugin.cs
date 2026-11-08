@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using MelonLoader;
 using MelonLoader.Utils;
 
-[assembly: MelonInfo(typeof(QuestShadeUpdater.Plugin), "QuestShade Updater", "1.0.0", "MonkeOnYT")]
+[assembly: MelonInfo(typeof(QuestShadeUpdater.Plugin), "QuestShade Updater", "1.0.1", "MonkeOnYT")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 
 namespace QuestShadeUpdater
@@ -92,8 +92,7 @@ namespace QuestShadeUpdater
             try { if (AssemblyName.GetAssemblyName(tmp).Name != "QuestShade") throw new Exception("downloaded file isn't QuestShade"); }
             catch { TryDelete(tmp); throw; }
             if (_givenUp) { TryDelete(tmp); return; }
-            File.Copy(tmp, modPath, true);
-            TryDelete(tmp);
+            File.Move(tmp, modPath, true);
             try { File.WriteAllText(Path.Combine(MelonEnvironment.UserDataDirectory, "QuestShade", "just-updated.txt"), latest.ToString()); } catch { }
             Log.Msg($"QuestShade updated to {latest}, it loads now");
         }

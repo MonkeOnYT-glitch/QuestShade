@@ -178,11 +178,11 @@ namespace QuestShade
             catch { TryDelete(tmp); throw; }
 
             string old = _target + ".old";
-            bool copied = false;
-            try { File.Copy(tmp, _target, true); TryDelete(tmp); copied = true; }
+            bool moved = false;
+            try { File.Move(tmp, _target, true); moved = true; }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
-            if (!copied)
+            if (!moved)
             {
                 TryDelete(old);
                 File.Move(_target, old);
