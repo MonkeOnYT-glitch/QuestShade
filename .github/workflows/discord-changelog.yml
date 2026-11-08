@@ -1,0 +1,49 @@
+name: Discord changelog
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to post (e.g. v1.4.0)"
+        required: true
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post the release to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_CHANGELOG_WEBHOOK }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$WEBHOOK" ]; then echo "Add the DISCORD_CHANGELOG_WEBHOOK secret first"; exit 1; fi
+          gh api "repos/$REPO/releases/tags/$TAG" | jq '
+            def asset(n): ([.assets[] | select(.name == n) | .browser_download_url] | first) // null;
+            (.body // "" | gsub("\r"; "") | split("\n") | map(select(test("^Install:") | not)) | join("\n")
+              | gsub("^\\s+|\\s+$"; "")) as $notes
+            | {
+                username: "QuestShade Updates",
+                allowed_mentions: { parse: [] },
+                embeds: [{
+                  title: ("🎬 QuestShade " + .tag_name + " is out"),
+                  url: .html_url,
+                  color: 16747546,
+                  thumbnail: { url: "https://monkeonyt-glitch.github.io/QuestShade/icon.png" },
+                  description: (($notes | if length > 3500 then .[0:3500] + "…" else . end)
+                                + "\n\n🔄 **On 1.3.1 or newer?** It updates itself next time you start BONELAB."),
+                  fields: [
+                    (if asset("QuestShade.dll") then {name: "🥽 Quest", value: ("[QuestShade.dll](" + asset("QuestShade.dll") + ")"), inline: true} else empty end),
+                    (if asset("QuestShade-PC.dll") then {name: "🖥️ PC", value: ("[QuestShade-PC.dll](" + asset("QuestShade-PC.dll") + ")"), inline: true} else empty end),
+                    {name: "🌐 Website", value: "[Download page](https://monkeonyt-glitch.github.io/QuestShade/)", inline: true}
+                  ],
+                  footer: { text: "QuestShade • free & open source" },
+                  timestamp: .published_at
+                }]
+              }' > payload.json
+          curl -fsS -H "Content-Type: application/json" -d @payload.json "$WEBHOOK"
+          echo "Posted $TAG"
