@@ -21,7 +21,6 @@ jobs:
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
-          if [ -z "$WEBHOOK" ]; then echo "Add the DISCORD_CHANGELOG_WEBHOOK secret first"; exit 1; fi
           gh api "repos/$REPO/releases/tags/$TAG" | jq '
             def asset(n): ([.assets[] | select(.name == n) | .browser_download_url] | first) // null;
             (.body // "" | gsub("\r"; "") | split("\n") | map(select(test("^Install:") | not)) | join("\n")
@@ -45,5 +44,7 @@ jobs:
                   timestamp: .published_at
                 }]
               }' > payload.json
+          jq . payload.json
+          if [ -z "$WEBHOOK" ]; then echo "::error::Add the DISCORD_CHANGELOG_WEBHOOK secret first"; exit 1; fi
           curl -fsS -H "Content-Type: application/json" -d @payload.json "$WEBHOOK"
           echo "Posted $TAG"
