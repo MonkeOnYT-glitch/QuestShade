@@ -126,6 +126,37 @@
   .cta h2 { margin-bottom: 10px; }
   .cta p { color: var(--dim); margin: 0 0 28px; }
 
+
+  .pbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
+  .tabs { display: inline-flex; padding: 4px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); }
+  .tabs button { font: 600 14px Inter, system-ui, sans-serif; color: var(--dim); background: none; border: 0; padding: 8px 16px; border-radius: 999px; cursor: pointer; }
+  .tabs button[aria-pressed="true"] { background: var(--orange); color: #1a0c00; }
+  .psearch { flex: 1 1 200px; min-width: 0; font: 15px Inter, system-ui, sans-serif; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; outline: none; }
+  .psearch:focus { border-color: rgba(255,138,30,.5); }
+  .pgrid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  @media (min-width: 640px) { .pgrid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 980px) { .pgrid { grid-template-columns: repeat(3, 1fr); } }
+  .preset { display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); min-width: 0; }
+  .preset h3 { font: 700 18px var(--display); margin: 0; overflow-wrap: anywhere; }
+  .preset .by { color: var(--dim); font-size: 14px; overflow-wrap: anywhere; }
+  .preset .nums { display: flex; gap: 14px; font: 500 12.5px var(--mono); color: var(--amber); }
+  .preset .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .preset .chips:empty { display: none; }
+  .preset .chips span { font: 500 11.5px var(--mono); padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,.05); border: 1px solid var(--line); color: #e3e3ea; }
+  .preset .row { display: flex; gap: 8px; margin-top: auto; }
+  .sbtn { font: 600 13.5px Inter, system-ui, sans-serif; padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.05); color: var(--text); cursor: pointer; text-decoration: none; }
+  .sbtn.go { background: var(--orange); border-color: var(--orange); color: #1a0c00; }
+  .sbtn:hover { border-color: rgba(255,138,30,.5); }
+  .pstate { color: var(--dim); padding: 28px; border-radius: 16px; border: 1px dashed var(--line); text-align: center; grid-column: 1 / -1; }
+
+  .discord { margin-top: 96px; display: grid; gap: 22px; align-items: center; padding: 34px 28px; border-radius: 22px; border: 1px solid rgba(88,101,242,.45);
+    background: radial-gradient(500px 240px at 0% 0%, rgba(88,101,242,.28), transparent 70%), var(--bg2); }
+  @media (min-width: 760px) { .discord { grid-template-columns: 1fr auto; padding: 40px 44px; } }
+  .discord h2 { margin-bottom: 8px; }
+  .discord p { margin: 0; color: var(--dim); }
+  .btn.blurple { background: #5865F2; color: #fff; box-shadow: 0 10px 30px -10px rgba(88,101,242,.8); }
+  .btn.blurple:hover { background: #6a76f5; }
+
   footer { padding: 48px 0 56px; color: var(--dim); font-size: 14px; }
   footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 28px; }
   footer a { color: var(--text); text-decoration: none; }
@@ -144,6 +175,8 @@
     <div class="nav-links">
       <a class="hide-sm" href="#features">Features</a>
       <a class="hide-sm" href="#install">Install</a>
+      <a class="hide-sm" href="#presets">Presets</a>
+      <a class="hide-sm" href="https://discord.gg/g2X4cjjEqM">Discord</a>
       <a class="hide-sm" href="https://github.com/MonkeOnYT-glitch/QuestShade">GitHub</a>
       <a class="pill dl" href="https://github.com/MonkeOnYT-glitch/QuestShade/releases/latest/download/QuestShade.zip">Download</a>
     </div>
@@ -220,6 +253,28 @@
     <p class="note reveal">Settings live in <code>UserData/QuestShade/</code> and update live while you play. Only download QuestShade from this page, GitHub or Thunderstore.</p>
   </section>
 
+  <section id="presets">
+    <div class="eyebrow reveal">Community</div>
+    <h2 class="reveal">Presets made by players.</h2>
+    <p class="lede reveal">Made in the headset with <b>Effects &rarr; Edit preset</b> and shared with one button. Grab one in game from <b>Effects &rarr; Preset browser</b>, or download the <code>.ini</code> here and drop it in <code>UserData/QuestShade/Presets/</code>.</p>
+    <div class="pbar reveal">
+      <div class="tabs" role="group" aria-label="Sort presets">
+        <button type="button" data-sort="new" aria-pressed="true">Newest</button>
+        <button type="button" data-sort="top" aria-pressed="false">Top</button>
+      </div>
+      <input class="psearch" id="psearch" type="search" placeholder="Search presets or creators" aria-label="Search presets">
+    </div>
+    <div class="pgrid" id="pgrid" aria-live="polite"><div class="pstate">Loading presets&hellip;</div></div>
+  </section>
+
+  <div class="discord reveal">
+    <div>
+      <h2>Join the Discord.</h2>
+      <p>Share clips and presets, get install help, report bugs, and see updates first.</p>
+    </div>
+    <a class="btn blurple" href="https://discord.gg/g2X4cjjEqM" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H4l2.2-2.6A8 8 0 1 1 21 12z"/><path d="M9 11h.01M15 11h.01"/></svg>Join the server</a>
+  </div>
+
   <div class="cta reveal">
     <h2>Make it cinematic.</h2>
     <p>Free, open source, and made for Quest.</p>
@@ -233,7 +288,7 @@
 <footer>
   <div class="wrap">
     <span>Made by <a href="https://www.youtube.com/@Monke_On_YT">@Monke_On_YT</a></span>
-    <span><a href="https://github.com/MonkeOnYT-glitch/QuestShade">Source on GitHub</a></span>
+    <span><a href="https://discord.gg/g2X4cjjEqM">Discord</a> &nbsp;&middot;&nbsp; <a href="https://github.com/MonkeOnYT-glitch/QuestShade">Source on GitHub</a></span>
   </div>
 </footer>
 
@@ -257,6 +312,69 @@
     const r = c.getBoundingClientRect();
     c.style.setProperty("--mx", (e.clientX - r.left) + "px"); c.style.setProperty("--my", (e.clientY - r.top) + "px");
   }));
+
+  (function () {
+    const API = "https://questshade-presets.questshade.workers.dev/api/presets";
+    const grid = document.getElementById("pgrid"), search = document.getElementById("psearch");
+    const tabs = document.querySelectorAll(".tabs button");
+    let sort = "new", timer = 0, seq = 0;
+    const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+    const state = msg => grid.replaceChildren(el("div", "pstate", msg));
+    const LABELS = { "Color.Exposure": "Exposure", "Color.Contrast": "Contrast", "Color.Saturation": "Saturation", "Color.HueShift": "Hue",
+      "WhiteBalance.Temperature": "Warmth", "WhiteBalance.Tint": "Tint", "Sharpen.Amount": "Sharpness", "Bloom.Intensity": "Bloom",
+      "Vignette.Intensity": "Vignette", "FilmGrain.Intensity": "Grain", "ChromaticAberration.Intensity": "Fringe",
+      "Scanlines.Intensity": "Scanlines", "CRT.Curvature": "CRT curve", "Noise.Intensity": "Noise", "Glitch.Amount": "Glitch", "Posterize.Levels": "Posterize" };
+    const SIGNED = new Set(["Exposure", "Contrast", "Saturation", "Hue", "Warmth", "Tint"]);
+    function summary(ini) {
+      const out = []; let sec = "";
+      for (const raw of ini.split("\n")) {
+        const line = raw.trim(); if (!line) continue;
+        if (line[0] === "[") { sec = line.slice(1, -1); continue; }
+        const i = line.indexOf("="); if (i < 0) continue;
+        const label = LABELS[sec + "." + line.slice(0, i).trim()]; if (!label) continue;
+        const v = parseFloat(line.slice(i + 1)); if (!v) continue;
+        out.push(label + " " + (v > 0 && SIGNED.has(label) ? "+" : "") + (+v.toFixed(2)));
+      }
+      return out;
+    }
+    async function download(p, btn, chips) {
+      btn.disabled = true; const old = btn.textContent; btn.textContent = "Getting…";
+      try {
+        const r = await fetch(API + "/" + encodeURIComponent(p.id)); if (!r.ok) throw 0;
+        const full = await r.json();
+        const text = "; " + full.name + " by " + full.author + " - from the QuestShade preset browser\n[Shared]\nId = " + full.id + "\nAuthor = " + full.author + "\n" + full.ini;
+        const a = el("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+        a.download = (full.name.replace(/[\\/:*?"<>|]/g, "").trim() || "preset") + ".ini";
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        btn.textContent = "Downloaded";
+        if (!chips.childElementCount) summary(full.ini).slice(0, 8).forEach(s => chips.appendChild(el("span", null, s)));
+      } catch { btn.textContent = "Try again"; }
+      btn.disabled = false; setTimeout(() => { btn.textContent = old; }, 2500);
+    }
+    async function load() {
+      const my = ++seq, q = search.value.trim();
+      try {
+        const r = await fetch(API + "?sort=" + sort + (q ? "&q=" + encodeURIComponent(q) : ""));
+        if (!r.ok) throw 0;
+        const { presets } = await r.json();
+        if (my !== seq) return;
+        if (!presets.length) return state(q ? "No presets match that." : "No presets shared yet. Be the first: Effects → Edit preset → Share publicly.");
+        grid.replaceChildren(...presets.map(p => {
+          const c = el("article", "preset");
+          const nums = el("div", "nums"); nums.append(el("span", null, "♥ " + p.likes), el("span", null, "⬇ " + p.downloads));
+          const chips = el("div", "chips"), row = el("div", "row"), b = el("button", "sbtn go", "Download .ini");
+          b.type = "button"; b.addEventListener("click", () => download(p, b, chips)); row.append(b);
+          c.append(el("h3", null, p.name), el("div", "by", "by " + p.author), nums, chips, row);
+          return c;
+        }));
+      } catch { if (my === seq) state("Couldn't reach the preset server. Try again in a bit."); }
+    }
+    tabs.forEach(t => t.addEventListener("click", () => {
+      sort = t.dataset.sort; tabs.forEach(x => x.setAttribute("aria-pressed", String(x === t))); load();
+    }));
+    search.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(load, 300); });
+    load();
+  })();
 
   fetch("https://api.github.com/repos/MonkeOnYT-glitch/QuestShade/releases?per_page=100")
     .then(r => r.ok ? r.json() : null)
