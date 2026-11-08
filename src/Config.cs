@@ -1,0 +1,363 @@
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using MelonLoader.Utils;
+using UnityEngine;
+
+namespace QuestShade
+{
+    internal sealed class Config
+    {
+        public static string Root, PresetDir, LutDir, MainIniPath;
+
+        public bool Enabled = true;
+        public string PresetName = "Vivid";
+        public bool HotReload = true;
+        public float ReloadInterval = 2f;
+        public bool AllowUnsupportedOnQuest = false;
+        public bool ShowToasts = true;
+        public bool EmulateQuest;
+        public bool BloomDofHeadset = false, BloomDofPreview = true, BloomDofCapture = true, BloomDofAll = true;
+        public bool MatchPreview = true;
+        public float BloomStrength = 1f, BlurStrength = 1f, GripAngle = 0f;
+        public bool TimelineFollow = false, TimelineAutoRecord = true;
+
+        public Binding ToggleEffects, NextPreset, PrevPreset, ToggleCamera, TakePhoto, CameraMode, HideCamera, Record;
+        public bool Haptics = true, Keyboard = true;
+        public float HoldTime = 0.6f, DoubleTapTime = 0.35f;
+
+        public int PreviewWidth = 512, PreviewHeight = 288, PreviewFps = 24;
+        public int PhotoWidth = 1920, PhotoHeight = 1080, PhotoMsaa = 2;
+        public float Fov = 60f, FarClip = 0f, Smoothing = 0.12f, ScreenSize = 0.16f;
+        public bool PreviewShadows = false, PhotoShadows = true, CameraPostProcessing = true;
+        public Vector3 HandOffset = new Vector3(0f, 0.06f, 0.10f);
+        public float HandTilt = 25f;
+        public float ThirdPersonDistance = 1.6f, ThirdPersonHeight = 0.35f, ThirdPersonSide = 0.35f;
+        public bool FusionEffectsOnly = true;
+        public bool PhysicalCamera = false, FreezeOnRelease = true, HandheldModel = true, HoverPreview = false, CameraLabel = true;
+        public int PhotoTimer = 0;
+        public string BodyBarcode = "c1534c5a-87ce-436d-b00c-ef9547726176";
+        public float BodyMountHeight = 0.06f;
+        public float ChestFov = 100f, ChestForward = 0.16f, ChestHeight = 0f, ChestSide = 0f, ChestPitch = -5f;
+        public string SaveFolder = "auto";
+        public CamMode DefaultMode = CamMode.Hand;
+        public bool PreviewEnabled = true;
+        public int RecordWidth = 1920, RecordHeight = 1080, RecordFps = 30, RecordBitrateKbps = 35000;
+        public float RecordSupersample = 1.5f;
+        public bool RecordGameAudio = false, RecordMic = false;
+        public float GameVolume = 1f, MicVolume = 1f;
+        public int AudioBitrateKbps = 128;
+
+        public Ini Preset { get; private set; }
+        public string PresetFile { get; private set; }
+        public List<string> Presets { get; } = new List<string>();
+        public int PresetIndex { get; private set; }
+
+        private DateTime _mainTime, _presetTime, _lutTime;
+        private string _lutWatched;
+        private float _nextCheck;
+
+        public static void InitPaths()
+        {
+            Root = Path.Combine(MelonEnvironment.UserDataDirectory, "QuestShade");
+            PresetDir = Path.Combine(Root, "Presets");
+            LutDir = Path.Combine(Root, "LUTs");
+            MainIniPath = Path.Combine(Root, "QuestShade.ini");
+            Directory.CreateDirectory(PresetDir);
+            Directory.CreateDirectory(LutDir);
+            try { var nm = Path.Combine(Root, ".nomedia"); if (!File.Exists(nm)) File.WriteAllText(nm, ""); } catch { }
+
+            ExtractDefaults();
+        }
+
+        private static void ExtractDefaults()
+        {
+            var asm = Assembly.GetExecutingAssembly();
+            const string prefix = "QuestShade.Defaults.";
+            foreach (var name in asm.GetManifestResourceNames())
+            {
+                if (!name.StartsWith(prefix)) continue;
+                var rel = name.Substring(prefix.Length).Replace('\\', '/');
+                var dest = Path.Combine(Root, rel.Replace('/', Path.DirectorySeparatorChar));
+                if (File.Exists(dest)) continue;
+                Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                using var s = asm.GetManifestResourceStream(name);
+                using var f = File.Create(dest);
+                s.CopyTo(f);
+            }
+        }
+
+        public void LoadAll()
+        {
+            LoadMain();
+            ScanPresets();
+            LoadPreset(PresetName);
+        }
+
+        private void LoadMain()
+        {
+            var ini = File.Exists(MainIniPath) ? Ini.Parse(File.ReadAllText(MainIniPath)) : Ini.Parse("");
+            _mainTime = Mtime(MainIniPath);
+
+            Enabled = ini.Bool("General", "Enabled", true);
+            PresetName = ini.Str("General", "Preset", PresetName);
+            HotReload = ini.Bool("General", "HotReload", true);
+            ReloadInterval = Mathf.Max(0.5f, ini.Float("General", "ReloadInterval", 2f));
+            AllowUnsupportedOnQuest = ini.Bool("General", "AllowUnsupportedOnQuest", false);
+            ShowToasts = ini.Bool("General", "ShowToasts", true);
+            BloomDofHeadset = ini.Bool("General", "BloomDofHeadset", false);
+            BloomDofPreview = ini.Bool("General", "BloomDofPreview", true);
+            BloomDofCapture = ini.Bool("General", "BloomDofPhotosVideo", true);
+            MatchPreview = ini.Bool("General", "MatchPreview", true);
+            BloomDofAll = ini.Bool("General", "BloomDofEveryPreset", true);
+            BloomStrength = Mathf.Clamp(ini.Float("General", "BloomStrength", 1f), 0f, 4f);
+            BlurStrength = Mathf.Clamp(ini.Float("General", "BlurStrength", 1f), 0f, 3f);
+            GripAngle = Mathf.Clamp(ini.Float("Camera", "GripAngle", 0f), -90f, 90f);
+            TimelineFollow = ini.Bool("Camera", "TimelineFollow", false);
+            TimelineAutoRecord = ini.Bool("Camera", "TimelineAutoRecord", true);
+
+            ToggleEffects = Binding.Parse(ini.Str("Controls", "ToggleEffects", "RightStickHold"));
+            NextPreset = Binding.Parse(ini.Str("Controls", "NextPreset", "RightStickDoubleTap"));
+            PrevPreset = Binding.Parse(ini.Str("Controls", "PrevPreset", "None"));
+            ToggleCamera = Binding.Parse(ini.Str("Controls", "ToggleCamera", "BothSticks"));
+            TakePhoto = Binding.Parse(ini.Str("Controls", "TakePhoto", "LeftStickDoubleTap"));
+            CameraMode = Binding.Parse(ini.Str("Controls", "CameraMode", "LeftStickHold"));
+            HideCamera = Binding.Parse(ini.Str("Controls", "HideCamera", "LeftGripStickHold"));
+            Record = Binding.Parse(ini.Str("Controls", "Record", "RightGripStickHold"));
+            Haptics = ini.Bool("Controls", "Haptics", true);
+            Keyboard = ini.Bool("Controls", "Keyboard", true);
+            HoldTime = Mathf.Clamp(ini.Float("Controls", "HoldTime", 0.6f), 0.2f, 3f);
+            DoubleTapTime = Mathf.Clamp(ini.Float("Controls", "DoubleTapTime", 0.35f), 0.15f, 1f);
+
+            PreviewWidth = Mathf.Clamp(ini.Int("Camera", "PreviewWidth", 512), 64, 2048);
+            PreviewHeight = Mathf.Clamp(ini.Int("Camera", "PreviewHeight", 288), 64, 2048);
+            PreviewFps = Mathf.Clamp(ini.Int("Camera", "PreviewFps", 24), 1, 120);
+            PhotoWidth = Mathf.Clamp(ini.Int("Camera", "PhotoWidth", 1920), 128, 4096);
+            PhotoHeight = Mathf.Clamp(ini.Int("Camera", "PhotoHeight", 1080), 128, 4096);
+            PhotoMsaa = ini.Int("Camera", "PhotoMSAA", 2) switch { >= 8 => 8, >= 4 => 4, >= 2 => 2, _ => 1 };
+            if (Application.platform == RuntimePlatform.Android) PhotoMsaa = 1;
+            Fov = Mathf.Clamp(ini.Float("Camera", "FieldOfView", 60f), 10f, 140f);
+            var fc = ini.Float("Camera", "FarClip", 0f);
+            FarClip = fc <= 0f ? 0f : Mathf.Clamp(fc, 10f, 100000f);
+            Smoothing = Mathf.Clamp01(ini.Float("Camera", "Smoothing", 0.12f));
+            ScreenSize = Mathf.Clamp(ini.Float("Camera", "ScreenSize", 0.16f), 0.05f, 1f);
+            PreviewShadows = ini.Bool("Camera", "PreviewShadows", false);
+            PhotoShadows = ini.Bool("Camera", "PhotoShadows", true);
+            CameraPostProcessing = ini.Bool("Camera", "PostProcessing", true);
+            HandOffset = ini.Vec3("Camera", "HandOffset", HandOffset);
+            HandTilt = ini.Float("Camera", "HandTilt", HandTilt);
+            ThirdPersonDistance = Mathf.Clamp(ini.Float("Camera", "ThirdPersonDistance", 1.6f), 0.3f, 10f);
+            ThirdPersonHeight = Mathf.Clamp(ini.Float("Camera", "ThirdPersonHeight", 0.35f), -2f, 5f);
+            ThirdPersonSide = Mathf.Clamp(ini.Float("Camera", "ThirdPersonSide", 0.35f), -3f, 3f);
+            PhysicalCamera = ini.Bool("Camera", "CupBody", false);
+            FusionEffectsOnly = ini.Bool("Camera", "NoCameraInFusion", true);
+            HoverPreview = ini.Bool("Camera", "HoverPreview", false);
+            CameraLabel = ini.Bool("Camera", "ControlsLabel", true);
+            PhotoTimer = Mathf.Clamp(ini.Int("Camera", "PhotoTimer", 0), 0, 30);
+            HandheldModel = !string.Equals((ini.Str("Camera", "CameraModel", "handheld") ?? "").Trim(), "simple", StringComparison.OrdinalIgnoreCase);
+            FreezeOnRelease = ini.Bool("Camera", "FreezeOnRelease", true);
+            BodyBarcode = (ini.Str("Camera", "BodyBarcode", BodyBarcode) ?? BodyBarcode).Trim();
+            BodyMountHeight = Mathf.Clamp(ini.Float("Camera", "BodyMountHeight", 0.06f), -0.5f, 0.5f);
+            ChestFov = Mathf.Clamp(ini.Float("Camera", "ChestFieldOfView", 100f), 10f, 150f);
+            ChestForward = Mathf.Clamp(ini.Float("Camera", "ChestForward", 0.16f), -0.5f, 1f);
+            ChestHeight = Mathf.Clamp(ini.Float("Camera", "ChestHeight", 0f), -1f, 1f);
+            ChestSide = Mathf.Clamp(ini.Float("Camera", "ChestSide", 0f), -1f, 1f);
+            ChestPitch = Mathf.Clamp(ini.Float("Camera", "ChestPitch", -5f), -60f, 60f);
+            SaveFolder = ini.Str("Camera", "SaveFolder", "auto");
+            DefaultMode = Enum.TryParse<CamMode>(ini.Str("Camera", "Mode", "Hand"), true, out var dm) ? dm : CamMode.Hand;
+            PreviewEnabled = ini.Bool("Camera", "Preview", true);
+            var q = (ini.Str("Camera", "RecordQuality", "ultra") ?? "ultra").Trim().ToLowerInvariant();
+            int autoKbps;
+            long budget = Device.RecordPixelBudget;
+            if (q == "ultra" || q == "auto")
+                q = budget >= 1920L * 1080 ? "1080p" : budget >= 1280L * 720 ? "720p" : "540p";
+            (RecordWidth, RecordHeight, autoKbps) = q switch
+            {
+                "480p" => (848, 480, 1300),
+                "540p" => (960, 540, 1600),
+                "1080p" => (1920, 1080, 4500),
+                _ => (1280, 720, 2500),
+            };
+            RecordSupersample = Mathf.Clamp(ini.Float("Camera", "RecordSupersample", 1f), 1f, 2f);
+            double room = Math.Sqrt(budget * 1.3 / ((double)RecordWidth * RecordHeight));
+            RecordSupersample = Mathf.Max(1f, Mathf.Min(RecordSupersample, (float)room));
+            if ((long)RecordWidth * RecordHeight > budget)
+                Mod.Log.Warning($"RecordQuality {q} is above what a {Device.Name} usually handles while playing - expect stutter or crashes");
+            RecordFps = Mathf.Clamp(ini.Int("Camera", "RecordFps", 30), 10, 60);
+            var br = (ini.Str("Camera", "RecordBitrate", "auto") ?? "auto").Trim();
+            RecordBitrateKbps = int.TryParse(br, out int kb) ? Mathf.Clamp(kb, 1000, 60000) : autoKbps;
+            RecordGameAudio = ini.Bool("Camera", "RecordGameAudio", false);
+            RecordMic = ini.Bool("Camera", "RecordMic", false);
+            GameVolume = Mathf.Clamp(ini.Float("Camera", "GameVolume", 1f), 0f, 4f);
+            MicVolume = Mathf.Clamp(ini.Float("Camera", "MicVolume", 1f), 0f, 4f);
+            AudioBitrateKbps = Mathf.Clamp(ini.Int("Camera", "AudioBitrate", 128), 64, 320);
+        }
+
+        public void ScanPresets()
+        {
+            ReShadeImport.Run();
+            Presets.Clear();
+            Presets.AddRange(Directory.GetFiles(PresetDir, "*.ini")
+                .Select(Path.GetFileNameWithoutExtension)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase));
+        }
+
+        public void LoadPreset(string name)
+        {
+            if (Presets.Count == 0) { Preset = Ini.Parse(""); PresetFile = null; PresetName = "(none)"; return; }
+            int idx = Presets.FindIndex(p => p.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (idx < 0) idx = 0;
+            PresetIndex = idx;
+            PresetName = Presets[idx];
+            PresetFile = Path.Combine(PresetDir, PresetName + ".ini");
+            try { Preset = Ini.Parse(File.ReadAllText(PresetFile)); }
+            catch (Exception e) { Mod.Log.Warning($"Couldn't read preset {PresetFile}: {e.Message}"); Preset = Ini.Parse(""); }
+            _presetTime = Mtime(PresetFile);
+            WatchLut(LutPath());
+        }
+
+        public void StepPreset(int dir)
+        {
+            ScanPresets();
+            if (Presets.Count == 0) return;
+            int i = Presets.FindIndex(p => p.Equals(PresetName, StringComparison.OrdinalIgnoreCase));
+            i = ((i < 0 ? 0 : i + dir) % Presets.Count + Presets.Count) % Presets.Count;
+            LoadPreset(Presets[i]);
+            SaveSelectedPreset();
+        }
+
+        public void SelectPreset(string name)
+        {
+            ScanPresets();
+            LoadPreset(name);
+            SaveSelectedPreset();
+        }
+
+        private void SaveSelectedPreset() => SetKey("General", "Preset", PresetName);
+
+        public void SetKey(string section, string key, string value)
+        {
+            try
+            {
+                var lines = File.Exists(MainIniPath) ? File.ReadAllLines(MainIniPath).ToList() : new List<string>();
+                bool inSec = false; int secEnd = -1;
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    var t = lines[i].Trim();
+                    if (t.StartsWith("["))
+                    {
+                        if (inSec) { secEnd = i; break; }
+                        inSec = t.Equals("[" + section + "]", StringComparison.OrdinalIgnoreCase);
+                        if (inSec) secEnd = lines.Count;
+                        continue;
+                    }
+                    if (!inSec) continue;
+                    int eq = t.IndexOf('=');
+                    if (eq > 0 && t.Substring(0, eq).Trim().Equals(key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        int sc = lines[i].IndexOf(';');
+                        string comment = sc >= 0 ? "   " + lines[i].Substring(sc) : "";
+                        lines[i] = $"{key} = {value}{comment}";
+                        Write(lines);
+                        return;
+                    }
+                }
+                if (secEnd < 0) { lines.Add(""); lines.Add("[" + section + "]"); lines.Add($"{key} = {value}"); }
+                else
+                {
+                    int at = secEnd;
+                    while (at > 0 && lines[at - 1].Trim().Length == 0) at--;
+                    lines.Insert(at, $"{key} = {value}");
+                }
+                Write(lines);
+            }
+            catch (Exception e) { Mod.Log.Warning($"Couldn't save {section}.{key}: {e.Message}"); }
+
+            void Write(List<string> l) { File.WriteAllLines(MainIniPath, l); _mainTime = Mtime(MainIniPath); }
+        }
+
+        private static string F(float f) => f.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+        public void SaveMenuSettings()
+        {
+            SetKey("General", "Enabled", Enabled ? "true" : "false");
+            SetKey("General", "Preset", PresetName);
+            SetKey("General", "BloomDofHeadset", BloomDofHeadset ? "true" : "false");
+            SetKey("General", "BloomDofPreview", BloomDofPreview ? "true" : "false");
+            SetKey("General", "BloomDofPhotosVideo", BloomDofCapture ? "true" : "false");
+            SetKey("General", "MatchPreview", MatchPreview ? "true" : "false");
+            SetKey("General", "BloomDofEveryPreset", BloomDofAll ? "true" : "false");
+            SetKey("General", "BloomStrength", BloomStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            SetKey("General", "BlurStrength", BlurStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            SetKey("Camera", "GripAngle", GripAngle.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
+            SetKey("Camera", "TimelineFollow", TimelineFollow ? "true" : "false");
+            SetKey("Camera", "TimelineAutoRecord", TimelineAutoRecord ? "true" : "false");
+            SetKey("Camera", "Mode", DefaultMode.ToString());
+            SetKey("Camera", "FieldOfView", F(Fov));
+            SetKey("Camera", "Smoothing", F(Smoothing));
+            SetKey("Camera", "PreviewFps", PreviewFps.ToString());
+            SetKey("Camera", "Preview", PreviewEnabled ? "true" : "false");
+            SetKey("Camera", "PreviewShadows", PreviewShadows ? "true" : "false");
+            SetKey("Camera", "PostProcessing", CameraPostProcessing ? "true" : "false");
+            SetKey("Camera", "ThirdPersonDistance", F(ThirdPersonDistance));
+            SetKey("Camera", "ThirdPersonHeight", F(ThirdPersonHeight));
+            SetKey("Camera", "ThirdPersonSide", F(ThirdPersonSide));
+            SetKey("Camera", "HoverPreview", HoverPreview ? "true" : "false");
+            SetKey("Camera", "ControlsLabel", CameraLabel ? "true" : "false");
+            SetKey("Camera", "RecordGameAudio", RecordGameAudio ? "true" : "false");
+            SetKey("Camera", "RecordMic", RecordMic ? "true" : "false");
+            SetKey("Camera", "PhotoTimer", PhotoTimer.ToString());
+            SetKey("Camera", "FreezeOnRelease", FreezeOnRelease ? "true" : "false");
+            SetKey("Camera", "NoCameraInFusion", FusionEffectsOnly ? "true" : "false");
+            SetKey("Camera", "ChestFieldOfView", F(ChestFov));
+            SetKey("Camera", "ChestForward", F(ChestForward));
+            SetKey("Camera", "ChestHeight", F(ChestHeight));
+            SetKey("Camera", "ChestSide", F(ChestSide));
+            SetKey("Camera", "ChestPitch", F(ChestPitch));
+        }
+        public string LutPath()
+        {
+            var f = Preset?.Str("LUT", "File");
+            if (string.IsNullOrEmpty(f) || !Preset.Enabled("LUT")) return null;
+            return Path.IsPathRooted(f) ? f : Path.Combine(LutDir, f);
+        }
+
+        private void WatchLut(string path) { _lutWatched = path; _lutTime = path != null ? Mtime(path) : default; }
+
+        public bool PollChanges(float now)
+        {
+            if (!HotReload || now < _nextCheck) return false;
+            _nextCheck = now + ReloadInterval;
+            bool changed = false;
+            if (Mtime(MainIniPath) != _mainTime)
+            {
+                Mod.Log.Msg("QuestShade.ini changed, reloading");
+                var before = PresetName;
+                LoadMain();
+                ScanPresets();
+                LoadPreset(PresetName);
+                changed = true;
+            }
+            else if (PresetFile != null && Mtime(PresetFile) != _presetTime)
+            {
+                Mod.Log.Msg($"Preset '{PresetName}' changed, reloading");
+                LoadPreset(PresetName);
+                changed = true;
+            }
+            else if (_lutWatched != null && Mtime(_lutWatched) != _lutTime)
+            {
+                WatchLut(_lutWatched);
+                changed = true;
+            }
+            return changed;
+        }
+
+        private static DateTime Mtime(string p)
+        {
+            try { return p != null && File.Exists(p) ? File.GetLastWriteTimeUtc(p) : default; }
+            catch { return default; }
+        }
+    }
+}

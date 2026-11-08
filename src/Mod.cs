@@ -1,0 +1,596 @@
+﻿using System;
+using System.Linq;
+using MelonLoader;
+using UnityEngine;
+
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.3.0", "QuestShade")]
+[assembly: MelonGame("Stress Level Zero", "BONELAB")]
+[assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
+[assembly: MelonOptionalDependencies("BoneLib")]
+
+namespace QuestShade
+{
+    public sealed class Mod : MelonMod
+    {
+        internal static MelonLogger.Instance Log;
+
+        private readonly Config _cfg = new Config();
+        private readonly Effects _fx = new Effects();
+        private readonly PhotoCamera _cam = new PhotoCamera();
+        private readonly Controls _ctl = new Controls();
+        private readonly Toast _toast = new Toast();
+        private float _nextCamCheck;
+        private bool _ready, _boneLib;
+        private int _errors;
+
+        public override void OnInitializeMelon()
+        {
+            Log = LoggerInstance;
+            try
+            {
+                Config.InitPaths();
+                _cfg.LoadAll();
+                PhotoSaver.ResolveFolder(_cfg.SaveFolder);
+                _cam.SetMode(_cfg.DefaultMode);
+                _cam.Fx = _fx;
+                _cam.SetHoverPreview(_cfg.HoverPreview);
+                _cam.Feedback += (msg, left) => { _ctl.Buzz(_cfg, left, 0.5f, 0.05f); if (msg != null) Notify(msg, 1f); };
+                _ready = true;
+                Log.Msg($"Ready on {Application.platform}. Config: {Config.Root}  Presets: {string.Join(", ", _cfg.Presets)}");
+            }
+            catch (Exception e) { Log.Error("Init failed, QuestShade disabled: " + e); return; }
+
+            _boneLib = AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "BoneLib");
+            if (_boneLib)
+            {
+                try { BoneMenuUi.Build(this, _cfg); _cam.ChestProvider = BoneMenuUi.Chest; Focus.PlayerRoot = BoneMenuUi.PlayerRoot; _cam.HideHead = BoneMenuUi.HideHead; _cam.RestoreHead = BoneMenuUi.RestoreHead; _cam.UiLayerMask = BoneMenuUi.UiLayerMask; _cam.ActorPose = BoneMenuUi.ActorPose; _cam.HideHeadOf = BoneMenuUi.HideHeadOf; _cam.HeadToLayer = BoneMenuUi.HeadToLayer; _cam.HeadRestore = BoneMenuUi.RestoreHeadLayer; _cam.OwnBodyToLayer = BoneMenuUi.OwnBodyToLayer;
+                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Log.Msg("BoneMenu page added"); }
+                catch (Exception e) { _boneLib = false; Log.Warning("BoneLib found but menu failed (gestures still work): " + e.Message); }
+            }
+            else Log.Msg("BoneLib not found - using controller gestures only");
+        }
+
+        public override void OnSceneWasInitialized(int buildIndex, string sceneName)
+        {
+            if (!_ready) return;
+            if (_cam.Recording) { var f = _cam.StopRecording(); if (f != null) Log.Msg("Recording stopped by level change: " + f); }
+            _cam.OnSceneLoaded();
+            _fx.ResetCalibration();
+            Perf.OnSceneLoaded();
+            _calibTries = 0; _nextCalibAt = Time.unscaledTime + 9f;
+            _nextCamCheck = 0f;
+            _fx.MarkDirty();
+        }
+
+        public override void OnUpdate()
+        {
+            if (!_ready) return;
+            float now = Time.unscaledTime;
+            _sw.Restart();
+            try
+            {
+                if (_cfg.PollChanges(now)) { _fx.MarkDirty(); _cam.Refresh(_cfg, _fx.BoundCamera); RefreshPresetMenu(); }
+                if (now >= _nextCamCheck) { _nextCamCheck = now + 1f; _fx.EnsureCamera(_cfg); }
+                _fx.Tick(_cfg);
+                _fx.TickHeadsetFocus(Time.unscaledDeltaTime);
+
+                _ctl.Update(_cfg, now);
+                HandleInput();
+                _ctl.EndFrame();
+
+                TimerTick(now);
+                TimelineTick();
+                FusionTick();
+                if (_uiDumpAt > 0f && now > _uiDumpAt) { _uiDumpAt = -1f; if (_boneLib) BoneMenuUi.DumpUi(); }
+                SelfTest(now);
+                var saved = PhotoSaver.PumpMainThread();
+                if (saved != null) Notify(saved, saved.Contains("fail") ? 4f : 1.5f);
+            }
+            catch (Exception e) { Guard(e); }
+            _ownMs += _sw.Elapsed.TotalMilliseconds;
+        }
+
+        private readonly System.Diagnostics.Stopwatch _sw = new System.Diagnostics.Stopwatch();
+        private float _nextCalibAt; private int _calibTries; private float _uiDumpAt = -1f;
+        private double _ownMs, _ownMax;
+
+        public override void OnLateUpdate()
+        {
+            if (!_ready) return;
+            _sw.Restart();
+            try
+            {
+                var head = _fx.BoundCamera;
+                _fx.PhotoCamera = _cam.Open ? _cam.LensCamera : null;
+                _cam.LateTick(_cfg, head, Time.unscaledDeltaTime, _ctl.GripL, _ctl.GripR);
+                if (!_cam.Open)
+                {
+                    _cam.PrewarmTick(_cfg, head);
+                    float now = Time.unscaledTime;
+                    if (_fx.CalibrationWanted && !_cam.Prewarming && now > _nextCalibAt && _calibTries < 8)
+                    { _calibTries++; _nextCalibAt = now + 5f; _cam.SchedulePrewarm(0f); }
+                }
+                _toast.LateTick(head);
+                if (_boneLib)
+                {
+                    BoneMenuUi.Hmd = head != null ? head.transform : null;
+                    Vector3 top = default; int which = 0, count = 0;
+                    bool show = _cfg.TimelineFollow && TimelineLink.Present && BoneMenuUi.ActorMarker(_cam.ActorIndex, out top, out which, out count);
+                    _marker.Tick(show, top, head, which, count);
+                    BoneMenuUi.OutlineSelected(show && !TimelineLink.PlayingTake);
+                }
+                _cam.ToastObject = _toast.Object;
+            }
+            catch (Exception e) { _cam.Close(); Guard(e); }
+            _ownMs += _sw.Elapsed.TotalMilliseconds;
+            if (_ownMs > _ownMax) _ownMax = _ownMs;
+            SpikeWatch();
+            Perf.Tick(Time.unscaledDeltaTime);
+            _ownMs = 0;
+        }
+
+        private int _gcSeen; private float _nextSpikeLog; private int _spikes;
+        private void SpikeWatch()
+        {
+            float dt = Time.unscaledDeltaTime;
+            int gc = GC.CollectionCount(0);
+            bool gcRan = gc != _gcSeen; _gcSeen = gc;
+            if (dt < 0.045f || Time.unscaledTime < 20f) return;
+            _spikes++;
+            if (Time.unscaledTime < _nextSpikeLog) return;
+            _nextSpikeLog = Time.unscaledTime + 2f;
+            Log.Msg($"Perf: {dt * 1000f:0} ms frame (QuestShade {_ownMs:0.0} ms{(gcRan ? ", .NET GC ran" : "")}{(_cam.Recording ? ", recording" : "")}{(_cam.Open ? ", camera open" : "")}) - {_spikes} spikes so far");
+        }
+
+        private void Guard(Exception e)
+        {
+            _errors++;
+            if (_errors <= 5) Log.Error(e.ToString());
+            if (_errors == 5) Log.Error("Further QuestShade errors suppressed.");
+            _nextCamCheck = Time.unscaledTime + 3f;
+        }
+
+
+        internal void SetEffectsEnabled(bool on)
+        {
+            _cfg.Enabled = on;
+            _fx.EnsureCamera(_cfg);
+            Notify(on ? $"Effects ON ({_cfg.PresetName})" : "Effects OFF");
+        }
+
+        internal void StepPreset(int dir)
+        {
+            _cfg.StepPreset(dir);
+            AfterPresetChange();
+        }
+
+        internal void SelectPreset(string name)
+        {
+            _cfg.SelectPreset(name);
+            AfterPresetChange();
+        }
+
+        private void AfterPresetChange()
+        {
+            _cfg.Enabled = true;
+            _fx.MarkDirty();
+            RefreshPresetMenu();
+            Notify($"Preset {_cfg.PresetIndex + 1}/{_cfg.Presets.Count}: {_cfg.PresetName}");
+        }
+
+        internal void ReloadAll()
+        {
+            _cfg.LoadAll();
+            _fx.MarkDirty();
+            _cam.Refresh(_cfg, _fx.BoundCamera);
+            RefreshPresetMenu();
+            Notify($"Reloaded ({_cfg.Presets.Count} presets)");
+        }
+
+        internal void ToggleCamera()
+        {
+            if (_cam.Blocked && !_cam.Open) { Notify("Camera's off in Fusion lobbies (Camera > Settings to change)", 2f); return; }
+            _cam.Toggle(_cfg, _fx.BoundCamera);
+            Notify(_cam.Open ? $"Camera: {Pretty(_cam.Mode)}" : "Camera closed", 1f);
+        }
+
+        internal void SetCameraMode(CamMode m, bool open = false)
+        {
+            bool changed = _cfg.DefaultMode != m || _cam.Mode != m;
+            _cfg.DefaultMode = m;
+            _cam.SetMode(m);
+            if (open && !_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+            if (changed && _cam.Open) Notify($"Camera: {Pretty(m)}", 1f);
+        }
+
+        private float _timerAt = -1f; private int _timerShown;
+
+        internal void TakePhoto()
+        {
+            if (!_cam.Open) { Notify("Open the camera first", 1f); return; }
+            if (_cfg.PhotoTimer > 0)
+            {
+                if (_timerAt >= 0f) { _timerAt = -1f; Notify("Timer cancelled", 1f); return; }
+                _timerAt = Time.unscaledTime + _cfg.PhotoTimer;
+                _timerShown = _cfg.PhotoTimer + 1;
+                return;
+            }
+            TakePhotoNow();
+        }
+
+        private void TimerTick(float now)
+        {
+            if (_timerAt < 0f) return;
+            if (!_cam.Open) { _timerAt = -1f; return; }
+            float left = _timerAt - now;
+            if (left <= 0f) { _timerAt = -1f; TakePhotoNow(); return; }
+            int s = Mathf.CeilToInt(left);
+            if (s != _timerShown) { _timerShown = s; _ctl.Buzz(_cfg, true, 0.3f, 0.04f); }
+        }
+
+        internal void TakePhotoNow()
+        {
+            if (!_cam.Open) { Notify("Open the camera first", 1f); return; }
+            Log.Msg($"Photo requested ({_cam.Mode})");
+            if (_cam.RequestPhoto(_cfg)) _ctl.Buzz(_cfg, true, 0.8f, 0.08f);
+            else Log.Msg("Photo skipped (busy)");
+        }
+
+        internal void ToggleRecording()
+        {
+            if (_cam.Recording)
+            {
+                var file = _cam.StopRecording();
+                _ctl.Buzz(_cfg, false, 0.6f, 0.1f);
+                Notify(file != null ? "Saving video..." : "Recording stopped (save failed, see log)", 2f);
+                return;
+            }
+            Log.Msg("Recording requested");
+            if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+            if (_cam.StartRecording(_cfg, out var err))
+            {
+                _recStart = Time.unscaledTime;
+                _ctl.Buzz(_cfg, false, 0.8f, 0.1f);
+#if QUEST
+                if (AudioCapture.Notice != null) { Notify(AudioCapture.Notice, 4f); AudioCapture.Notice = null; return; }
+#endif
+                Notify("Recording... (hold trigger again to stop)", 1.5f);
+            }
+            else Notify(err, 2f);
+        }
+
+        internal void FlipCamera()
+        {
+            if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+            var m = _cam.Mode == CamMode.Selfie ? CamMode.Hand : CamMode.Selfie;
+            _cam.SetMode(m);
+            _cfg.DefaultMode = m;
+            Notify(m == CamMode.Selfie ? "Camera flipped: facing you" : "Camera flipped: facing forward", 1f);
+        }
+
+        internal void SetHoverPreview(bool on)
+        {
+            _cfg.HoverPreview = on;
+            _cam.SetHoverPreview(on);
+        }
+
+        private bool _trigWas, _trigFired; private float _trigStart;
+        private float _recStart; private bool _hintShown; private int _lastHand, _lastBar;
+        private void CameraTrigger(float now)
+        {
+            int hand = _cam.HoldingHand;
+            string extra = null;
+            if (_timerAt >= 0f) extra = $"<color=#ffa030>PHOTO IN {Mathf.CeilToInt(_timerAt - now)}</color>  (tap = cancel)";
+            if (hand != 0 && _lastHand == 0 && !_hintShown)
+            {
+                _hintShown = true;
+                Notify("Camera: TAP trigger = photo, HOLD trigger = start / stop recording", 4f);
+            }
+            _lastHand = hand;
+            if (hand == 0) { _trigWas = _trigFired = false; _cam.LabelExtra = extra; return; }
+            bool down = _ctl.Trigger(hand == 1);
+            if (down && !_trigWas) { _trigStart = now; _lastBar = 0; }
+            float held = now - _trigStart;
+            if (down && !_trigFired && held >= 0.15f)
+            {
+                int n = Mathf.Clamp((int)((held - 0.15f) / (HoldToRecord - 0.15f) * 8f), 0, 8);
+                string bar = new string('\u25A0', n) + new string('\u25A1', 8 - n);
+                extra = $"<color=#ff5050>{(_cam.Recording ? "keep holding = STOP" : "keep holding = RECORD")} {bar}</color>";
+                if (n != _lastBar && n > 0) _ctl.Buzz(_cfg, hand == 1, 0.15f, 0.02f);
+                _lastBar = n;
+            }
+            if (down && !_trigFired && held >= HoldToRecord) { _trigFired = true; ToggleRecording(); }
+            if (!down && _trigWas && !_trigFired) TakePhoto();
+            if (!down) _trigFired = false;
+            _trigWas = down;
+            _cam.LabelExtra = extra;
+        }
+        private const float HoldToRecord = 0.7f;
+
+        internal void SetCameraLabel(bool on) { _cfg.CameraLabel = on; _cam.SetLabel(on); }
+
+        internal void SetPreview(bool on)
+        {
+            _cfg.PreviewEnabled = on;
+            Notify(on ? "Preview on" : "Preview off (camera still shoots)", 1f);
+        }
+
+        internal void ToggleHidden()
+        {
+            if (!_cam.Open) { Notify("Open the camera first", 1f); return; }
+            _cam.SetHidden(!_cam.Hidden);
+            Notify(_cam.Hidden ? (_cam.Recording ? "Camera hidden (still recording)" : "Camera hidden") : "Camera visible", 1f);
+        }
+
+        internal void RefreshCamera() => _cam.Refresh(_cfg, _fx.BoundCamera);
+        internal void ReapplyEffects() => _fx.MarkDirty();
+
+        internal void SetPhysicalCamera(bool on)
+        {
+            _cfg.PhysicalCamera = on;
+            if (_cam.Open && !_cam.Recording) { _cam.Toggle(_cfg, _fx.BoundCamera); _cam.Toggle(_cfg, _fx.BoundCamera); }
+            Notify(on ? "Physical camera: grab it like any item" : "Floating camera", 1.2f);
+        }
+
+        private static string Pretty(CamMode m) => m switch
+        {
+            CamMode.FirstPerson => "First person", CamMode.ThirdPerson => "Third person", CamMode.Chest => "Chest (bodycam)", _ => m.ToString()
+        };
+
+        private void RefreshPresetMenu()
+        {
+            if (!_boneLib) return;
+            try { BoneMenuUi.RefreshPresets(_cfg); } catch { }
+        }
+
+        private bool _tlWasPlaying, _tlWasRecording, _tlStartedRec, _tlWasBusy;
+        private void TimelineTick()
+        {
+            _cam.FollowActor = _cfg.TimelineFollow;
+            TimelineLink.Tick();
+            if (TimelineLink.JustFound && _boneLib) { try { BoneMenuUi.BuildTimeline(this, _cfg); } catch (Exception e) { Log.Warning("Timeline menu failed: " + e.Message); } }
+            if (!TimelineLink.Present) return;
+            bool rec = TimelineLink.Recording;
+            bool playing = TimelineLink.PlayingTake;
+            bool busy = rec || TimelineLink.Playing;
+            if (busy != _tlWasBusy)
+            {
+                _tlWasBusy = busy;
+                _cam.SuppressBody = busy;
+                Log.Msg(busy ? $"Timeline busy (playing {TimelineLink.Playing}, paused {TimelineLink.Paused}, recording {rec}): camera body put away" : "Timeline idle: camera body back");
+                if (busy && _cam.HasBody) _cam.ParkBody();
+            }
+            if (rec != _tlWasRecording) { _tlWasRecording = rec; Log.Msg("Timeline recording: " + rec); }
+            if (playing == _tlWasPlaying) return;
+            _tlWasPlaying = playing;
+            Log.Msg("Timeline playback: " + (playing ? "started" : "stopped"));
+            if (!_cfg.TimelineAutoRecord) return;
+            if (playing && !_cam.Recording)
+            {
+                if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+                ToggleRecording();
+                _tlStartedRec = _cam.Recording;
+            }
+            else if (!playing && _tlStartedRec)
+            {
+                _tlStartedRec = false;
+                if (_cam.Recording) ToggleRecording();
+            }
+        }
+
+        private void FusionTick()
+        {
+            FusionLink.Tick();
+            bool block = _cfg.FusionEffectsOnly && FusionLink.InLobby;
+            if (block == _cam.Blocked) return;
+            _cam.Blocked = block;
+            if (block && _cam.Open) _cam.Close();
+            Log.Msg(block ? "Fusion lobby: camera off, effects stay on" : "Left the Fusion lobby: camera available");
+            Notify(block ? "Fusion lobby: camera off, effects still on" : "Camera available again", 2f);
+        }
+
+        private ReplayView _replayView = ReplayView.POV;
+        private readonly ReplayMarker _marker = new ReplayMarker();
+
+        private static CamMode ModeFor(ReplayView v) => v == ReplayView.Chest ? CamMode.Chest : v == ReplayView.OverTheShoulder ? CamMode.ThirdPerson : CamMode.FirstPerson;
+
+        internal void SetReplayView(ReplayView v)
+        {
+            _replayView = v;
+            if (_cfg.TimelineFollow) SetCameraMode(ModeFor(v));
+        }
+
+        internal void SetFollowActor(bool on)
+        {
+            _cfg.TimelineFollow = on;
+            if (!on) { Notify("Camera follows you again", 1.2f); return; }
+            if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+            SetCameraMode(ModeFor(_replayView));
+            NextActor(advance: false);
+        }
+
+        internal void NextActor() => NextActor(true);
+
+        private void NextActor(bool advance)
+        {
+            if (!_cfg.TimelineFollow) { _cfg.TimelineFollow = true; if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera); SetCameraMode(ModeFor(_replayView)); advance = false; }
+            int n = _boneLib ? BoneMenuUi.ActorCount() : 0;
+            if (n == 0)
+            {
+                if (TimelineLink.Present && !TimelineLink.Playing && TimelineLink.Preview())
+                {
+                    BoneMenuUi.RefreshActorsSoon();
+                    Notify("Loading the take's people (paused). The marker shows who gets filmed", 2.5f);
+                }
+                else if (TimelineLink.Previewing) Notify("Still loading the take's people...", 1.5f);
+                else Notify("No replay people - record a Timeline take first", 2f);
+                return;
+            }
+            if (advance) _cam.ActorIndex = (_cam.ActorIndex + 1) % n;
+            Notify($"Filming person {_cam.ActorIndex % n + 1} of {n}", 1.2f);
+        }
+
+        private void Notify(string msg, float seconds = 1.6f)
+        {
+            if (_boneLib && _cfg.ShowToasts)
+            {
+                try { Log.Msg(msg); BoneMenuUi.Notify(msg, seconds); return; }
+                catch {  }
+            }
+            _toast.Show(_cfg, _fx.BoundCamera, msg, seconds);
+        }
+
+        private float _nextSelfTestPoll, _selfTestAt;
+        private int _selfTestStep = -1;
+        private float _ftSum; private int _ftCount; private float _ftMax;
+
+        private void SelfTest(float now)
+        {
+            if (_selfTestStep < 0)
+            {
+                if (now < _nextSelfTestPoll) return;
+                _nextSelfTestPoll = now + 3f;
+                var f = System.IO.Path.Combine(Config.Root, "selftest.txt");
+                if (!System.IO.File.Exists(f) || _fx.BoundCamera == null) return;
+                string mode = "";
+                try { mode = System.IO.File.ReadAllText(f).Trim().ToLowerInvariant(); System.IO.File.Delete(f); } catch { }
+                if (mode.StartsWith("camera")) { _camStep = 0; _selfTestAt = now + 1f; _selfTestStep = 2000; Log.Msg("[SelfTest] camera: photo + 4s recording"); return; }
+                if (mode.StartsWith("ui")) { if (_boneLib) { BoneMenuUi.DumpUi(); _uiDumpAt = now + 1f; } return; }
+                if (mode.StartsWith("avatar")) { if (_boneLib) BoneMenuUi.DumpAvatar(); return; }
+                if (mode.StartsWith("compress:"))
+                {
+                    var target = _cfg.Presets.FirstOrDefault(p => p.StartsWith(mode.Substring(9).Trim(), StringComparison.OrdinalIgnoreCase) && p.EndsWith(ReShadeImport.Suffix));
+                    if (target != null) { ReShadeImport.Answer(target, true); ReloadAll(); Log.Msg("[SelfTest] compressed " + target); }
+                    return;
+                }
+                if (mode.StartsWith("only:"))
+                {
+                    var names = mode.Substring(5).Split('|').Select(x => x.Trim()).ToList();
+                    _shotList = _cfg.Presets.Where(p => names.Any(n => p.Equals(n, StringComparison.OrdinalIgnoreCase))).ToList();
+                    _shotQuest = true; _shotStep = 0; _selfTestAt = now + 1f; _selfTestStep = 1000; Log.Msg($"[SelfTest] {_shotList.Count} presets"); return;
+                }
+                if (mode.StartsWith("imports"))
+                {
+                    _shotList = _cfg.Presets.Where(p => p.EndsWith(ReShadeImport.Suffix)).ToList();
+                    _shotQuest = true; _shotStep = 0; _selfTestAt = now + 1f; _selfTestStep = 1000; Log.Msg($"[SelfTest] {_shotList.Count} imported presets"); return;
+                }
+                if (mode.StartsWith("dof"))
+                {
+                    _shotList = new System.Collections.Generic.List<string>();
+                    foreach (var n in new[] { "Bodycam", "Night Ops", "Night Vision", "CCTV", "Punchy" }) if (_cfg.Presets.Contains(n)) _shotList.Add(n);
+                    _shotQuest = true; _shotStep = 0; _selfTestAt = now + 1f; _selfTestStep = 1000; Log.Msg("[SelfTest] dof photos"); return;
+                }
+                if (mode.StartsWith("presets")) { _shotQuest = !mode.Contains("pc"); _shotStep = 0; _selfTestAt = now + 1f; _selfTestStep = 1000; Log.Msg("[SelfTest] preset photos (" + (_shotQuest ? "Quest-equivalent" : "PC") + ")"); return; }
+                Log.Msg("[SelfTest] start");
+                _selfTestStep = 0; _selfTestAt = now + 1f;
+                return;
+            }
+            float dt = Time.unscaledDeltaTime; _ftSum += dt; _ftCount++; if (dt > _ftMax) _ftMax = dt;
+            if (now < _selfTestAt) return;
+            void Report(string what) { Log.Msg($"[SelfTest] {what}: avg {_ftSum / Math.Max(1, _ftCount) * 1000f:0.0} ms, worst {_ftMax * 1000f:0.0} ms, QuestShade worst {_ownMax:0.00} ms"); _ftSum = 0; _ftCount = 0; _ftMax = 0; _ownMax = 0; }
+
+            if (_selfTestStep >= 2000) { CameraTest(now); return; }
+            if (_selfTestStep >= 1000) { PresetShots(now); return; }
+            int nPresets = _cfg.Presets.Count;
+            int s = _selfTestStep++;
+            if (s == 0) { SetEffectsEnabled(false); _selfTestAt = now + 2f; }
+            else if (s == 1) { Report("effects OFF"); SetEffectsEnabled(true); _selfTestAt = now + 2f; }
+            else if (s < 2 + nPresets) { Report($"preset {_cfg.PresetName}"); StepPreset(1); _selfTestAt = now + 2f; }
+            else if (s < 2 + nPresets + 5 * 2)
+            {
+                int k = s - 2 - nPresets, mode = k / 2;
+                if (k % 2 == 0)
+                {
+                    if (k > 0) Report($"camera {(CamMode)(mode - 1)}");
+                    SetCameraMode((CamMode)mode, true); _selfTestAt = now + 2f;
+                }
+                else { TakePhoto(); _selfTestAt = now + 1.5f; }
+            }
+            else
+            {
+                Report($"camera {CamMode.Tripod}");
+                if (_cam.Open) ToggleCamera();
+                SetCameraMode(CamMode.Hand, true); if (_cam.Open) ToggleCamera();
+                Log.Msg("[SelfTest] done");
+                _selfTestStep = -1;
+            }
+        }
+
+        private int _camStep; private string _testPreset;
+        private void CameraTest(float now)
+        {
+            int s = _camStep++;
+            Log.Msg($"[SelfTest] camera step {s}");
+            switch (s)
+            {
+                case 0: _testPreset = _cfg.PresetName; SetCameraMode(CamMode.ThirdPerson, true); SetEffectsEnabled(false); _selfTestAt = now + 1.5f; break;
+                case 1:
+                    _cam.PhotoTag = "_TestNoFx"; TakePhoto(); _selfTestAt = now + 3f; SetEffectsEnabled(true);
+                    if (_cfg.Presets.Contains("Night Ops")) SelectPreset("Night Ops");
+                    break;
+                case 2: SetCameraMode(CamMode.ThirdPerson, true); _selfTestAt = now + 1.5f; break;
+                case 3: _cam.PhotoTag = "_TestThird"; TakePhoto(); _selfTestAt = now + 3f; break;
+                case 4: SetCameraMode(CamMode.Chest, true); _selfTestAt = now + 1.5f; break;
+                case 5: _cam.PhotoTag = "_TestChest"; TakePhoto(); _selfTestAt = now + 3f; break;
+                case 6: ToggleRecording(); _selfTestAt = now + 4f; break;
+                case 7: if (_cam.Recording) ToggleRecording(); _selfTestAt = now + 1f; break;
+                default:
+                    if (_cam.Open) ToggleCamera();
+                    _cam.SetMode(_cfg.DefaultMode);
+                    if (_testPreset != null) SelectPreset(_testPreset);
+                    Log.Msg("[SelfTest] camera done");
+                    _selfTestStep = -1;
+                    break;
+            }
+        }
+
+        private int _shotStep; private bool _shotQuest; private string _shotOrigPreset;
+        private System.Collections.Generic.List<string> _shotList;
+        private void PresetShots(float now)
+        {
+            var list = _shotList ?? _cfg.Presets;
+            int n = list.Count, s = _shotStep++;
+            if (s == 0)
+            {
+                _shotOrigPreset = _cfg.PresetName;
+                _cfg.EmulateQuest = _shotQuest; _fx.MarkDirty();
+                SetCameraMode(CamMode.ThirdPerson, true); SetEffectsEnabled(false); _selfTestAt = now + 1.5f;
+            }
+            else if (s == 1) { _cam.PhotoTag = "_Original"; TakePhoto(); _selfTestAt = now + 1.5f; }
+            else if (s < 2 + 2 * n)
+            {
+                int i = (s - 2) / 2;
+                if ((s - 2) % 2 == 0) { SelectPreset(list[i]); _selfTestAt = now + (_shotList != null ? 2.5f : 1.5f); }
+                else { _cam.PhotoTag = "_" + _cfg.PresetName.Replace(' ', '_'); TakePhoto(); _selfTestAt = now + 1.5f; }
+            }
+            else
+            {
+                _cfg.EmulateQuest = false; SelectPreset(_shotOrigPreset);
+                if (_cam.Open) ToggleCamera();
+                _cam.SetMode(CamMode.Hand); _cfg.DefaultMode = CamMode.Hand;
+                Log.Msg("[SelfTest] preset photos done"); _shotList = null;
+                _selfTestStep = -1;
+            }
+        }
+
+        private void HandleInput()
+        {
+            if (_ctl.Fired(_cfg.ToggleEffects) || _ctl.Key(_cfg, KeyCode.F7)) { SetEffectsEnabled(!_cfg.Enabled); _ctl.Buzz(_cfg, false); }
+            if (_ctl.Fired(_cfg.NextPreset) || _ctl.Key(_cfg, KeyCode.F8)) { StepPreset(1); _ctl.Buzz(_cfg, false, 0.25f, 0.04f); }
+            if (_ctl.Fired(_cfg.PrevPreset) || _ctl.Key(_cfg, KeyCode.F6)) { StepPreset(-1); _ctl.Buzz(_cfg, false, 0.25f, 0.04f); }
+            if (_ctl.Fired(_cfg.ToggleCamera) || _ctl.Key(_cfg, KeyCode.F9)) { ToggleCamera(); _ctl.Buzz(_cfg, true); }
+            if (!_cam.Open) return;
+            CameraTrigger(Time.unscaledTime);
+            if (_ctl.Fired(_cfg.CameraMode) || _ctl.Key(_cfg, KeyCode.F11))
+            {
+                _cam.CycleMode();
+                _cfg.DefaultMode = _cam.Mode;
+                _ctl.Buzz(_cfg, true, 0.25f, 0.04f);
+                Notify($"Camera: {Pretty(_cam.Mode)}", 1f);
+            }
+            if (_ctl.Fired(_cfg.TakePhoto) || _ctl.Key(_cfg, KeyCode.F10)) TakePhoto();
+            if (_ctl.Fired(_cfg.HideCamera) || _ctl.Key(_cfg, KeyCode.F12)) { ToggleHidden(); _ctl.Buzz(_cfg, true, 0.3f, 0.04f); }
+            if (_ctl.Fired(_cfg.Record) || _ctl.Key(_cfg, KeyCode.R)) ToggleRecording();
+        }
+    }
+}

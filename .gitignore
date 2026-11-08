@@ -1,0 +1,11 @@
+bin/
+obj/
+*.user
+.vs/
+dist/*.zip
+dist/QuestShade/Mods/
+screenshots/
+trailer/
+unity/Library/
+unity/Temp/
+unity/Logs/
