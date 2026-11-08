@@ -46,6 +46,8 @@ namespace QuestShade
 
         public bool Has(string section) => _data.ContainsKey(section);
 
+        public void Set(string section, string key, string value) => GetOrAdd(section)[key] = value;
+
         public Dictionary<string, string> Section(string name)
             => _data.TryGetValue(name, out var d) ? new Dictionary<string, string>(d, StringComparer.OrdinalIgnoreCase) : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 

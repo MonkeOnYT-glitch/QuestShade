@@ -3,7 +3,7 @@ using System.Linq;
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.3.1", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.4.0", "QuestShade")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
 [assembly: MelonOptionalDependencies("BoneLib")]
@@ -207,6 +207,30 @@ namespace QuestShade
             _fx.MarkDirty();
             RefreshPresetMenu();
             Notify($"Preset {_cfg.PresetIndex + 1}/{_cfg.Presets.Count}: {_cfg.PresetName}");
+        }
+
+        internal void EditPreset(string section, string key, string value)
+        {
+            _cfg.SetPresetValue(section, key, value);
+            _cfg.Enabled = true;
+            _fx.MarkDirty();
+        }
+
+        internal void NewPreset(bool copyCurrent)
+        {
+            var name = _cfg.NewPreset(copyCurrent);
+            if (name == null) { Notify("Couldn't make a new preset"); return; }
+            AfterPresetChange();
+            Notify(copyCurrent ? $"Copied to \"{name}\": edit it in Effects > Edit preset" : $"New preset \"{name}\": edit it in Effects > Edit preset", 3f);
+        }
+
+        internal void DeletePreset()
+        {
+            var name = _cfg.PresetName;
+            if (Config.IsBuiltIn(name)) { Notify($"\"{name}\" comes with QuestShade and can't be deleted", 2.5f); return; }
+            if (!_cfg.DeleteCurrentPreset()) { Notify("Couldn't delete that preset"); return; }
+            AfterPresetChange();
+            Notify($"Deleted \"{name}\". Now on {_cfg.PresetName}", 2.5f);
         }
 
         internal void ReloadAll()

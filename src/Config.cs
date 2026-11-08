@@ -241,11 +241,70 @@ namespace QuestShade
 
         private void SaveSelectedPreset() => SetKey("General", "Preset", PresetName);
 
+
+        public void SetPresetValue(string section, string key, string value)
+        {
+            if (PresetFile == null || Preset == null) return;
+            Preset.Set(section, key, value);
+            WriteKey(PresetFile, section, key, value);
+            if (Preset.HasKey(section, "Enabled") && !Preset.Bool(section, "Enabled", true))
+            {
+                Preset.Set(section, "Enabled", "true");
+                WriteKey(PresetFile, section, "Enabled", "true");
+            }
+            _presetTime = Mtime(PresetFile);
+        }
+
+        public string NewPreset(bool copyCurrent)
+        {
+            string name = null;
+            for (int i = 1; i < 1000; i++)
+            {
+                var n = "My preset " + i;
+                if (!File.Exists(Path.Combine(PresetDir, n + ".ini"))) { name = n; break; }
+            }
+            if (name == null) return null;
+            string text;
+            if (copyCurrent && PresetFile != null && File.Exists(PresetFile))
+                text = $"; {name} - copy of {PresetName}, made in game\n" + File.ReadAllText(PresetFile).TrimStart('﻿');
+            else
+                text = $"; {name} - made in game with QuestShade's preset editor\n[Color]\nExposure = 0\nContrast = 0\nSaturation = 0\n";
+            File.WriteAllText(Path.Combine(PresetDir, name + ".ini"), text);
+            SelectPreset(name);
+            return name;
+        }
+
+        public static bool IsBuiltIn(string name)
+        {
+            foreach (var r in Assembly.GetExecutingAssembly().GetManifestResourceNames())
+            {
+                var n = r.Replace('\\', '/');
+                if (n.Equals("QuestShade.Defaults.Presets/" + name + ".ini", StringComparison.OrdinalIgnoreCase) ||
+                    n.Equals("QuestShade.Defaults.Presets." + name + ".ini", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+
+        public bool DeleteCurrentPreset()
+        {
+            if (PresetFile == null || IsBuiltIn(PresetName)) return false;
+            try { File.Delete(PresetFile); } catch (Exception e) { Mod.Log.Warning($"Couldn't delete {PresetFile}: {e.Message}"); return false; }
+            ScanPresets();
+            LoadPreset(Presets.Count > 0 ? Presets[0] : "");
+            SaveSelectedPreset();
+            return true;
+        }
+
         public void SetKey(string section, string key, string value)
+        {
+            if (WriteKey(MainIniPath, section, key, value)) _mainTime = Mtime(MainIniPath);
+        }
+
+        private static bool WriteKey(string path, string section, string key, string value)
         {
             try
             {
-                var lines = File.Exists(MainIniPath) ? File.ReadAllLines(MainIniPath).ToList() : new List<string>();
+                var lines = File.Exists(path) ? File.ReadAllLines(path).ToList() : new List<string>();
                 bool inSec = false; int secEnd = -1;
                 for (int i = 0; i < lines.Count; i++)
                 {
@@ -265,7 +324,7 @@ namespace QuestShade
                         string comment = sc >= 0 ? "   " + lines[i].Substring(sc) : "";
                         lines[i] = $"{key} = {value}{comment}";
                         Write(lines);
-                        return;
+                        return true;
                     }
                 }
                 if (secEnd < 0) { lines.Add(""); lines.Add("[" + section + "]"); lines.Add($"{key} = {value}"); }
@@ -276,10 +335,11 @@ namespace QuestShade
                     lines.Insert(at, $"{key} = {value}");
                 }
                 Write(lines);
+                return true;
             }
-            catch (Exception e) { Mod.Log.Warning($"Couldn't save {section}.{key}: {e.Message}"); }
+            catch (Exception e) { Mod.Log.Warning($"Couldn't save {section}.{key} in {Path.GetFileName(path)}: {e.Message}"); return false; }
 
-            void Write(List<string> l) { File.WriteAllLines(MainIniPath, l); _mainTime = Mtime(MainIniPath); }
+            void Write(List<string> l) => File.WriteAllLines(path, l);
         }
 
         private static string F(float f) => f.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);

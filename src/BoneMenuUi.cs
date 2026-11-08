@@ -66,6 +66,7 @@ namespace QuestShade
             var fx = root.CreatePage("Effects", Color.white);
             fx.CreateBool("Effects on", Color.green, cfg.Enabled, v => mod.SetEffectsEnabled(v));
             _presetPage = fx.CreatePage("Choose preset", Color.white);
+            PresetEditorUi.Build(fx, mod, cfg);
             fx.CreateFunction("Next preset", Color.white, () => mod.StepPreset(1));
             fx.CreateBool("Videos match the preview", Color.white, cfg.MatchPreview, v => cfg.MatchPreview = v);
             var fxMore = fx.CreatePage("Bloom + depth of field", Color.white);
@@ -550,6 +551,7 @@ namespace QuestShade
         public static void RefreshPresets(Config cfg)
         {
             try { RefreshImports(cfg); } catch { }
+            try { PresetEditorUi.Refresh(); } catch (Exception e) { Mod.Log.Warning("Preset editor: " + e.Message); }
             if (_presetPage == null) return;
             _presetPage.RemoveAll();
             foreach (var p in cfg.Presets)

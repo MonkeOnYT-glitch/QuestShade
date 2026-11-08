@@ -23,6 +23,8 @@ I wanted my Quest footage to look like the stuff people make on PC with ReShade,
 - Everything goes straight into your Quest gallery (same way LIV's camera does it). No file manager, no extra permissions.
 - Your own head and menus never show up in the shot.
 
+**Make your own presets in the headset.** Effects > Edit preset > **New preset**, then move the sliders: exposure, contrast, shadows, midtones, highlights, saturation, warmth, tint, hue, sharpness, bloom, vignette, film grain and colour fringe. You see every change live and it saves as you go. "Copy this preset" starts from the one you have on.
+
 **Bring your ReShade presets.** Drop a ReShade `.ini` into `UserData/QuestShade/ReShade/` and it shows up in the preset list.
 - If it uses LUT textures, throw them in `ReShade/Textures/`.
 - The standard ReShade colour shaders are matched exactly.
