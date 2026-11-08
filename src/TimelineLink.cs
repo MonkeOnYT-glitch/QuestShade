@@ -10,7 +10,7 @@ namespace QuestShade
         private static FieldInfo _playing, _recording, _paused, _instance, _recorders, _avatarField, _playHead;
         private static MethodInfo _play, _pause, _updateScene;
         private static Type _rigType, _menuType;
-        private static bool _searched;
+        private static bool _searched, _warned;
         private static float _nextSearch, _nextPoll;
 
         public static bool Present { get; private set; }
@@ -22,6 +22,7 @@ namespace QuestShade
         private static int _preview;
         private static float _previewUntil, _nextReadyCheck;
         private static int _extraPoses;
+        private static float _nextPose;
         public static bool Previewing => _preview != 0;
 
         public static bool Preview()
@@ -45,6 +46,8 @@ namespace QuestShade
             bool paused = false;
             try { paused = _paused != null && (bool)_paused.GetValue(null); } catch { }
             if (!paused || now > _previewUntil) { _preview = 0; return; }
+            if (now < _nextPose) return;
+            _nextPose = now + 0.2f;
             PoseScene();
             if (_extraPoses > 0) { if (--_extraPoses == 0) _preview = 0; return; }
             if (now >= _nextReadyCheck) { _nextReadyCheck = now + 0.2f; if (AllAvatarsLoaded()) _extraPoses = 3; }
@@ -149,6 +152,14 @@ namespace QuestShade
             }
         }
 
+        public static bool RecordingNow()
+        {
+            if (!Present || _recording == null) return false;
+            try { return (bool)_recording.GetValue(null); } catch { return false; }
+        }
+
+        public static void CancelPreview() { _preview = 0; _extraPoses = -1; }
+
         public static bool JustFound { get; private set; }
 
         public static void Tick()
@@ -165,7 +176,7 @@ namespace QuestShade
                 Recording = _recording != null && (bool)_recording.GetValue(null);
                 Paused = _paused != null && (bool)_paused.GetValue(null);
             }
-            catch { Present = false; }
+            catch (Exception e) { Playing = Recording = Paused = false; _preview = 0; if (!_warned) { _warned = true; Mod.Log.Warning("Timeline state unreadable: " + e.Message); } }
         }
     }
 }

@@ -1,4 +1,4 @@
-# QuestShade
+﻿# QuestShade
 
 ReShade, but for BONELAB on Quest. Plus a camera you can actually pick up and film with.
 
@@ -18,7 +18,7 @@ I wanted my Quest footage to look like the stuff people make on PC with ReShade,
 **The camera:**
 - A camera rig you grab with either hand. Squeeze near a handle and it snaps into your hand, straight, every time. Let go and it just floats there. It can't be knocked around and won't hurt you.
 - Tap trigger to take a photo. Hold trigger to record. There's a little label on the camera so you don't forget.
-- Modes: handheld, selfie, first person, chest (bodycam), third person and tripod.
+- Modes: handheld, selfie, chest (bodycam), third person and tripod.
 - Videos record with game audio and your mic if you want, and they're encoded the same way the Quest's own recordings are. They come out looking like the camera's preview screen, not lighter.
 - Everything goes straight into your Quest gallery (same way LIV's camera does it). No file manager, no extra permissions.
 - Your own head and menus never show up in the shot.
@@ -30,7 +30,7 @@ I wanted my Quest footage to look like the stuff people make on PC with ReShade,
 - Everything else gets the closest thing that can run on a Quest.
 - Stuff that just can't run on Quest (AO, RTGI, reflections and so on) gets skipped, and the preset file tells you what was skipped.
 
-**Works with Timeline** (the replay mod), if you have it. A **Timeline** folder shows up in the QuestShade menu (only when Timeline is installed) with Timeline's own Play / Pause / Stop / Record, takes, saving and settings, so you never have to bounce between two menus. Hit **Next person** and the take pops up paused with everyone loaded in. The person you're filming gets a red outline and a "FILMING 1/3" marker (only you see those, never the video). Pick a view (their POV, chest cam, or over the shoulder), then press Play. The camera records the playback and stops when it ends, your own body is left out of the shot, and it never records while Timeline is recording a take. Timeline isn't required.
+**Works with Timeline** (the replay mod), if you have it. A **Timeline** folder shows up in the QuestShade menu (only when Timeline is installed) with Timeline's own Play / Pause / Stop / Record, takes, saving and settings, so you never have to bounce between two menus. Hit **Next person** and the take pops up paused with everyone loaded in. The person you're filming gets a red outline and a "FILMING 1/3" marker (only you see those, never the video). Pick a view (chest cam or over the shoulder), then press Play. The camera records the playback and stops when it ends, your own body is left out of the shot, and it never records while Timeline is recording a take. Timeline isn't required.
 
 **Fusion lobbies:** the camera turns itself off in a Fusion lobby so it stays effects-only (you can switch that off in Camera → Settings).
 

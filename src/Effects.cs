@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System;
 using System.IO;
 using Il2CppInterop.Runtime;
@@ -97,15 +97,19 @@ namespace QuestShade
         private readonly RenderTexture[] _down = new RenderTexture[6], _up = new RenderTexture[6];
 
         private static readonly int SourceTexId = Shader.PropertyToID("_SourceTex");
+        private Material _matGrade;
 
         public bool GradeAgain(RenderTexture src, RenderTexture dst)
         {
             if (!Active || _matMono == null || src == null || dst == null) return false;
             try
             {
-                _matMono.SetVector(ID.Texel, new Vector4(1f / dst.width, 1f / dst.height, dst.width, dst.height));
-                _matMono.SetTexture(SourceTexId, src);
-                Graphics.Blit(src, dst, _matMono);
+                _matGrade ??= new Material(_matMono) { name = "QuestShade_GradeAgain", hideFlags = HideFlags.HideAndDontSave };
+                _matGrade.CopyPropertiesFromMaterial(_matMono);
+                _matGrade.SetVector(ID.Texel, new Vector4(1f / dst.width, 1f / dst.height, dst.width, dst.height));
+                _matGrade.SetTexture(SourceTexId, src);
+                Graphics.Blit(src, dst, _matGrade);
+                _matGrade.SetTexture(SourceTexId, null);
                 return true;
             }
             catch (Exception e) { Mod.Log.Warning("Second grade pass failed: " + e.Message); return false; }
@@ -217,10 +221,11 @@ namespace QuestShade
                     lum[i] = l; sum += l;
                 }
                 Array.Sort(lum);
-                float mean = (float)(sum / n), p90 = lum[(int)(n * 0.9f)];
+                float mean = (float)(sum / n), p90 = lum[(int)(n * 0.9f)], p95 = lum[(int)(n * 0.95f)];
                 if (mean < 0.02f && p90 < 0.05f) return;
-                _calThr = Mathf.Clamp(p90 * 0.85f, 0f, 0.85f);
-                _calInt = Mathf.Clamp(0.35f / Mathf.Max(mean, 0.01f), 0.65f, 1f);
+                float bright = Mathf.InverseLerp(0.3f, 0.7f, mean);
+                _calThr = Mathf.Clamp(Mathf.Lerp(p90 * 0.85f, p95 * 0.97f, bright), 0f, Mathf.Lerp(0.85f, 0.95f, bright));
+                _calInt = Mathf.Clamp(0.3f / Mathf.Max(mean, 0.01f), 0.4f, 1f);
                 _calDone = true;
                 Mod.Log.Msg($"Bloom calibrated for this level: brightness {mean:0.00} (top 10% {p90:0.00}) -> threshold {_calThr:0.00}, strength x{_calInt:0.00}");
             }

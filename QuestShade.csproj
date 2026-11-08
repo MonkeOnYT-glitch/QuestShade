@@ -25,6 +25,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="unity\**;bin\**;obj\**;trailer\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="MelonLoader"><HintPath>$(ML)\MelonLoader.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Il2CppInterop.Runtime"><HintPath>$(ML)\Il2CppInterop.Runtime.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Il2CppInterop.Common"><HintPath>$(ML)\Il2CppInterop.Common.dll</HintPath><Private>false</Private></Reference>
@@ -45,6 +49,8 @@
     <Reference Include="JNISharp" Condition="'$(QSTarget)' == 'Quest'"><HintPath>$(ML)\JNISharp.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Unity.RenderPipelines.Universal.StressLevelZero.VRS" Condition="'$(QSTarget)' == 'Quest'"><HintPath>$(IA)\Unity.RenderPipelines.Universal.StressLevelZero.VRS.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Il2CppSLZ.Marrow"><HintPath>$(IA)\Il2CppSLZ.Marrow.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2CppSystem"><HintPath>$(IA)\Il2CppSystem.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UnityWebRequestModule"><HintPath>$(IA)\UnityEngine.UnityWebRequestModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.AudioModule"><HintPath>$(IA)\UnityEngine.AudioModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.AndroidJNIModule"><HintPath>$(IA)\UnityEngine.AndroidJNIModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="BoneLib"><HintPath>$(GameDir)\Mods\BoneLib.dll</HintPath><Private>false</Private></Reference>

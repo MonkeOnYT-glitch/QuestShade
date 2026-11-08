@@ -91,7 +91,7 @@ namespace QuestShade
             var tl = _root.CreatePage("Timeline", Color.yellow);
             if (!TimelineLink.Populate("PopulateScenePage", tl)) Mod.Log.Warning("Timeline: transport buttons unavailable");
             tl.CreateFunction("Next person", Color.cyan, () => mod.NextActor());
-            tl.CreateEnum("View", Color.white, ReplayView.POV, v => mod.SetReplayView((ReplayView)v));
+            tl.CreateEnum("View", Color.white, ReplayView.Chest, v => mod.SetReplayView((ReplayView)v));
 
             var more = tl.CreatePage("More", Color.gray);
             more.CreateBool("Film a replay person", Color.white, cfg.TimelineFollow, v => mod.SetFollowActor(v));

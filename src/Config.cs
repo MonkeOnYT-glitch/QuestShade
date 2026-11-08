@@ -18,6 +18,7 @@ namespace QuestShade
         public float ReloadInterval = 2f;
         public bool AllowUnsupportedOnQuest = false;
         public bool ShowToasts = true;
+        public bool AutoUpdate = true;
         public bool EmulateQuest;
         public bool BloomDofHeadset = false, BloomDofPreview = true, BloomDofCapture = true, BloomDofAll = true;
         public bool MatchPreview = true;
@@ -107,6 +108,7 @@ namespace QuestShade
             ReloadInterval = Mathf.Max(0.5f, ini.Float("General", "ReloadInterval", 2f));
             AllowUnsupportedOnQuest = ini.Bool("General", "AllowUnsupportedOnQuest", false);
             ShowToasts = ini.Bool("General", "ShowToasts", true);
+            AutoUpdate = ini.Bool("General", "AutoUpdate", true);
             BloomDofHeadset = ini.Bool("General", "BloomDofHeadset", false);
             BloomDofPreview = ini.Bool("General", "BloomDofPreview", true);
             BloomDofCapture = ini.Bool("General", "BloomDofPhotosVideo", true);
@@ -166,7 +168,9 @@ namespace QuestShade
             ChestSide = Mathf.Clamp(ini.Float("Camera", "ChestSide", 0f), -1f, 1f);
             ChestPitch = Mathf.Clamp(ini.Float("Camera", "ChestPitch", -5f), -60f, 60f);
             SaveFolder = ini.Str("Camera", "SaveFolder", "auto");
-            DefaultMode = Enum.TryParse<CamMode>(ini.Str("Camera", "Mode", "Hand"), true, out var dm) ? dm : CamMode.Hand;
+            var modeStr = ini.Str("Camera", "Mode", "Hand");
+            if (string.Equals(modeStr?.Trim(), "FirstPerson", StringComparison.OrdinalIgnoreCase)) modeStr = "Chest";
+            DefaultMode = Enum.TryParse<CamMode>(modeStr, true, out var dm) ? dm : CamMode.Hand;
             PreviewEnabled = ini.Bool("Camera", "Preview", true);
             var q = (ini.Str("Camera", "RecordQuality", "ultra") ?? "ultra").Trim().ToLowerInvariant();
             int autoKbps;

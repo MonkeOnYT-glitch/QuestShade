@@ -48,5 +48,5 @@ namespace QuestShade
         }
     }
 
-    internal enum ReplayView { POV, Chest, OverTheShoulder }
+    internal enum ReplayView { Chest, OverTheShoulder }
 }

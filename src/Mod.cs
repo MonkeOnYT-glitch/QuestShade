@@ -3,7 +3,7 @@ using System.Linq;
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.3.0", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.3.1", "QuestShade")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
 [assembly: MelonOptionalDependencies("BoneLib")]
@@ -20,6 +20,7 @@ namespace QuestShade
         private readonly Controls _ctl = new Controls();
         private readonly Toast _toast = new Toast();
         private float _nextCamCheck;
+        private string _startNotice;
         private bool _ready, _boneLib;
         private int _errors;
 
@@ -36,9 +37,15 @@ namespace QuestShade
                 _cam.SetHoverPreview(_cfg.HoverPreview);
                 _cam.Feedback += (msg, left) => { _ctl.Buzz(_cfg, left, 0.5f, 0.05f); if (msg != null) Notify(msg, 1f); };
                 _ready = true;
+#if QUEST
+                _startNotice = VideoRecorder.RecoverInterrupted();
+#endif
                 Log.Msg($"Ready on {Application.platform}. Config: {Config.Root}  Presets: {string.Join(", ", _cfg.Presets)}");
             }
             catch (Exception e) { Log.Error("Init failed, QuestShade disabled: " + e); return; }
+
+            if (_cfg.AutoUpdate) Updater.Begin(Info.Version);
+            else Log.Msg("Updates: auto-update is off ([General] AutoUpdate)");
 
             _boneLib = AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "BoneLib");
             if (_boneLib)
@@ -54,8 +61,11 @@ namespace QuestShade
         {
             if (!_ready) return;
             if (_cam.Recording) { var f = _cam.StopRecording(); if (f != null) Log.Msg("Recording stopped by level change: " + f); }
+            TimelineLink.CancelPreview();
+            if (_boneLib) { try { BoneMenuUi.OutlineSelected(false); } catch { } }
             _cam.OnSceneLoaded();
             _fx.ResetCalibration();
+            if (_startNotice != null) _noticeAt = Time.unscaledTime + 6f;
             Perf.OnSceneLoaded();
             _calibTries = 0; _nextCalibAt = Time.unscaledTime + 9f;
             _nextCamCheck = 0f;
@@ -79,6 +89,10 @@ namespace QuestShade
                 _ctl.EndFrame();
 
                 TimerTick(now);
+                FocusGuard(now);
+                Updater.Tick();
+                if (Updater.Notice != null && _noticeAt < 0f) { Notify(Updater.Notice, 6f); Updater.Notice = null; }
+                if (_noticeAt > 0f && now > _noticeAt && _startNotice != null) { Notify(_startNotice, 6f); _startNotice = null; _noticeAt = -1f; }
                 TimelineTick();
                 FusionTick();
                 if (_uiDumpAt > 0f && now > _uiDumpAt) { _uiDumpAt = -1f; if (_boneLib) BoneMenuUi.DumpUi(); }
@@ -88,6 +102,23 @@ namespace QuestShade
             }
             catch (Exception e) { Guard(e); }
             _ownMs += _sw.Elapsed.TotalMilliseconds;
+        }
+
+        private float _unfocusedSince = -1f, _noticeAt = -1f;
+        private void FocusGuard(float now)
+        {
+            if (Application.isFocused) { _unfocusedSince = -1f; return; }
+            if (!_cam.Recording) return;
+            if (_unfocusedSince < 0f) { _unfocusedSince = now; return; }
+            if (now - _unfocusedSince < 0.25f) return;
+            _unfocusedSince = -1f;
+            var f = _cam.StopRecording();
+            Log.Msg("Recording saved because the game lost focus (Quest menu / headset off): " + (f ?? "nothing to save"));
+        }
+
+        public override void OnApplicationQuit()
+        {
+            try { if (_ready && _cam.Recording) { var f = _cam.StopRecording(); Log.Msg("Recording saved on quit: " + (f ?? "nothing to save")); } } catch { }
         }
 
         private readonly System.Diagnostics.Stopwatch _sw = new System.Diagnostics.Stopwatch();
@@ -287,7 +318,12 @@ namespace QuestShade
                 Notify("Camera: TAP trigger = photo, HOLD trigger = start / stop recording", 4f);
             }
             _lastHand = hand;
-            if (hand == 0) { _trigWas = _trigFired = false; _cam.LabelExtra = extra; return; }
+            if (hand == 0)
+            {
+                _trigWas = false;
+                if (!_ctl.Trigger(true) && !_ctl.Trigger(false)) _trigFired = false;
+                _cam.LabelExtra = extra; return;
+            }
             bool down = _ctl.Trigger(hand == 1);
             if (down && !_trigWas) { _trigStart = now; _lastBar = 0; }
             float held = now - _trigStart;
@@ -299,13 +335,19 @@ namespace QuestShade
                 if (n != _lastBar && n > 0) _ctl.Buzz(_cfg, hand == 1, 0.15f, 0.02f);
                 _lastBar = n;
             }
-            if (down && !_trigFired && held >= HoldToRecord) { _trigFired = true; ToggleRecording(); }
+            if (down && !_trigFired && held >= HoldToRecord)
+            {
+                _trigFired = true;
+                if (_cam.Recording && now - _recStart < MinClip) Notify("Recording just started - hold again to stop", 1.2f);
+                else ToggleRecording();
+            }
             if (!down && _trigWas && !_trigFired) TakePhoto();
             if (!down) _trigFired = false;
             _trigWas = down;
             _cam.LabelExtra = extra;
         }
         private const float HoldToRecord = 0.7f;
+        private const float MinClip = 1.5f;
 
         internal void SetCameraLabel(bool on) { _cfg.CameraLabel = on; _cam.SetLabel(on); }
 
@@ -334,7 +376,7 @@ namespace QuestShade
 
         private static string Pretty(CamMode m) => m switch
         {
-            CamMode.FirstPerson => "First person", CamMode.ThirdPerson => "Third person", CamMode.Chest => "Chest (bodycam)", _ => m.ToString()
+            CamMode.ThirdPerson => "Third person", CamMode.Chest => "Chest (bodycam)", _ => m.ToString()
         };
 
         private void RefreshPresetMenu()
@@ -343,7 +385,8 @@ namespace QuestShade
             try { BoneMenuUi.RefreshPresets(_cfg); } catch { }
         }
 
-        private bool _tlWasPlaying, _tlWasRecording, _tlStartedRec, _tlWasBusy;
+        private bool _tlWasPlaying, _tlWasRecording, _tlStartedRec, _tlWasBusy, _tlActOn;
+        private float _tlChangedAt;
         private void TimelineTick()
         {
             _cam.FollowActor = _cfg.TimelineFollow;
@@ -361,9 +404,14 @@ namespace QuestShade
                 if (busy && _cam.HasBody) _cam.ParkBody();
             }
             if (rec != _tlWasRecording) { _tlWasRecording = rec; Log.Msg("Timeline recording: " + rec); }
-            if (playing == _tlWasPlaying) return;
-            _tlWasPlaying = playing;
-            Log.Msg("Timeline playback: " + (playing ? "started" : "stopped"));
+            float tnow = Time.unscaledTime;
+            if (playing != _tlWasPlaying)
+            {
+                _tlWasPlaying = playing; _tlChangedAt = tnow; _tlActOn = true;
+                Log.Msg("Timeline playback: " + (playing ? "started" : "stopped"));
+            }
+            if (!_tlActOn || tnow - _tlChangedAt < (playing ? 0.15f : 0.75f)) return;
+            _tlActOn = false;
             if (!_cfg.TimelineAutoRecord) return;
             if (playing && !_cam.Recording)
             {
@@ -389,10 +437,10 @@ namespace QuestShade
             Notify(block ? "Fusion lobby: camera off, effects still on" : "Camera available again", 2f);
         }
 
-        private ReplayView _replayView = ReplayView.POV;
+        private ReplayView _replayView = ReplayView.Chest;
         private readonly ReplayMarker _marker = new ReplayMarker();
 
-        private static CamMode ModeFor(ReplayView v) => v == ReplayView.Chest ? CamMode.Chest : v == ReplayView.OverTheShoulder ? CamMode.ThirdPerson : CamMode.FirstPerson;
+        private static CamMode ModeFor(ReplayView v) => v == ReplayView.OverTheShoulder ? CamMode.ThirdPerson : CamMode.Chest;
 
         internal void SetReplayView(ReplayView v)
         {

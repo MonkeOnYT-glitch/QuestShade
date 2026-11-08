@@ -144,7 +144,7 @@ namespace QuestShade
                 var devs = Microphone.devices;
                 if (devs == null || devs.Length == 0) { Mod.Log.Msg("Recording: no microphone"); return false; }
                 _micDev = null;
-                if (Microphone.IsRecording(_micDev))
+                if (Microphone.IsRecording(_micDev) || TimelineLink.RecordingNow())
                 {
                     Mod.Log.Msg("Recording: the microphone is already in use by another mod (voice chat / Timeline) - recording game audio only");
                     return false;
@@ -166,9 +166,27 @@ namespace QuestShade
             catch (Exception e) { Mod.Log.Warning("Recording: microphone failed: " + e.Message); return false; }
         }
 
+        private bool MicStillOurs()
+        {
+            if (_micClip == null) return false;
+            if (TimelineLink.RecordingNow()) return false;
+            if (!Microphone.IsRecording(_micDev)) return false;
+            return true;
+        }
+
+        private void LetGoOfMic(string why)
+        {
+            if (!MicOn) return;
+            MicOn = false; _micClip = null; _micEnded = true;
+            Mod.Log.Msg("Recording: microphone handed over (" + why + ") - recording game audio only from here");
+            VideoRecorder.Diag("audio: mic released without ending it: " + why);
+        }
+        private bool _micEnded;
+
         private void PumpMic()
         {
-            if (!MicOn || _micClip == null) return;
+            if (!MicOn) return;
+            if (!MicStillOurs()) { LetGoOfMic(TimelineLink.RecordingNow() ? "Timeline started recording a take" : "another mod took the mic"); return; }
             int pos = Microphone.GetPosition(_micDev);
             if (pos < 0 || pos >= _micLen) return;
             int n = pos - _micLastPos;
@@ -263,9 +281,8 @@ namespace QuestShade
             bool wasOn = GameOn || MicOn;
             GameOn = false;
             QSAudioTap.Sink = null;
-            try { if (_tap != null) UnityEngine.Object.Destroy(_tap); } catch { }
             _tap = null;
-            try { if (MicOn || _micClip != null) Microphone.End(_micDev); } catch { }
+            try { if (MicOn && !_micEnded && MicStillOurs()) Microphone.End(_micDev); } catch { }
             _micClip = null;
             MicOn = false;
             if (wasOn) ClearGuard();

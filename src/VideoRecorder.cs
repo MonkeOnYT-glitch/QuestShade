@@ -37,6 +37,51 @@ namespace QuestShade
         private float _t0;
         private int _frames, _dropped;
 
+        private static string Marker => Path.Combine(Config.Root, "recording_in_progress.txt");
+        private static void SetMarker(string file) { try { File.WriteAllText(Marker, file); } catch { } }
+        private static void ClearMarker() { try { if (File.Exists(Marker)) File.Delete(Marker); } catch { } }
+
+        public static string RecoverInterrupted()
+        {
+            try
+            {
+                if (!File.Exists(Marker)) return null;
+                string file = File.ReadAllText(Marker).Trim();
+                ClearMarker();
+                if (file.Length == 0 || !File.Exists(file) || HasIndex(file)) return null;
+                long size = new FileInfo(file).Length;
+                if (size < 256 * 1024) { File.Delete(file); Mod.Log.Msg("Removed an unfinished recording (the game closed mid-take): " + file); return null; }
+                string dir = Path.Combine(Config.Root, "Unfinished recordings");
+                Directory.CreateDirectory(dir);
+                string dst = Path.Combine(dir, Path.GetFileName(file));
+                if (File.Exists(dst)) File.Delete(dst);
+                File.Move(file, dst);
+                Mod.Log.Warning($"The last recording was cut off when the game closed ({size / 1048576f:0.0} MB). It can't play as-is; moved to {dst}");
+                return "Last recording was cut off when the game closed - moved out of your gallery (see the QuestShade folder)";
+            }
+            catch (Exception e) { Mod.Log.Warning("Unfinished recording check failed: " + e.Message); return null; }
+        }
+
+        private static bool HasIndex(string file)
+        {
+            using var f = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var h = new byte[16];
+            long pos = 0, len = f.Length;
+            while (pos + 8 <= len)
+            {
+                f.Position = pos;
+                if (f.Read(h, 0, 16) < 8) break;
+                long size = (uint)(h[0] << 24 | h[1] << 16 | h[2] << 8 | h[3]);
+                string type = System.Text.Encoding.ASCII.GetString(h, 4, 4);
+                if (type == "moov") return true;
+                if (size == 1) size = (long)((ulong)h[8] << 56 | (ulong)h[9] << 48 | (ulong)h[10] << 40 | (ulong)h[11] << 32 | (ulong)h[12] << 24 | (ulong)h[13] << 16 | (ulong)h[14] << 8 | h[15]);
+                else if (size == 0) break;
+                if (size < 8) break;
+                pos += size;
+            }
+            return false;
+        }
+
         private RenderTexture _yuv;
         private Material _yuvMat;
         private readonly Queue<(AsyncGPUReadbackRequest req, long pts)> _pending = new Queue<(AsyncGPUReadbackRequest, long)>();
@@ -108,6 +153,7 @@ namespace QuestShade
                 _pcmLen = 0; _aFrames = 0; _early.Clear();
                 _t0 = Time.realtimeSinceStartup; _nextBeat = 1f;
                 Recording = true;
+                SetMarker(FilePath);
                 Diag($"recording: audio={(_audio != IntPtr.Zero ? _cap.Status : "none")}");
                 Mod.Log.Msg($"Recording {Width}x{Height}@{fps} {bitrate / 1000} kbps (NV12 {stride}x{slice}){(_audio != IntPtr.Zero ? " + audio" : "")} -> {FilePath}");
                 return true;
@@ -353,6 +399,7 @@ namespace QuestShade
             catch (Exception e) { Mod.Log.Error("Recording stop error: " + e.Message); file = null; }
             Diag(file != null ? $"saved {_frames} frames" : "stopped without a file");
             Release();
+            ClearMarker();
             if (file == null) try { if (File.Exists(FilePath)) File.Delete(FilePath); } catch { }
             return file;
         }
