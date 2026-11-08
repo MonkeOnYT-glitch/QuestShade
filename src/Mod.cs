@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using MelonLoader;
 using UnityEngine;
@@ -31,6 +31,7 @@ namespace QuestShade
             {
                 Config.InitPaths();
                 _cfg.LoadAll();
+                Sharing.Init(_cfg);
                 PhotoSaver.ResolveFolder(_cfg.SaveFolder);
                 _cam.SetMode(_cfg.DefaultMode);
                 _cam.Fx = _fx;
@@ -91,6 +92,7 @@ namespace QuestShade
                 TimerTick(now);
                 FocusGuard(now);
                 Updater.Tick();
+                Sharing.Tick();
                 if (Updater.Notice != null && _noticeAt < 0f) { Notify(Updater.Notice, 6f); Updater.Notice = null; }
                 if (_noticeAt > 0f && now > _noticeAt && _startNotice != null) { Notify(_startNotice, 6f); _startNotice = null; _noticeAt = -1f; }
                 TimelineTick();
@@ -222,6 +224,63 @@ namespace QuestShade
             if (name == null) { Notify("Couldn't make a new preset"); return; }
             AfterPresetChange();
             Notify(copyCurrent ? $"Copied to \"{name}\": edit it in Effects > Edit preset" : $"New preset \"{name}\": edit it in Effects > Edit preset", 3f);
+        }
+
+        internal void RenamePreset(string name)
+        {
+            var old = _cfg.PresetName;
+            var n = _cfg.RenamePreset(name, out var err);
+            if (n == null) { Notify(err ?? "Couldn't rename", 2.5f); RefreshPresetMenu(); return; }
+            _fx.MarkDirty();
+            RefreshPresetMenu();
+            Notify(Config.IsBuiltIn(old) ? $"Saved a copy as \"{n}\"" : $"Renamed to \"{n}\"", 2f);
+        }
+
+        internal void SetShareAuthor(string name)
+        {
+            var n = (name ?? "").Trim();
+            if (n.Length > 24) n = n.Substring(0, 24);
+            _cfg.ShareAuthor = n;
+            _cfg.SetKey("Sharing", "Author", n);
+            Notify(n.Length == 0 ? "Your shared presets will say Anonymous" : $"Your shared presets will say \"by {n}\"", 2f);
+        }
+
+        internal void SharePreset()
+        {
+            var name = _cfg.PresetName;
+            var author = string.IsNullOrWhiteSpace(_cfg.ShareAuthor) ? "Anonymous" : _cfg.ShareAuthor.Trim();
+            Notify($"Sharing \"{name}\"...", 2f);
+            Sharing.Publish(name, author, _cfg.CurrentPresetText(), (id, err) =>
+            {
+                if (err != null) { Notify("Couldn't share: " + err, 3f); return; }
+                Notify($"\"{name}\" is public! Find it in Effects > Preset browser", 3f);
+            });
+        }
+
+        internal void DownloadShared(Sharing.Entry entry)
+        {
+            Notify($"Getting \"{entry.Name}\"...", 2f);
+            Sharing.Get(entry.Id, (full, err) =>
+            {
+                if (err != null || full?.Ini == null) { Notify("Couldn't download: " + (err ?? "empty preset"), 3f); return; }
+                var n = _cfg.AddSharedPreset(full.Name ?? entry.Name, full.Author ?? entry.Author, full.Id ?? entry.Id, full.Ini);
+                AfterPresetChange();
+                Notify($"Got \"{n}\" by {full.Author ?? entry.Author}. It's on now", 3f);
+            });
+        }
+
+        internal void ReportCurrentPreset()
+        {
+            var id = _cfg.Preset?.Str("Shared", "Id", null);
+            if (string.IsNullOrEmpty(id)) { Notify("Switch to the preset you got from the browser first", 2.5f); return; }
+            Sharing.Report(id, err => Notify(err != null ? "Couldn't report: " + err : "Reported. Thanks, someone will take a look", 2.5f));
+        }
+
+        internal void LikeCurrentPreset()
+        {
+            var id = _cfg.Preset?.Str("Shared", "Id", null);
+            if (string.IsNullOrEmpty(id)) { Notify("Switch to a preset you got from the browser first", 2.5f); return; }
+            Sharing.Like(id, (likes, err) => Notify(err != null ? "Couldn't like: " + err : $"Liked \"{_cfg.PresetName}\" ({likes} likes)", 2f));
         }
 
         internal void DeletePreset()

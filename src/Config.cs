@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -19,6 +19,7 @@ namespace QuestShade
         public bool AllowUnsupportedOnQuest = false;
         public bool ShowToasts = true;
         public bool AutoUpdate = true;
+        public string ShareServer = Sharing.DefaultServer, ShareAuthor = "", ShareClientId = "";
         public bool EmulateQuest;
         public bool BloomDofHeadset = false, BloomDofPreview = true, BloomDofCapture = true, BloomDofAll = true;
         public bool MatchPreview = true;
@@ -93,9 +94,12 @@ namespace QuestShade
         public void LoadAll()
         {
             LoadMain();
+            if (_pendingClientId) { _pendingClientId = false; SetKey("Sharing", "ClientId", ShareClientId); }
             ScanPresets();
             LoadPreset(PresetName);
         }
+
+        private bool _pendingClientId;
 
         private void LoadMain()
         {
@@ -109,6 +113,10 @@ namespace QuestShade
             AllowUnsupportedOnQuest = ini.Bool("General", "AllowUnsupportedOnQuest", false);
             ShowToasts = ini.Bool("General", "ShowToasts", true);
             AutoUpdate = ini.Bool("General", "AutoUpdate", true);
+            ShareServer = (ini.Str("Sharing", "Server", Sharing.DefaultServer) ?? Sharing.DefaultServer).Trim().TrimEnd('/');
+            ShareAuthor = ini.Str("Sharing", "Author", "") ?? "";
+            ShareClientId = ini.Str("Sharing", "ClientId", "") ?? "";
+            if (ShareClientId.Length < 16) { ShareClientId = Guid.NewGuid().ToString("N"); _pendingClientId = true; }
             BloomDofHeadset = ini.Bool("General", "BloomDofHeadset", false);
             BloomDofPreview = ini.Bool("General", "BloomDofPreview", true);
             BloomDofCapture = ini.Bool("General", "BloomDofPhotosVideo", true);
@@ -283,6 +291,57 @@ namespace QuestShade
                     n.Equals("QuestShade.Defaults.Presets." + name + ".ini", StringComparison.OrdinalIgnoreCase)) return true;
             }
             return false;
+        }
+
+        public static string CleanName(string name)
+        {
+            if (name == null) return null;
+            var bad = Path.GetInvalidFileNameChars();
+            var sb = new System.Text.StringBuilder();
+            foreach (char c in name.Trim())
+                if (Array.IndexOf(bad, c) < 0 && c != '[' && c != ']' && c != ';' && !char.IsControl(c)) sb.Append(c);
+            var n = sb.ToString().Trim().Trim('.');
+            if (n.Length > 40) n = n.Substring(0, 40).Trim();
+            return n.Length == 0 ? null : n;
+        }
+
+        public string RenamePreset(string newName, out string error)
+        {
+            error = null;
+            var n = CleanName(newName);
+            if (n == null) { error = "That name has no usable letters"; return null; }
+            if (PresetFile == null) { error = "No preset to rename"; return null; }
+            if (n.Equals(PresetName, StringComparison.Ordinal)) return n;
+            var dest = Path.Combine(PresetDir, n + ".ini");
+            bool sameFile = n.Equals(PresetName, StringComparison.OrdinalIgnoreCase);
+            if (File.Exists(dest) && !sameFile) { error = $"There's already a preset called \"{n}\""; return null; }
+            try
+            {
+                if (IsBuiltIn(PresetName)) File.Copy(PresetFile, dest);
+                else if (sameFile) { var tmp = dest + ".tmp"; File.Move(PresetFile, tmp); File.Move(tmp, dest); }
+                else File.Move(PresetFile, dest);
+            }
+            catch (Exception e) { error = e.Message; return null; }
+            SelectPreset(n);
+            return n;
+        }
+
+        public string AddSharedPreset(string name, string author, string id, string ini)
+        {
+            var baseName = CleanName(name) ?? "Shared preset";
+            var n = baseName;
+            for (int i = 2; File.Exists(Path.Combine(PresetDir, n + ".ini")); i++) n = $"{baseName} ({i})";
+            author = CleanName(author) ?? "Anonymous";
+            id = CleanName(id) ?? "";
+            var text = $"; {n} by {author} - from the QuestShade preset browser\n[Shared]\nId = {id}\nAuthor = {author}\n" + Sharing.CleanIni(ini);
+            File.WriteAllText(Path.Combine(PresetDir, n + ".ini"), text);
+            SelectPreset(n);
+            return n;
+        }
+
+        public string CurrentPresetText()
+        {
+            try { return PresetFile != null && File.Exists(PresetFile) ? File.ReadAllText(PresetFile) : ""; } catch { return ""; }
         }
 
         public bool DeleteCurrentPreset()
