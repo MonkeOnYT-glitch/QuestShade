@@ -6,6 +6,8 @@
     <TargetFramework Condition="'$(QSTarget)' == 'PC'">net6.0</TargetFramework>
     <OutputPath>bin\$(QSTarget)\</OutputPath>
     <DefineConstants Condition="'$(QSTarget)' == 'Quest'">$(DefineConstants);QUEST</DefineConstants>
+    <DefineConstants Condition="'$(QSStore)' == 'true'">$(DefineConstants);THUNDERSTORE</DefineConstants>
+    <OutputPath Condition="'$(QSStore)' == 'true'">bin/$(QSTarget)-Store/</OutputPath>
     <AssemblyName>QuestShade</AssemblyName>
     <RootNamespace>QuestShade</RootNamespace>
     <LangVersion>latest</LangVersion>

@@ -5,6 +5,17 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using UnityEngine.Networking;
 
+#if THUNDERSTORE
+namespace QuestShade
+{
+    internal static class Updater
+    {
+        public static string Notice;
+        public static void Begin(string currentVersion) { }
+        public static void Tick() { }
+    }
+}
+#else
 namespace QuestShade
 {
     internal static class Updater
@@ -141,3 +152,4 @@ namespace QuestShade
         private static void TryDelete(string f) { try { if (File.Exists(f)) File.Delete(f); } catch { } }
     }
 }
+#endif

@@ -45,8 +45,12 @@ namespace QuestShade
             }
             catch (Exception e) { Log.Error("Init failed, QuestShade disabled: " + e); return; }
 
+#if THUNDERSTORE
+            Log.Msg("Updates: Thunderstore build, your mod manager keeps QuestShade up to date");
+#else
             if (_cfg.AutoUpdate) Updater.Begin(Info.Version);
             else Log.Msg("Updates: auto-update is off ([General] AutoUpdate)");
+#endif
 
             _boneLib = AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "BoneLib");
             if (_boneLib)
