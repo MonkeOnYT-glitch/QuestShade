@@ -491,12 +491,31 @@ namespace QuestShade
 
         private void WatchLut(string path) { _lutWatched = path; _lutTime = path != null ? Mtime(path) : default; }
 
+        private volatile bool _statBusy, _statReady;
+        private DateTime _sMain, _sPreset, _sLut;
+        private string _sPresetPath, _sLutPath;
+
         public bool PollChanges(float now)
         {
-            if (!HotReload || now < _nextCheck) return false;
-            _nextCheck = now + ReloadInterval;
+            if (!HotReload) return false;
+            if (!_statReady)
+            {
+                if (!_statBusy && now >= _nextCheck)
+                {
+                    _nextCheck = now + ReloadInterval;
+                    _statBusy = true;
+                    string mainP = MainIniPath, presetP = PresetFile, lutP = _lutWatched;
+                    System.Threading.Tasks.Task.Run(() =>
+                    {
+                        try { _sMain = Mtime(mainP); _sPreset = Mtime(presetP); _sLut = Mtime(lutP); _sPresetPath = presetP; _sLutPath = lutP; _statReady = true; }
+                        finally { _statBusy = false; }
+                    });
+                }
+                return false;
+            }
+            _statReady = false;
             bool changed = false;
-            if (Mtime(MainIniPath) != _mainTime)
+            if (_sMain > _mainTime)
             {
                 Mod.Log.Msg("QuestShade.ini changed, reloading");
                 var before = PresetName;
@@ -505,13 +524,13 @@ namespace QuestShade
                 LoadPreset(PresetName);
                 changed = true;
             }
-            else if (PresetFile != null && Mtime(PresetFile) != _presetTime)
+            else if (PresetFile != null && _sPresetPath == PresetFile && _sPreset > _presetTime)
             {
                 Mod.Log.Msg($"Preset '{PresetName}' changed, reloading");
                 LoadPreset(PresetName);
                 changed = true;
             }
-            else if (_lutWatched != null && Mtime(_lutWatched) != _lutTime)
+            else if (_lutWatched != null && _sLutPath == _lutWatched && _sLut > _lutTime)
             {
                 WatchLut(_lutWatched);
                 changed = true;

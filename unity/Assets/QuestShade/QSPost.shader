@@ -150,16 +150,16 @@ Shader "Hidden/QuestShade/Post"
                 }
                 else c = SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv, 0).rgb;
                 c = Safe(c);
-                UNITY_BRANCH if (_QS_Bloom.x > 0 || _QS_Flare.x > 0 || _QS_Dirt.x > 0)
+                UNITY_BRANCH if (_QS_Bloom.x > 0 || _QS_Flare.x > 0)
                 {
                     half3 glow = SAMPLE_TEXTURE2D_LOD(_QS_BloomTex, sampler_QS_BloomTex, uv, 0).rgb;
                     half3 add = glow * _QS_Bloom.x * _QS_BloomTint.rgb;
                     UNITY_BRANCH if (_QS_Flare.x > 0)
-                        add += SAMPLE_TEXTURE2D_LOD(_QS_FlareTex, sampler_QS_FlareTex, uv, 0).rgb * _QS_Flare.x;
-                    UNITY_BRANCH if (_QS_Dirt.x > 0)
                     {
-                        half dirt = SAMPLE_TEXTURE2D_LOD(_QS_DirtTex, sampler_QS_DirtTex, uv, 0).r;
-                        add += (glow * 1.5 + add) * dirt * _QS_Dirt.x;
+                        half3 flare = SAMPLE_TEXTURE2D_LOD(_QS_FlareTex, sampler_QS_FlareTex, uv, 0).rgb * _QS_Flare.x;
+                        add += flare;
+                        UNITY_BRANCH if (_QS_Dirt.x > 0)
+                            add += flare * SAMPLE_TEXTURE2D_LOD(_QS_DirtTex, sampler_QS_DirtTex, uv, 0).r * _QS_Dirt.x * 5;
                     }
                     c += add;
                 }
@@ -199,12 +199,13 @@ Shader "Hidden/QuestShade/Post"
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment Frag
+            half3 Hot(half3 c) { half b = dot(c, half3(0.333, 0.333, 0.333)); return c * saturate(b * 2.5 - 0.25); }
             half3 Fringe(float2 uv, float2 dir)
             {
                 float2 o = dir * _QS_Flare.w * 0.012;
-                return half3(SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv + o, 0).r,
-                             SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv, 0).g,
-                             SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv - o, 0).b);
+                return Hot(half3(SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv + o, 0).r,
+                                 SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv, 0).g,
+                                 SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv - o, 0).b));
             }
             half4 Frag(V i) : SV_Target
             {
@@ -221,8 +222,8 @@ Shader "Hidden/QuestShade/Post"
                 }
                 float2 hv = dir * 0.42;
                 float2 ho = frac(uv + hv);
-                half hw = pow(saturate(1 - length(0.5 - ho) / 0.707), 4);
-                acc += Fringe(ho, dir) * hw * _QS_Flare.z * half3(1.0, 0.85, 0.7);
+                half hw = pow(saturate(1 - length(0.5 - ho) / 0.6), 8);
+                acc += Fringe(ho, dir) * hw * _QS_Flare.z * 0.3 * half3(1.0, 0.85, 0.7);
                 return half4(Safe(acc), 1);
             }
             ENDHLSL

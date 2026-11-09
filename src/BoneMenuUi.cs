@@ -491,9 +491,9 @@ namespace QuestShade
             if (rig == null) return false;
             if (rig.GetInstanceID() != _menuRigId || Time.unscaledTime > _menuScanAt)
             {
-                _menuRigId = rig.GetInstanceID(); _menuScanAt = Time.unscaledTime + 1f;
+                _menuRigId = rig.GetInstanceID(); _menuScanAt = Time.unscaledTime + 10f;
                 _menuCanvases.Clear();
-                foreach (var cv in rig.GetComponentsInChildren<Canvas>(false))
+                foreach (var cv in rig.GetComponentsInChildren<Canvas>(true))
                     if (cv != null && cv.isRootCanvas && cv.renderMode == RenderMode.WorldSpace) _menuCanvases.Add(cv);
             }
             var hp = head.position; var hf = head.forward;
@@ -516,7 +516,7 @@ namespace QuestShade
         public static void KeepMenusOffCamera()
         {
             if (Time.unscaledTime < _menuLayerAt) return;
-            _menuLayerAt = Time.unscaledTime + 1f;
+            _menuLayerAt = Time.unscaledTime + 15f;
             int moved = 0;
             var rig = BoneLib.Player.UIRig;
             if (rig != null && rig.popUpMenu != null && rig.popUpMenu.preferencesPanelView != null)
@@ -529,8 +529,10 @@ namespace QuestShade
         private static int ToUiLayer(Transform root)
         {
             int n = 0;
-            foreach (var t in root.GetComponentsInChildren<Transform>(true))
-                if (t != null && t.gameObject.layer == 0) { t.gameObject.layer = UiLayer; n++; }
+            foreach (var c in root.GetComponentsInChildren<Canvas>(true))
+                if (c != null && c.gameObject.layer == 0) { c.gameObject.layer = UiLayer; n++; }
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                if (r != null && r.gameObject.layer == 0) { r.gameObject.layer = UiLayer; n++; }
             return n;
         }
 

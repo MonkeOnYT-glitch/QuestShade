@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 using Il2CppInterop.Runtime;
 using UnityEngine;
@@ -339,6 +339,7 @@ namespace QuestShade
         private bool _chestLogged;
         private float _appliedFov = -1f, _appliedNear = -1f;
 
+        private static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<RaycastHit> _wallHits;
         private Vector3 AvoidWalls(Vector3 pivot, Vector3 desired)
         {
             try
@@ -349,9 +350,11 @@ namespace QuestShade
                 d /= len;
                 int mask = unchecked((int)0x80000441);
                 if (_screenLayer >= 0) mask &= ~(1 << _screenLayer);
-                var hits = Physics.SphereCastAll(pivot, 0.05f, d, len, mask, QueryTriggerInteraction.Ignore);
+                _wallHits ??= new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<RaycastHit>(16);
+                int count = Physics.SphereCastNonAlloc(pivot, 0.05f, d, _wallHits, len, mask, QueryTriggerInteraction.Ignore);
+                var hits = _wallHits;
                 float best = float.MaxValue;
-                for (int i = 0; hits != null && i < hits.Length; i++)
+                for (int i = 0; i < count; i++)
                 {
                     var col = hits[i].collider;
                     if (col == null || col.attachedRigidbody != null) continue;

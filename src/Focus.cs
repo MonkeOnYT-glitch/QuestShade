@@ -6,6 +6,7 @@ namespace QuestShade
     {
         public static System.Func<Transform> PlayerRoot;
         private static Transform _player; private static float _playerAt;
+        private static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<RaycastHit> _hits;
         public static float Raycast(Vector3 from, Vector3 dir, int excludeLayer, Transform ignore, float last)
         {
             int mask = ~0;
@@ -14,8 +15,10 @@ namespace QuestShade
             if (Time.unscaledTime > _playerAt) { _playerAt = Time.unscaledTime + 2f; try { _player = PlayerRoot?.Invoke(); } catch { _player = null; } }
             try
             {
-                var hits = Physics.RaycastAll(from + dir * 0.05f, dir, 150f, mask, QueryTriggerInteraction.Ignore);
-                for (int k = 0; hits != null && k < hits.Length; k++)
+                _hits ??= new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<RaycastHit>(32);
+                int count = Physics.RaycastNonAlloc(from + dir * 0.05f, dir, _hits, 150f, mask, QueryTriggerInteraction.Ignore);
+                var hits = _hits;
+                for (int k = 0; k < count; k++)
                 {
                     var h = hits[k];
                     if (h.collider == null) continue;
