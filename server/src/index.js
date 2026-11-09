@@ -22,6 +22,7 @@ const ALLOWED = {
   EyeAdaptation: ["Enabled", "Strength"],
   LensFlare: ["Enabled", "Intensity", "Spacing", "Halo", "Fringe"],
   LensDirt: ["Enabled", "Intensity"],
+  GodRays: ["Enabled", "Intensity", "Length", "Threshold"],
 };
 const WORDS = new Set(["true", "false", "on", "off", "aces", "neutral", "none"]);
 const BAD = /(n[i1!]gg|f[a@]g|retard|\bkys\b|rap(e|ist)|nazi|hitler|cunt|whore|porn|\bsex|dick|cock|puss(y|ie)|penis|vagina|f+u+c+k|sh[i1]t|b[i1]tch|slut|\bcum\b)/i;

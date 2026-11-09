@@ -133,6 +133,9 @@ Shader "Hidden/QuestShade/FinalBlit"
             float4 _QS_Live;
             float4 _QS_LiveBloom;
             float4 _QS_LiveTint;
+            float4 _QS_God;
+            float4 _QS_SunL;
+            float4 _QS_SunR;
             half3 FetchRaw(float2 uv) { return SAMPLE_TEXTURE2D_X_LOD(_SourceTex, sampler_SourceTex, uv, 0).rgb; }
 
             half3 FetchMain(float2 uv)
@@ -175,6 +178,25 @@ Shader "Hidden/QuestShade/FinalBlit"
                         b += s * (max(soft, br - _QS_LiveBloom.x) / max(br, 1e-4)) * (k < 6 ? 1.5 : 0.5);
                     }
                     c += b / 12.0 * _QS_Live.x * _QS_LiveTint.rgb;
+                }
+                UNITY_BRANCH if (_QS_God.x > 0)
+                {
+                    float4 sun = unity_StereoEyeIndex == 0 ? _QS_SunL : _QS_SunR;
+                    UNITY_BRANCH if (sun.z > 0.001)
+                    {
+                        float2 d = (sun.xy - uv) * (_QS_God.y / 10.0);
+                        float j = frac(sin(dot(uv * 431.7, float2(12.9898, 78.233))) * 43758.5453);
+                        float2 p = uv + d * j;
+                        half3 acc = 0; half w = 1;
+                        UNITY_UNROLL for (int g = 0; g < 10; g++)
+                        {
+                            half3 s = FetchRaw(p);
+                            half br = max(s.r, max(s.g, s.b));
+                            acc += s * saturate((br - _QS_God.z) * 4) * w;
+                            w *= 0.88; p += d;
+                        }
+                        c += acc * (_QS_God.x * sun.z / 10.0);
+                    }
                 }
                 return c;
             }

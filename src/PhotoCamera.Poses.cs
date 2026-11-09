@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 using Il2CppInterop.Runtime;
 using UnityEngine;
@@ -155,6 +155,13 @@ namespace QuestShade
             if (fov != _appliedFov) { _appliedFov = fov; _cam.fieldOfView = fov; }
             float near = Mode == CamMode.Chest ? 0.05f : 0.015f;
             if (_handNear && Mode == CamMode.Chest) near = 0.01f;
+            if (Mode == CamMode.Chest && !_following)
+            {
+                var rel = Quaternion.Inverse(_lensRot) * (ht.position - _lensPos);
+                float halfTan = Mathf.Tan(cfg.ChestFov * 0.5f * Mathf.Deg2Rad) * 1.2f;
+                if (rel.z > 0f && rel.z < 0.6f && Mathf.Abs(rel.y) < (rel.z + 0.15f) * halfTan * 1.8f && Mathf.Abs(rel.x) < (rel.z + 0.15f) * halfTan * 1.8f)
+                    near = Mathf.Max(near, Mathf.Min(rel.z + 0.14f, 0.45f));
+            }
             if (near != _appliedNear) { _appliedNear = near; _cam.nearClipPlane = near; }
 
             bool stereo = ShaderPack.HeadsetActive;

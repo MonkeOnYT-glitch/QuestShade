@@ -52,6 +52,7 @@ namespace QuestShade
             new Knob { Label = "Colour fringe (edges)", Section = "ChromaticAberration", Key = "Intensity", Min = 0f, Max = 1f, Step = 0.05f },
             new Knob { Label = "Lens flare (camera only)", Section = "LensFlare", Key = "Intensity", Min = 0f, Max = 2f, Step = 0.1f },
             new Knob { Label = "Lens dirt (camera only)", Section = "LensDirt", Key = "Intensity", Min = 0f, Max = 2f, Step = 0.1f },
+            new Knob { Label = "God rays (sun shafts)", Section = "GodRays", Key = "Intensity", Min = 0f, Max = 2f, Step = 0.1f },
         };
         private static readonly Knob[] RetroKnobs =
         {

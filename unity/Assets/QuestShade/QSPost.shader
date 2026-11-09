@@ -21,6 +21,9 @@ Shader "Hidden/QuestShade/Post"
         TEXTURE2D(_QS_DirtTex);    SAMPLER(sampler_QS_DirtTex);
         float4 _QS_Flare;
         float4 _QS_Dirt;
+        TEXTURE2D(_QS_GodTex);     SAMPLER(sampler_QS_GodTex);
+        float4 _QS_God;
+        float4 _QS_Sun;
         float4 _QS_DofPx;
 
         struct A { float4 pos : POSITION; float2 uv : TEXCOORD0; };
@@ -150,6 +153,8 @@ Shader "Hidden/QuestShade/Post"
                 }
                 else c = SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv, 0).rgb;
                 c = Safe(c);
+                UNITY_BRANCH if (_QS_God.x > 0)
+                    c += SAMPLE_TEXTURE2D_LOD(_QS_GodTex, sampler_QS_GodTex, uv, 0).rgb * _QS_God.x;
                 UNITY_BRANCH if (_QS_Bloom.x > 0 || _QS_Flare.x > 0)
                 {
                     half3 glow = SAMPLE_TEXTURE2D_LOD(_QS_BloomTex, sampler_QS_BloomTex, uv, 0).rgb;
@@ -225,6 +230,26 @@ Shader "Hidden/QuestShade/Post"
                 half hw = pow(saturate(1 - length(0.5 - ho) / 0.6), 8);
                 acc += Fringe(ho, dir) * hw * _QS_Flare.z * 0.3 * half3(1.0, 0.85, 0.7);
                 return half4(Safe(acc), 1);
+            }
+            ENDHLSL
+        }
+        Pass
+        {
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            half4 Frag(V i) : SV_Target
+            {
+                float2 d = (_QS_Sun.xy - i.uv) * (_QS_God.y / 24.0);
+                float2 p = i.uv;
+                half3 acc = 0; half w = 1;
+                [unroll] for (int k = 0; k < 24; k++)
+                {
+                    half3 s = SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, p, 0).rgb;
+                    acc += s * w;
+                    w *= 0.93; p += d;
+                }
+                return half4(Safe(acc * (_QS_Sun.z / 24.0) * 2.5), 1);
             }
             ENDHLSL
         }

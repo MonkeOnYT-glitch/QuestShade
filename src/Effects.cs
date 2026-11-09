@@ -36,7 +36,9 @@ namespace QuestShade
         private Vector4 _flareVec;
         private float _dirtAmt;
         private Texture2D _dirtTex;
-        private bool LensFx => _flareVec.x > 0f || _dirtAmt > 0f;
+        private bool LensFx => _flareVec.x > 0f || _dirtAmt > 0f || _godVec.x > 0f;
+        private Vector4 _godVec;
+        private Transform _sunT; private int _sunScene = -1; private float _sunLookAt;
         private float _baseExposure, _tonemap, _appliedEv = float.NaN, _adaptStrength = -1f;
         private int _frame;
 
@@ -88,13 +90,13 @@ namespace QuestShade
 
         private void SetLive(Config cfg, Ini p)
         {
-            bool live = false;
-            _liveDof = live && _dofStrength > 0f;
+            bool live = cfg.HeadsetBloom && _bloomIntensity > 0f;
+            _liveDof = false;
             _matMono.SetVector(ID.Live, Vector4.zero);
             if (!live) { _mat.SetVector(ID.Live, Vector4.zero); return; }
             int eyeH = XRSettings.enabled && XRSettings.eyeTextureHeight > 0 ? XRSettings.eyeTextureHeight : (_cam != null ? _cam.pixelHeight : 1080);
             float blur = Mathf.Min(_dofMaxBlur, 14f) * eyeH / 1080f;
-            _mat.SetVector(ID.Live, new Vector4(_bloomIntensity, _liveDof ? 1 : 0, blur, _dofBokeh));
+            _mat.SetVector(ID.Live, new Vector4(_bloomIntensity * 0.6f, 0, blur, _dofBokeh));
             float thr = Mathf.Clamp(p.Float("Bloom", "Threshold", 0.85f), 0f, 4f);
             _mat.SetVector(ID.LiveBloom, new Vector4(thr, thr * Mathf.Clamp01(p.Float("Bloom", "SoftKnee", 0.5f)), 0.02f + 0.05f * Mathf.Clamp01(p.Float("Bloom", "Scatter", 0.7f)), 0));
             var tint = p.Color("Bloom", "Tint", Color.white);
@@ -126,7 +128,7 @@ namespace QuestShade
         {
             if (raw == null || dst == null || _post == null) return;
             int w = raw.width, h = raw.height;
-            RenderTexture src = raw, dof = null, dof2 = null, flare = null, flare2 = null;
+            RenderTexture src = raw, dof = null, dof2 = null, flare = null, flare2 = null, god = null;
             int levels = 0;
             try
             {
@@ -138,6 +140,7 @@ namespace QuestShade
                 var bloomV = BloomEff();
                 _post.SetVector(ID.Bloom, extras ? bloomV : Vector4.zero);
                 bool lens = extras && LensFx;
+                _post.SetVector(ID.God, Vector4.zero);
                 _post.SetVector(ID.Flare, lens ? _flareVec : Vector4.zero);
                 _post.SetVector(ID.Dirt, lens ? new Vector4(_dirtAmt, 0, 0, 0) : Vector4.zero);
                 if (lens && _dirtAmt > 0f) _post.SetTexture(ID.DirtTex, DirtTexture());
@@ -179,6 +182,15 @@ namespace QuestShade
                         _post.SetTexture(ID.FlareTex, flare2);
                     }
                     else _post.SetTexture(ID.FlareTex, Texture2D.blackTexture);
+                    if (lens && _godVec.x > 0f && levels >= 2 && SunOnScreen(PhotoCamera, out var sunUv))
+                    {
+                        _post.SetVector(ID.God, _godVec);
+                        _post.SetVector(ID.Sun, sunUv);
+                        god = RenderTexture.GetTemporary(_down[1].width, _down[1].height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
+                        Graphics.Blit(_down[1], god, _post, 7);
+                        _post.SetTexture(ID.GodTex, god);
+                    }
+                    else _post.SetVector(ID.God, Vector4.zero);
                     float norm = 0, wgt = 1; for (int i = 0; i < levels; i++) { norm += wgt; wgt *= bloomV.w; }
                     _post.SetVector(ID.Bloom, new Vector4(bloomV.x * 1.8f / Mathf.Max(1f, norm), bloomV.y, bloomV.z, bloomV.w));
                 }
@@ -191,6 +203,7 @@ namespace QuestShade
                 if (dof2 != null) RenderTexture.ReleaseTemporary(dof2);
                 if (flare != null) RenderTexture.ReleaseTemporary(flare);
                 if (flare2 != null) RenderTexture.ReleaseTemporary(flare2);
+                if (god != null) RenderTexture.ReleaseTemporary(god);
                 for (int i = 0; i < _down.Length; i++)
                 {
                     if (_down[i] != null) { RenderTexture.ReleaseTemporary(_down[i]); _down[i] = null; }
@@ -293,6 +306,9 @@ namespace QuestShade
                                     Mathf.Clamp(p.Float("LensFlare", "Halo", 0.5f), 0f, 2f), Mathf.Clamp(p.Float("LensFlare", "Fringe", 0.5f), 0f, 2f));
             _dirtAmt = p.Enabled("LensDirt") ? Mathf.Clamp(p.Float("LensDirt", "Intensity", 0f), 0f, 3f) : 0f;
             _post.SetTexture(ID.FlareTex, Texture2D.blackTexture);
+            float gr = p.Enabled("GodRays") ? Mathf.Clamp(p.Float("GodRays", "Intensity", 0f), 0f, 3f) : 0f;
+            _godVec = new Vector4(gr, Mathf.Clamp(p.Float("GodRays", "Length", 0.6f), 0.1f, 1f), Mathf.Clamp(p.Float("GodRays", "Threshold", 0.7f), 0f, 1.5f), 0);
+            _post.SetTexture(ID.GodTex, Texture2D.blackTexture);
 
             _dofStrength = p.Enabled("DepthOfField") ? Mathf.Max(0f, p.Float("DepthOfField", "Strength", 1f)) : 0f;
             _dofMaxBlur = Mathf.Clamp(p.Float("DepthOfField", "MaxBlur", 20f) * (_cfg != null ? _cfg.BlurStrength : 1f), 0f, 48f);
@@ -468,12 +484,75 @@ namespace QuestShade
             CalibrationTick();
             if (!Active || _mat == null) return;
             TickEyeAdaptation(cfg);
+            TickGodRays(cfg);
 
             _frame++;
             var tv = new Vector4(Time.unscaledTime % 1000f, _frame % 4096, 0, 0);
             _mat.SetVector(ID.Time, tv); _matMono.SetVector(ID.Time, tv);
             if (_post != null && _hasHQ) _post.SetVector(ID.Time, tv);
             if ((_frame & 31) == 0) SetTexel();
+        }
+
+        private Transform Sun()
+        {
+            int scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle;
+            if (scene == _sunScene && (_sunT != null || Time.unscaledTime < _sunLookAt)) return _sunT;
+            _sunScene = scene; _sunLookAt = Time.unscaledTime + 10f; _sunT = null;
+            try
+            {
+                var s = RenderSettings.sun;
+                if (s != null) _sunT = s.transform;
+                else foreach (var l in UnityEngine.Object.FindObjectsOfType<Light>()) if (l != null && l.type == LightType.Directional) { _sunT = l.transform; break; }
+            }
+            catch { }
+            return _sunT;
+        }
+
+        private bool SunOnScreen(Camera cam, out Vector4 uv)
+        {
+            uv = Vector4.zero;
+            var sun = Sun();
+            if (cam == null || sun == null) return false;
+            var p = cam.WorldToViewportPoint(cam.transform.position - sun.forward * 1000f);
+            if (p.z <= 0f) return false;
+            uv = new Vector4(p.x, p.y, SunFade(p.x, p.y), 0);
+            return uv.z > 0f;
+        }
+        private static float SunFade(float x, float y) => Mathf.Clamp01(1f - (Mathf.Max(Mathf.Abs(x - 0.5f), Mathf.Abs(y - 0.5f)) - 0.6f) / 0.5f);
+
+        private void TickGodRays(Config cfg)
+        {
+            bool want = _godVec.x > 0f && cfg.HeadsetBloom && _cam != null;
+            if (!want) { if (_godOn) { _mat.SetVector(ID.God, Vector4.zero); _godOn = false; } return; }
+            var sun = Sun();
+            if (sun == null) { if (_godOn) { _mat.SetVector(ID.God, Vector4.zero); _godOn = false; } return; }
+            Vector3 toSun = -sun.forward;
+            Vector4 l = Vector4.zero, r = Vector4.zero;
+            if (XRSettings.enabled && _cam.stereoEnabled)
+            {
+                l = EyeSun(Camera.StereoscopicEye.Left, toSun);
+                r = EyeSun(Camera.StereoscopicEye.Right, toSun);
+            }
+            else
+            {
+                var p = _cam.WorldToViewportPoint(_cam.transform.position + toSun * 1000f);
+                if (p.z > 0f) l = new Vector4(p.x, p.y, SunFade(p.x, p.y), 0);
+                r = l;
+            }
+            _mat.SetVector(ID.SunL, l); _mat.SetVector(ID.SunR, r);
+            _mat.SetVector(ID.God, new Vector4(_godVec.x * 0.7f, _godVec.y, _godVec.z, 0));
+            _godOn = true;
+        }
+        private bool _godOn;
+        private Vector4 EyeSun(Camera.StereoscopicEye eye, Vector3 toSun)
+        {
+            var v = _cam.GetStereoViewMatrix(eye);
+            var pr = _cam.GetStereoProjectionMatrix(eye);
+            var dir = v.MultiplyVector(toSun);
+            var clip = pr * new Vector4(dir.x, dir.y, dir.z, 0f);
+            if (clip.w <= 1e-4f) return Vector4.zero;
+            float x = clip.x / clip.w * 0.5f + 0.5f, y = clip.y / clip.w * 0.5f + 0.5f;
+            return new Vector4(x, y, SunFade(x, y), 0);
         }
 
         private void TickEyeAdaptation(Config cfg)
@@ -616,6 +695,7 @@ BokehIntensity = 0.3
             n += Set(m, ID.Curve, p, "CRT", s => new Vector4(Mathf.Clamp01(p.Float(s, "Curvature", 0.3f)), 0, 0, 0), v => v.x > 0);
 
             _matMono.CopyPropertiesFromMaterial(_mat);
+            _matMono.SetVector(ID.God, Vector4.zero);
             ShaderPack.SetStereo(_matMono, false);
             SetTexel();
 
@@ -667,6 +747,8 @@ BokehIntensity = 0.3
                 Bloom = Shader.PropertyToID("_QS_Bloom"), BloomTint = Shader.PropertyToID("_QS_BloomTint"),
                 BloomTex = Shader.PropertyToID("_QS_BloomTex"), BloomLow = Shader.PropertyToID("_QS_BloomLow"),
                 Flare = Shader.PropertyToID("_QS_Flare"), FlareTex = Shader.PropertyToID("_QS_FlareTex"),
+                God = Shader.PropertyToID("_QS_God"), GodTex = Shader.PropertyToID("_QS_GodTex"), Sun = Shader.PropertyToID("_QS_Sun"),
+                SunL = Shader.PropertyToID("_QS_SunL"), SunR = Shader.PropertyToID("_QS_SunR"),
                 Dirt = Shader.PropertyToID("_QS_Dirt"), DirtTex = Shader.PropertyToID("_QS_DirtTex"),
                 SS = Shader.PropertyToID("_QS_SS"),
                 Live = Shader.PropertyToID("_QS_Live"), LiveBloom = Shader.PropertyToID("_QS_LiveBloom"), LiveTint = Shader.PropertyToID("_QS_LiveTint");

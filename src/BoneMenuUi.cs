@@ -71,6 +71,7 @@ namespace QuestShade
             fx.CreateBool("Videos match the preview", Color.white, cfg.MatchPreview, v => cfg.MatchPreview = v);
             var fxMore = fx.CreatePage("Bloom + depth of field", Color.white);
             fxMore.CreateBool("On every preset", Color.green, cfg.BloomDofAll, v => { cfg.BloomDofAll = v; mod.ReapplyEffects(); });
+            fxMore.CreateBool("Bloom + god rays in your own view", Color.white, cfg.HeadsetBloom, v => { cfg.HeadsetBloom = v; mod.ReapplyEffects(); });
             fxMore.CreateFloat("Bloom strength", Color.white, cfg.BloomStrength, 0.25f, 0f, 4f, v => { cfg.BloomStrength = v; mod.ReapplyEffects(); });
             fxMore.CreateFloat("Blur strength", Color.white, cfg.BlurStrength, 0.25f, 0f, 3f, v => { cfg.BlurStrength = v; mod.ReapplyEffects(); });
             var eye = fx.CreatePage("Eye adaptation (dark rooms)", Color.white);
@@ -183,11 +184,13 @@ namespace QuestShade
         private static readonly System.Collections.Generic.List<Renderer> _headAttached = new System.Collections.Generic.List<Renderer>();
         private static readonly System.Collections.Generic.List<Renderer> _smallSkinned = new System.Collections.Generic.List<Renderer>();
         private static float _avScanAt;
+        private static readonly System.Collections.Generic.List<Renderer> _allRenderers = new System.Collections.Generic.List<Renderer>();
 
         private static void ScanAvatar(Il2CppSLZ.VRMK.Avatar av)
         {
-            _avId = av.GetInstanceID(); _avScanAt = Time.unscaledTime + 5f;
-            _headAttached.Clear(); _smallSkinned.Clear();
+            _avId = av.GetInstanceID(); _avScanAt = Time.unscaledTime + 30f;
+            _headAttached.Clear(); _smallSkinned.Clear(); _allRenderers.Clear();
+            foreach (var r in av.GetComponentsInChildren<Renderer>(true)) if (r != null) _allRenderers.Add(r);
             var neck = av.neck2;
             if (neck != null) foreach (var r in neck.GetComponentsInChildren<Renderer>(true)) if (r != null) _headAttached.Add(r);
             foreach (var arr in new[] { av.headMeshes, av.hairMeshes }) if (arr != null) foreach (var m in arr) if (m != null && !_headAttached.Contains(m)) _headAttached.Add(m);
@@ -317,6 +320,16 @@ namespace QuestShade
                 if (Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z)) > 0.5f) continue;
                 if ((b.center - hc).sqrMagnitude > 0.22f * 0.22f) continue;
                 if ((b.center - wl).sqrMagnitude < 0.18f * 0.18f || (b.center - wr).sqrMagnitude < 0.18f * 0.18f) continue;
+                Move(r);
+            }
+            float neckY = neck.position.y - 0.06f;
+            foreach (var r in _allRenderers)
+            {
+                if (r == null) continue;
+                var b = r.bounds;
+                if (b.min.y < neckY || b.size.y > 0.9f) continue;
+                if ((b.center - hc).sqrMagnitude > 0.6f * 0.6f) continue;
+                if ((b.center - wl).sqrMagnitude < 0.15f * 0.15f || (b.center - wr).sqrMagnitude < 0.15f * 0.15f) continue;
                 Move(r);
             }
         }
