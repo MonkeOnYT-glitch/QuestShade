@@ -1,3 +1,4 @@
+import { discordTick } from "./discord.js";
 
 const ALLOWED = {
   Color: ["Enabled", "Exposure", "Contrast", "Saturation", "HueShift", "ColorFilter"],
@@ -30,6 +31,8 @@ const BAD = /(n[i1!]gg|f[a@]g|retard|\bkys\b|rap(e|ist)|nazi|hitler|cunt|whore|p
 const MAX_INI = 6000, MAX_NAME = 40, MAX_AUTHOR = 24, SHARES_PER_HOUR = 5;
 
 export default {
+  async scheduled(event, env, ctx) { ctx.waitUntil(discordTick(env).catch(e => console.log("discord tick failed", e))); },
+
   async fetch(req, env) {
     const url = new URL(req.url);
     const parts = url.pathname.replace(/\/+$/, "").split("/").filter(Boolean);

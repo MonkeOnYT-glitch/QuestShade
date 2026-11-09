@@ -6,3 +6,6 @@ compatibility_date = "2025-06-01"
 binding = "DB"
 database_name = "questshade-presets"
 database_id = "1c6ad308-4dd2-4c3e-8b1b-4409de47d26c"
+
+[triggers]
+crons = ["*/2 * * * *"]
