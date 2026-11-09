@@ -294,7 +294,7 @@ namespace QuestShade
             _bloomIntensity = p.Enabled("Bloom") ? Mathf.Max(0f, p.Float("Bloom", "Intensity", 0f)) * (_cfg != null ? _cfg.BloomStrength : 1f) : 0f;
             float thr = Mathf.Clamp(p.Float("Bloom", "Threshold", 0.85f), 0f, 4f) * 0.5f;
             float knee = thr * 0.8f;
-            _bloomIntensity *= 1.6f;
+            _bloomIntensity *= 0.9f;
             _bloomVec = new Vector4(_bloomIntensity, thr, knee, Mathf.Max(0.8f, Mathf.Clamp01(p.Float("Bloom", "Scatter", 0.7f))));
             _post.SetVector(ID.Bloom, _bloomVec);
             var tint = p.Color("Bloom", "Tint", Color.white);
@@ -302,7 +302,7 @@ namespace QuestShade
             _post.SetTexture(ID.BloomTex, Texture2D.blackTexture);
 
             float fl = p.Enabled("LensFlare") ? Mathf.Clamp(p.Float("LensFlare", "Intensity", 0f), 0f, 3f) : 0f;
-            _flareVec = new Vector4(fl * 0.6f, Mathf.Clamp(p.Float("LensFlare", "Spacing", 0.35f), 0.05f, 1f),
+            _flareVec = new Vector4(fl * 0.25f, Mathf.Clamp(p.Float("LensFlare", "Spacing", 0.35f), 0.05f, 1f),
                                     Mathf.Clamp(p.Float("LensFlare", "Halo", 0.5f), 0f, 2f), Mathf.Clamp(p.Float("LensFlare", "Fringe", 0.5f), 0f, 2f));
             _dirtAmt = p.Enabled("LensDirt") ? Mathf.Clamp(p.Float("LensDirt", "Intensity", 0f), 0f, 3f) : 0f;
             _post.SetTexture(ID.FlareTex, Texture2D.blackTexture);
