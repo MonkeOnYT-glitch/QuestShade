@@ -90,7 +90,7 @@ namespace QuestShade
 
         private void SetLive(Config cfg, Ini p)
         {
-            bool live = cfg.HeadsetBloom && _bloomIntensity > 0f;
+            bool live = false;
             _liveDof = false;
             _matMono.SetVector(ID.Live, Vector4.zero);
             if (!live) { _mat.SetVector(ID.Live, Vector4.zero); return; }
