@@ -107,6 +107,16 @@
   .card p { margin: 0; color: var(--dim); font-size: 15px; }
   code { font: 500 13px var(--mono); background: rgba(255,255,255,.06); border: 1px solid var(--line); padding: 2px 7px; border-radius: 6px; color: #ffd9ad; word-break: break-all; }
 
+
+  .gallery { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  @media (min-width: 760px) { .gallery { grid-template-columns: 1fr 1fr; } .gallery .wide { grid-column: span 2; } }
+  .gallery figure { margin: 0; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: #000; }
+  .gallery img, .gallery video { width: 100%; height: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+  .gallery video { pointer-events: none; }
+  .gallery img { transition: transform .6s cubic-bezier(.2,.8,.2,1); }
+  .gallery figure:hover img { transform: scale(1.04); }
+  .gallery figcaption { position: absolute; left: 14px; bottom: 12px; font: 500 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; padding: 5px 10px; border-radius: 8px; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); pointer-events: none; }
+
   .shots { display: grid; grid-template-columns: 1fr; gap: 14px; }
   @media (min-width: 760px) { .shots { grid-template-columns: 1.4fr 1fr; grid-template-rows: 1fr 1fr; } .shots figure:first-child { grid-row: span 2; } }
   .shots figure { margin: 0; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: #000; }
@@ -240,14 +250,17 @@
     <div class="eyebrow reveal">Gallery</div>
     <h2 class="reveal">Shot on a Quest 3S.</h2>
     <p class="lede reveal">Straight out of the headset. No editing, no PC.</p>
-    <div class="clips reveal">
-      <figure><video src="media/clip-adapt.mp4" poster="media/clip-adapt.jpg" autoplay muted loop playsinline disablepictureinpicture disableremoteplayback preload="auto" aria-label="Recorded clip: walking out of a dark corridor into bright daylight as the exposure adjusts"></video><figcaption>Eye adaptation · dark to daylight</figcaption></figure>
-      <figure><video src="media/clip-sun.mp4" poster="media/clip-sun.jpg" autoplay muted loop playsinline disablepictureinpicture disableremoteplayback preload="auto" aria-label="Recorded clip: holding a rifle outdoors under a bright sun with lens flare"></video><figcaption>Lens flare · sun</figcaption></figure>
-    </div>
-    <div class="shots reveal">
+    <div class="gallery reveal">
+      <figure class="wide"><video src="media/clip-adapt.mp4" poster="media/clip-adapt.jpg" autoplay muted loop playsinline disablepictureinpicture disableremoteplayback preload="metadata" aria-label="Recorded clip: walking out of a dark corridor into bright daylight as the exposure adjusts"></video><figcaption>Video · eye adaptation</figcaption></figure>
+      <figure><video src="media/clip-sun.mp4" poster="media/clip-sun.jpg" autoplay muted loop playsinline disablepictureinpicture disableremoteplayback preload="metadata" aria-label="Recorded clip: holding a rifle outdoors under a bright sun with lens flare"></video><figcaption>Video · sun + lens flare</figcaption></figure>
       <figure><img src="media/shot4.jpg" alt="Photo inside an abandoned supermarket with empty shelves" loading="lazy"><figcaption>Photo · supermarket</figcaption></figure>
       <figure><img src="media/shot5.jpg" alt="Photo of a rooftop with blue pipes, bright sun and lens flare" loading="lazy"><figcaption>Photo · sun + flare</figcaption></figure>
+      <figure><video src="media/clip-neon.mp4" poster="media/clip-neon.jpg" autoplay muted loop playsinline disablepictureinpicture disableremoteplayback preload="metadata" aria-label="Recorded clip: holding a rifle in a dark neon-lit room"></video><figcaption>Video · neon range</figcaption></figure>
+      <figure><img src="media/shot1.jpg" alt="First-person view holding a rifle on a sunny field" loading="lazy"><figcaption>Photo · handheld</figcaption></figure>
+      <figure><video src="media/clip-outdoor.mp4" poster="media/clip-outdoor.jpg" autoplay muted loop playsinline disablepictureinpicture disableremoteplayback preload="metadata" aria-label="Recorded clip: outdoors with a rifle under a bright blue sky"></video><figcaption>Video · outdoors</figcaption></figure>
       <figure><img src="media/shot6.jpg" alt="Photo of a concrete rooftop with pipes under a blue sky" loading="lazy"><figcaption>Photo · rooftop</figcaption></figure>
+      <figure><img src="media/shot2.jpg" alt="Selfie camera view of the player avatar" loading="lazy"><figcaption>Photo · selfie</figcaption></figure>
+      <figure class="wide"><img src="media/shot3.jpg" alt="Selfie next to a blue shipping container" loading="lazy"><figcaption>Photo · selfie</figcaption></figure>
     </div>
   </section>
 
@@ -391,7 +404,7 @@
     const v = e.target;
     if (e.isIntersecting) { const p = v.play(); if (p && p.catch) p.catch(() => {}); } else v.pause();
   }), { threshold: .35 });
-  document.querySelectorAll(".clips video").forEach(v => clipIO.observe(v));
+  document.querySelectorAll(".gallery video").forEach(v => clipIO.observe(v));
 
   fetch("https://api.github.com/repos/MonkeOnYT-glitch/QuestShade/releases?per_page=100")
     .then(r => r.ok ? r.json() : null)
