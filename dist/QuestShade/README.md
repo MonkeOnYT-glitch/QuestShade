@@ -8,7 +8,7 @@ I wanted my Quest footage to look like the stuff people make on PC with ReShade,
 
 **Effects you can see in-game:**
 - Colour grading, LUTs, vignette, sharpening, grain, chromatic aberration, lens distortion, CRT, scanlines and glitch.
-- 10 presets to start with: Bodycam, Night Ops, Night Vision, CCTV, Punchy, Cinematic, Natural, Noir, Vivid and Warm.
+- 12 presets to start with: Bodycam, Night Ops, Night Vision, CCTV, Punchy, Cinematic, Natural, Noir, Vivid, Warm, Found Footage and Clean Cam.
 
 **Bloom and depth of field** on everything the camera shoots:
 - The focus follows what you point at.
