@@ -86,12 +86,40 @@ namespace QuestShade
                 if (!name.StartsWith(prefix)) continue;
                 var rel = name.Substring(prefix.Length).Replace('\\', '/');
                 var dest = Path.Combine(Root, rel.Replace('/', Path.DirectorySeparatorChar));
-                if (File.Exists(dest)) continue;
+                byte[] shipped;
+                using (var s = asm.GetManifestResourceStream(name)) { using var ms = new MemoryStream(); s.CopyTo(ms); shipped = ms.ToArray(); }
+                if (File.Exists(dest))
+                {
+                    try
+                    {
+                        string have = Fingerprint(File.ReadAllBytes(dest));
+                        if (OldShipped.Contains(have) && have != Fingerprint(shipped))
+                        {
+                            File.WriteAllBytes(dest, shipped);
+                            Mod.Log.Msg("Updated built-in preset " + Path.GetFileNameWithoutExtension(dest));
+                        }
+                    }
+                    catch { }
+                    continue;
+                }
                 Directory.CreateDirectory(Path.GetDirectoryName(dest));
-                using var s = asm.GetManifestResourceStream(name);
-                using var f = File.Create(dest);
-                s.CopyTo(f);
+                File.WriteAllBytes(dest, shipped);
             }
+        }
+
+        private static readonly HashSet<string> OldShipped = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "067051ba79d03c32c691b2faf0dd4ccfed1893de7b5c55d9f578c26f6f8b7ed9",
+            "0cb46f80045875a8330dbdcef42125ff1d6b4120f85f47b5f13b29b695b82e20",
+            "1a44a6ccd5affe81bd556b46ecd95cb45498a8bdefb2e1413461208513cc4c87",
+            "cdaf1f72e5926ba692043ba6477d3429548757661efd7d75f652d0f689227220",
+            "f6f6ea28d07a0085f6e6de9947c6acb198b600f554dfd0417420a9eb27026d53"
+        };
+
+        private static string Fingerprint(byte[] b)
+        {
+            var t = System.Text.Encoding.UTF8.GetString(b).TrimStart((char)0xFEFF).Replace("\r\n", "\n").TrimEnd();
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(t))).ToLowerInvariant();
         }
 
         public void LoadAll()

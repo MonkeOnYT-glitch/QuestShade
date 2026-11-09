@@ -155,13 +155,6 @@ namespace QuestShade
             if (fov != _appliedFov) { _appliedFov = fov; _cam.fieldOfView = fov; }
             float near = Mode == CamMode.Chest ? 0.05f : 0.015f;
             if (_handNear && Mode == CamMode.Chest) near = 0.01f;
-            if (Mode == CamMode.Chest && !_following)
-            {
-                var rel = Quaternion.Inverse(_lensRot) * (ht.position - _lensPos);
-                float halfTan = Mathf.Tan(cfg.ChestFov * 0.5f * Mathf.Deg2Rad) * 1.2f;
-                if (rel.z > -0.25f && rel.z < 0.6f && Mathf.Abs(rel.y) < (Mathf.Max(rel.z, 0f) + 0.3f) * halfTan * 1.8f && Mathf.Abs(rel.x) < (Mathf.Max(rel.z, 0f) + 0.3f) * halfTan * 1.8f)
-                    near = Mathf.Max(near, Mathf.Clamp(rel.z + 0.22f, 0.05f, 0.45f));
-            }
             if (near != _appliedNear) { _appliedNear = near; _cam.nearClipPlane = near; }
 
             bool stereo = ShaderPack.HeadsetActive;

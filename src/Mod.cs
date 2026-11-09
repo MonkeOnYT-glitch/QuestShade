@@ -3,7 +3,7 @@ using System.Linq;
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.4.11", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.4.12", "QuestShade")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
 [assembly: MelonOptionalDependencies("BoneLib")]
