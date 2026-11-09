@@ -3,7 +3,7 @@ using System.Linq;
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.4.5", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.4.6", "QuestShade")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
 [assembly: MelonOptionalDependencies("BoneLib")]
@@ -100,7 +100,7 @@ namespace QuestShade
                 {
                     try { BoneMenuUi.KeepMenusOffCamera(); } catch { }
                     bool was = EyeAdaptation.Hold;
-                    try { EyeAdaptation.Hold = BoneMenuUi.MenuInView(_fx.BoundCamera != null ? _fx.BoundCamera.transform : null); } catch { EyeAdaptation.Hold = false; }
+                    try { EyeAdaptation.Hold = BoneMenuUi.MenuInView(_fx.BoundTransform); } catch { EyeAdaptation.Hold = false; }
                     if (EyeAdaptation.Hold && !was && _cfg.EyeAdapt) Log.Msg($"Eye adaptation paused while menu '{BoneMenuUi.LastMenu}' is open");
                 }
                 Sharing.Tick();

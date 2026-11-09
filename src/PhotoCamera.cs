@@ -186,7 +186,8 @@ namespace QuestShade
             if (turn > 120f) return;
             Transform ignore = null;
             try { if (PropActive) ignore = _prop.Root.transform; } catch { }
-            _focus = Focus.Smooth(_focus, Focus.Raycast(t.position, t.forward, _screenLayer, ignore, _focus), dt);
+            if (Time.unscaledTime >= _focusNext) { _focusNext = Time.unscaledTime + 0.1f; _focusHit = Focus.Raycast(t.position, t.forward, _screenLayer, ignore, _focus); }
+            _focus = Focus.Smooth(_focus, _focusHit, dt);
             Fx.SetCaptureFocus(_focus);
         }
 
@@ -339,7 +340,8 @@ namespace QuestShade
         private bool _chestLogged;
         private float _appliedFov = -1f, _appliedNear = -1f;
 
-        private static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<RaycastHit> _wallHits;
+        private float _wallNext, _wallFrac = 1f;
+        private float _focusNext, _focusHit = 2f;
         private Vector3 AvoidWalls(Vector3 pivot, Vector3 desired)
         {
             try
@@ -350,17 +352,20 @@ namespace QuestShade
                 d /= len;
                 int mask = unchecked((int)0x80000441);
                 if (_screenLayer >= 0) mask &= ~(1 << _screenLayer);
-                _wallHits ??= new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<RaycastHit>(16);
-                int count = Physics.SphereCastNonAlloc(pivot, 0.05f, d, _wallHits, len, mask, QueryTriggerInteraction.Ignore);
-                var hits = _wallHits;
-                float best = float.MaxValue;
-                for (int i = 0; i < count; i++)
+                if (Time.unscaledTime >= _wallNext)
                 {
-                    var col = hits[i].collider;
-                    if (col == null || col.attachedRigidbody != null) continue;
-                    if (hits[i].distance < best) best = hits[i].distance;
+                    _wallNext = Time.unscaledTime + 0.066f;
+                    var hits = Physics.SphereCastAll(pivot, 0.05f, d, len, mask, QueryTriggerInteraction.Ignore);
+                    float best = float.MaxValue;
+                    for (int i = 0; hits != null && i < hits.Length; i++)
+                    {
+                        var col = hits[i].collider;
+                        if (col == null || col.attachedRigidbody != null) continue;
+                        if (hits[i].distance < best) best = hits[i].distance;
+                    }
+                    _wallFrac = best < float.MaxValue ? Mathf.Clamp01(Mathf.Max(0f, best - 0.06f) / len) : 1f;
                 }
-                if (best < float.MaxValue) return pivot + d * Mathf.Max(0f, best - 0.06f);
+                if (_wallFrac < 1f) return pivot + d * (len * _wallFrac);
             }
             catch { }
             return desired;

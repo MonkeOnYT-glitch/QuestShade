@@ -13,6 +13,8 @@ namespace QuestShade
     {
         public bool Active { get; private set; }
         public Camera BoundCamera => _cam;
+        public Transform BoundTransform { get { if (_camT == null || _camTFor != _cam) { _camTFor = _cam; _camT = _cam != null ? _cam.transform : null; } return _camT; } }
+        private Transform _camT; private Camera _camTFor;
         public string Status { get; private set; } = "starting";
 
         private Material _mat;
@@ -477,7 +479,7 @@ namespace QuestShade
         private void TickEyeAdaptation(Config cfg)
         {
             float strength = _adaptStrength >= 0f ? _adaptStrength : cfg.EyeAdaptStrength;
-            EyeAdaptation.Tick(_cam != null ? _cam.transform : null, cfg.EyeAdapt, strength, cfg.EyeAdaptSpeed, Time.unscaledDeltaTime);
+            EyeAdaptation.Tick(BoundTransform, cfg.EyeAdapt, strength, cfg.EyeAdaptSpeed, Time.unscaledDeltaTime);
             float ev = EyeAdaptation.Ev;
             if (!float.IsNaN(_appliedEv) && Mathf.Abs(ev - _appliedEv) < 0.004f) return;
             _appliedEv = ev;

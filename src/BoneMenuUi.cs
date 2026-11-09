@@ -479,7 +479,8 @@ namespace QuestShade
             _uiOff.Clear(); _uiROff.Clear();
         }
 
-        private static readonly System.Collections.Generic.List<Canvas> _menuCanvases = new System.Collections.Generic.List<Canvas>();
+        private static readonly System.Collections.Generic.List<(Canvas c, GameObject go, Transform t, string name)> _menuCanvases = new System.Collections.Generic.List<(Canvas, GameObject, Transform, string)>();
+        private static float _menuCheckAt; private static bool _menuOpen;
         private static float _menuScanAt; private static int _menuRigId;
         public static string LastMenu;
 
@@ -487,6 +488,14 @@ namespace QuestShade
         public static bool MenuInView(Transform head)
         {
             if (head == null) return false;
+            if (Time.unscaledTime < _menuCheckAt) return _menuOpen;
+            _menuCheckAt = Time.unscaledTime + 0.1f;
+            _menuOpen = MenuInViewNow(head);
+            return _menuOpen;
+        }
+
+        private static bool MenuInViewNow(Transform head)
+        {
             Component rig = BoneLib.Player.UIRig;
             if (rig == null) return false;
             int id = rig.GetInstanceID();
@@ -497,16 +506,16 @@ namespace QuestShade
                 _menuRigId = id;
                 _menuCanvases.Clear();
                 foreach (var cv in rig.GetComponentsInChildren<Canvas>(true))
-                    if (cv != null && cv.isRootCanvas && cv.renderMode == RenderMode.WorldSpace) _menuCanvases.Add(cv);
+                    if (cv != null && cv.isRootCanvas && cv.renderMode == RenderMode.WorldSpace) _menuCanvases.Add((cv, cv.gameObject, cv.transform, cv.name));
             }
             var hp = head.position; var hf = head.forward;
-            foreach (var cv in _menuCanvases)
+            foreach (var (cv, go, tr, name) in _menuCanvases)
             {
-                if (cv == null || !cv.enabled || !cv.gameObject.activeInHierarchy) continue;
-                var to = cv.transform.position - hp;
+                if (cv == null || go == null || !go.activeInHierarchy || !cv.enabled) continue;
+                var to = tr.position - hp;
                 float d = to.magnitude;
                 if (d > 1.5f || d < 0.05f) continue;
-                if (Vector3.Dot(hf, to / d) > 0.55f) { LastMenu = cv.name; return true; }
+                if (Vector3.Dot(hf, to / d) > 0.55f) { LastMenu = name; return true; }
             }
             return false;
         }
@@ -514,11 +523,14 @@ namespace QuestShade
         private const int UiLayer = 5;
         private static float _menuLayerAt;
         private static int _menuLayerRig, _menuLayerPasses;
+        private static float _menuLayerPoll;
         private static bool _menuLayerLogged;
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void KeepMenusOffCamera()
         {
+            if (Time.unscaledTime < _menuLayerPoll) return;
+            _menuLayerPoll = Time.unscaledTime + 1f;
             var rig = BoneLib.Player.UIRig;
             int id = rig != null ? rig.GetInstanceID() : 0;
             if (id != _menuLayerRig) { _menuLayerRig = id; _menuLayerPasses = 0; _menuLayerAt = 0f; }
