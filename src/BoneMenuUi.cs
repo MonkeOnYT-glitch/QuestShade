@@ -183,6 +183,7 @@ namespace QuestShade
         private static readonly System.Collections.Generic.List<Renderer> _headAttached = new System.Collections.Generic.List<Renderer>();
         private static readonly System.Collections.Generic.List<Renderer> _smallSkinned = new System.Collections.Generic.List<Renderer>();
         private static float _avScanAt;
+        private static int _headLogFor;
         private static readonly System.Collections.Generic.List<Renderer> _allRenderers = new System.Collections.Generic.List<Renderer>();
 
         private static void ScanAvatar(Il2CppSLZ.VRMK.Avatar av)
@@ -322,15 +323,21 @@ namespace QuestShade
                 Move(r);
             }
             float neckY = neck.position.y - 0.06f;
+            bool log = !actor && _headLogFor != _avId;
+            if (log) _headLogFor = _avId;
+            var sb = log ? new System.Text.StringBuilder() : null;
             foreach (var r in _allRenderers)
             {
                 if (r == null) continue;
                 var b = r.bounds;
-                if (b.min.y < neckY || b.size.y > 0.9f) continue;
-                if ((b.center - hc).sqrMagnitude > 0.6f * 0.6f) continue;
-                if ((b.center - wl).sqrMagnitude < 0.15f * 0.15f || (b.center - wr).sqrMagnitude < 0.15f * 0.15f) continue;
-                Move(r);
+                bool near = (b.center - hc).sqrMagnitude < 0.6f * 0.6f;
+                bool hands = (b.center - wl).sqrMagnitude < 0.15f * 0.15f || (b.center - wr).sqrMagnitude < 0.15f * 0.15f;
+                bool above = b.center.y > neckY && b.size.y < 0.9f;
+                if (above && near && !hands) { Move(r); if (sb != null) sb.Append($" +{r.name}"); }
+                else if (sb != null && b.max.y > neckY && near)
+                    sb.Append($" -{r.name}(centre {(b.center.y - neck.position.y):+0.00;-0.00} m, height {b.size.y:0.00} m)");
             }
+            if (sb != null) Mod.Log.Msg($"Chest cam: hiding from the lens on '{av.name}':{sb} (+ hidden, - left visible)");
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
