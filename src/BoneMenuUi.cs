@@ -28,7 +28,7 @@ namespace QuestShade
             var view = cam.CreatePage("Mode + view", Color.white);
             view.CreateEnum("Mode", Color.white, cfg.DefaultMode, v => mod.SetCameraMode((CamMode)v));
             view.CreateFunction("Flip camera", Color.white, () => mod.FlipCamera());
-            view.CreateFloat("Field of view", Color.white, cfg.Fov, 5f, 10f, 150f, v => { cfg.Fov = v; mod.RefreshCamera(); });
+            view.CreateFloat("Field of view", Color.white, cfg.Fov, 5f, 10f, 150f, v => cfg.Fov = v);
             var audio = cam.CreatePage("Audio", Color.white);
             audio.CreateBool("Game audio", Color.white, cfg.RecordGameAudio, v => cfg.RecordGameAudio = v);
             audio.CreateBool("Microphone", Color.white, cfg.RecordMic, v => cfg.RecordMic = v);
@@ -333,6 +333,8 @@ namespace QuestShade
                 bool near = (b.center - hc).sqrMagnitude < 0.6f * 0.6f;
                 bool hands = (b.center - wl).sqrMagnitude < 0.15f * 0.15f || (b.center - wr).sqrMagnitude < 0.15f * 0.15f;
                 bool above = b.center.y > neckY && b.size.y < 0.9f;
+                bool toNeck = b.max.y > neckY + 0.02f && b.size.y < 0.7f && b.size.x < 0.7f;
+                above |= toNeck;
                 if (above && near && !hands) { Move(r); if (sb != null) sb.Append($" +{r.name}"); }
                 else if (sb != null && b.max.y > neckY && near)
                     sb.Append($" -{r.name}(centre {(b.center.y - neck.position.y):+0.00;-0.00} m, height {b.size.y:0.00} m)");

@@ -115,6 +115,8 @@ namespace QuestShade
             {
                 _matGrade ??= new Material(_matMono) { name = "QuestShade_GradeAgain", hideFlags = HideFlags.HideAndDontSave };
                 _matGrade.CopyPropertiesFromMaterial(_matMono);
+                foreach (var id in new[] { ID.Vignette, ID.Sharpen, ID.CA, ID.Distort, ID.Grain, ID.Scan, ID.Glitch, ID.Noise, ID.Posterize, ID.Curve })
+                    _matGrade.SetVector(id, Vector4.zero);
                 _matGrade.SetVector(ID.Texel, new Vector4(1f / dst.width, 1f / dst.height, dst.width, dst.height));
                 _matGrade.SetTexture(SourceTexId, src);
                 Graphics.Blit(src, dst, _matGrade);
@@ -175,8 +177,9 @@ namespace QuestShade
                     _post.SetTexture(ID.BloomTex, low);
                     if (lens && _flareVec.x > 0f && levels >= 2)
                     {
-                        flare = RenderTexture.GetTemporary(_down[1].width, _down[1].height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
-                        Graphics.Blit(_down[1], flare, _post, 6);
+                        var fsrc = levels >= 3 ? _down[2] : _down[1];
+                        flare = RenderTexture.GetTemporary(fsrc.width, fsrc.height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
+                        Graphics.Blit(fsrc, flare, _post, 6);
                         flare2 = RenderTexture.GetTemporary(Math.Max(1, flare.width / 2), Math.Max(1, flare.height / 2), 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
                         Graphics.Blit(flare, flare2, _post, 2);
                         _post.SetTexture(ID.FlareTex, flare2);
@@ -294,7 +297,7 @@ namespace QuestShade
             _bloomIntensity = p.Enabled("Bloom") ? Mathf.Max(0f, p.Float("Bloom", "Intensity", 0f)) * (_cfg != null ? _cfg.BloomStrength : 1f) : 0f;
             float thr = Mathf.Clamp(p.Float("Bloom", "Threshold", 0.85f), 0f, 4f) * 0.5f;
             float knee = thr * 0.8f;
-            _bloomIntensity *= 0.9f;
+            _bloomIntensity *= 1.0f;
             _bloomVec = new Vector4(_bloomIntensity, thr, knee, Mathf.Max(0.8f, Mathf.Clamp01(p.Float("Bloom", "Scatter", 0.7f))));
             _post.SetVector(ID.Bloom, _bloomVec);
             var tint = p.Color("Bloom", "Tint", Color.white);
@@ -302,7 +305,7 @@ namespace QuestShade
             _post.SetTexture(ID.BloomTex, Texture2D.blackTexture);
 
             float fl = p.Enabled("LensFlare") ? Mathf.Clamp(p.Float("LensFlare", "Intensity", 0f), 0f, 3f) : 0f;
-            _flareVec = new Vector4(fl * 0.25f, Mathf.Clamp(p.Float("LensFlare", "Spacing", 0.35f), 0.05f, 1f),
+            _flareVec = new Vector4(fl * 0.18f, Mathf.Clamp(p.Float("LensFlare", "Spacing", 0.35f), 0.05f, 1f),
                                     Mathf.Clamp(p.Float("LensFlare", "Halo", 0.5f), 0f, 2f), Mathf.Clamp(p.Float("LensFlare", "Fringe", 0.5f), 0f, 2f));
             _dirtAmt = p.Enabled("LensDirt") ? Mathf.Clamp(p.Float("LensDirt", "Intensity", 0f), 0f, 3f) : 0f;
             _post.SetTexture(ID.FlareTex, Texture2D.blackTexture);
