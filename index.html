@@ -114,6 +114,13 @@
   .shots figure:hover img { transform: scale(1.04); }
   .shots figcaption { position: absolute; left: 14px; bottom: 12px; font: 500 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; padding: 5px 10px; border-radius: 8px; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); }
 
+
+  .clips { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 14px; }
+  @media (min-width: 760px) { .clips { grid-template-columns: 1fr 1fr; } }
+  .clips figure { margin: 0; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: #000; }
+  .clips video { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+  .clips figcaption { position: absolute; left: 14px; top: 12px; font: 500 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; padding: 5px 10px; border-radius: 8px; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); pointer-events: none; }
+
   .steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; counter-reset: s; }
   .steps li { counter-increment: s; display: grid; grid-template-columns: 52px 1fr; gap: 16px; align-items: start; padding: 20px 22px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); }
   .steps li::before { content: "0" counter(s); font: 700 26px/1.2 var(--display); color: var(--orange); }
@@ -233,6 +240,10 @@
     <div class="eyebrow reveal">Gallery</div>
     <h2 class="reveal">Shot on a Quest 3S.</h2>
     <p class="lede reveal">Straight out of the headset. No editing, no PC.</p>
+    <div class="clips reveal">
+      <figure><video src="media/clip-neon.mp4" poster="media/clip-neon.jpg" muted loop playsinline preload="metadata" controls aria-label="Recorded clip: holding a rifle in a dark neon-lit room, with lens flare"></video><figcaption>Recorded in-game · lens flare</figcaption></figure>
+      <figure><video src="media/clip-outdoor.mp4" poster="media/clip-outdoor.jpg" muted loop playsinline preload="metadata" controls aria-label="Recorded clip: outdoors with a rifle under a bright blue sky"></video><figcaption>Recorded in-game · outdoors</figcaption></figure>
+    </div>
     <div class="shots reveal">
       <figure><img src="media/shot1.jpg" alt="First-person view holding a rifle on a sunny field" loading="lazy"><figcaption>Handheld · Punchy</figcaption></figure>
       <figure><img src="media/shot2.jpg" alt="Selfie camera view of the player avatar" loading="lazy"><figcaption>Selfie</figcaption></figure>
@@ -375,6 +386,12 @@
     search.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(load, 300); });
     load();
   })();
+
+  const clipIO = new IntersectionObserver(es => es.forEach(e => {
+    const v = e.target;
+    if (e.isIntersecting) { const p = v.play(); if (p && p.catch) p.catch(() => {}); } else v.pause();
+  }), { threshold: .35 });
+  document.querySelectorAll(".clips video").forEach(v => clipIO.observe(v));
 
   fetch("https://api.github.com/repos/MonkeOnYT-glitch/QuestShade/releases?per_page=100")
     .then(r => r.ok ? r.json() : null)
