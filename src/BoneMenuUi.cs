@@ -71,7 +71,7 @@ namespace QuestShade
             fx.CreateBool("Videos match the preview", Color.white, cfg.MatchPreview, v => cfg.MatchPreview = v);
             var fxMore = fx.CreatePage("Bloom + depth of field", Color.white);
             fxMore.CreateBool("On every preset", Color.green, cfg.BloomDofAll, v => { cfg.BloomDofAll = v; mod.ReapplyEffects(); });
-            fxMore.CreateBool("Bloom + god rays in your own view", Color.white, cfg.HeadsetBloom, v => { cfg.HeadsetBloom = v; mod.ReapplyEffects(); });
+            fxMore.CreateBool("Bloom in your own view", Color.white, cfg.HeadsetBloom, v => { cfg.HeadsetBloom = v; mod.ReapplyEffects(); });
             fxMore.CreateFloat("Bloom strength", Color.white, cfg.BloomStrength, 0.25f, 0f, 4f, v => { cfg.BloomStrength = v; mod.ReapplyEffects(); });
             fxMore.CreateFloat("Blur strength", Color.white, cfg.BlurStrength, 0.25f, 0f, 3f, v => { cfg.BlurStrength = v; mod.ReapplyEffects(); });
             var eye = fx.CreatePage("Eye adaptation (dark rooms)", Color.white);

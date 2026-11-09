@@ -522,7 +522,7 @@ namespace QuestShade
 
         private void TickGodRays(Config cfg)
         {
-            bool want = _godVec.x > 0f && cfg.HeadsetBloom && _cam != null;
+            bool want = false;
             if (!want) { if (_godOn) { _mat.SetVector(ID.God, Vector4.zero); _godOn = false; } return; }
             var sun = Sun();
             if (sun == null) { if (_godOn) { _mat.SetVector(ID.God, Vector4.zero); _godOn = false; } return; }
