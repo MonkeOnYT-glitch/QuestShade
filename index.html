@@ -118,7 +118,7 @@
   .clips { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 14px; }
   @media (min-width: 760px) { .clips { grid-template-columns: 1fr 1fr; } }
   .clips figure { margin: 0; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: #000; }
-  .clips video { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+  .clips video { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; pointer-events: none; }
   .clips figcaption { position: absolute; left: 14px; top: 12px; font: 500 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; padding: 5px 10px; border-radius: 8px; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); pointer-events: none; }
 
   .steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; counter-reset: s; }
@@ -241,8 +241,8 @@
     <h2 class="reveal">Shot on a Quest 3S.</h2>
     <p class="lede reveal">Straight out of the headset. No editing, no PC.</p>
     <div class="clips reveal">
-      <figure><video src="media/clip-neon.mp4" poster="media/clip-neon.jpg" muted loop playsinline preload="metadata" controls aria-label="Recorded clip: holding a rifle in a dark neon-lit room, with lens flare"></video><figcaption>Recorded in-game · lens flare</figcaption></figure>
-      <figure><video src="media/clip-outdoor.mp4" poster="media/clip-outdoor.jpg" muted loop playsinline preload="metadata" controls aria-label="Recorded clip: outdoors with a rifle under a bright blue sky"></video><figcaption>Recorded in-game · outdoors</figcaption></figure>
+      <figure><video src="media/clip-neon.mp4" poster="media/clip-neon.jpg" autoplay muted loop playsinline disablepictureinpicture disableremoteplayback preload="auto" aria-label="Recorded clip: holding a rifle in a dark neon-lit room, with lens flare"></video><figcaption>Recorded in-game · lens flare</figcaption></figure>
+      <figure><video src="media/clip-outdoor.mp4" poster="media/clip-outdoor.jpg" autoplay muted loop playsinline disablepictureinpicture disableremoteplayback preload="auto" aria-label="Recorded clip: outdoors with a rifle under a bright blue sky"></video><figcaption>Recorded in-game · outdoors</figcaption></figure>
     </div>
     <div class="shots reveal">
       <figure><img src="media/shot1.jpg" alt="First-person view holding a rifle on a sunny field" loading="lazy"><figcaption>Handheld · Punchy</figcaption></figure>
