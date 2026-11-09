@@ -489,9 +489,12 @@ namespace QuestShade
             if (head == null) return false;
             Component rig = BoneLib.Player.UIRig;
             if (rig == null) return false;
-            if (rig.GetInstanceID() != _menuRigId || Time.unscaledTime > _menuScanAt)
+            int id = rig.GetInstanceID();
+            bool newRig = id != _menuRigId;
+            if (newRig || (_menuScanAt > 0f && Time.unscaledTime > _menuScanAt))
             {
-                _menuRigId = rig.GetInstanceID(); _menuScanAt = Time.unscaledTime + 10f;
+                _menuScanAt = newRig ? Time.unscaledTime + 5f : -1f;
+                _menuRigId = id;
                 _menuCanvases.Clear();
                 foreach (var cv in rig.GetComponentsInChildren<Canvas>(true))
                     if (cv != null && cv.isRootCanvas && cv.renderMode == RenderMode.WorldSpace) _menuCanvases.Add(cv);
@@ -510,15 +513,19 @@ namespace QuestShade
 
         private const int UiLayer = 5;
         private static float _menuLayerAt;
+        private static int _menuLayerRig, _menuLayerPasses;
         private static bool _menuLayerLogged;
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void KeepMenusOffCamera()
         {
-            if (Time.unscaledTime < _menuLayerAt) return;
-            _menuLayerAt = Time.unscaledTime + 15f;
-            int moved = 0;
             var rig = BoneLib.Player.UIRig;
+            int id = rig != null ? rig.GetInstanceID() : 0;
+            if (id != _menuLayerRig) { _menuLayerRig = id; _menuLayerPasses = 0; _menuLayerAt = 0f; }
+            if (_menuLayerPasses >= 3 || Time.unscaledTime < _menuLayerAt) return;
+            _menuLayerAt = Time.unscaledTime + (_menuLayerPasses == 0 ? 5f : 15f);
+            _menuLayerPasses++;
+            int moved = 0;
             if (rig != null && rig.popUpMenu != null && rig.popUpMenu.preferencesPanelView != null)
                 moved += ToUiLayer(rig.popUpMenu.preferencesPanelView.transform);
             var tut = Il2CppSLZ.Bonelab.TutorialRig.Instance;
