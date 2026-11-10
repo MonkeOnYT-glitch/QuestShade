@@ -16,6 +16,7 @@ float4 _QS_Noise;
 float4 _QS_Posterize;
 float4 _QS_Time;
 float4 _QS_Curve;
+float4 _QS_Hurt;
 float4 _QS_SrcTexel;
 
 #endif

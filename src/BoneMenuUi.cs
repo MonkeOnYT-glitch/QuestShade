@@ -33,6 +33,8 @@ namespace QuestShade
             var audio = cam.CreatePage("Audio", Color.white);
             audio.CreateBool("Game audio", Color.white, cfg.RecordGameAudio, v => { cfg.RecordGameAudio = v; cfg.SaveMenuSettings(); });
             audio.CreateBool("Microphone", Color.white, cfg.RecordMic, v => mod.SetMic(v));
+            var settingsHurt = cam.CreatePage("Hurt effect", Color.white);
+            settingsHurt.CreateBool("Blurry + red when hurt", new Color(1f, 0.5f, 0.5f), cfg.HurtEffect, v => { cfg.HurtEffect = v; cfg.SaveMenuSettings(); });
 
             var help = cam.CreatePage("How to use", Color.yellow);
             void Tip(string line, string more) => help.CreateFunction(line, Color.white, () => Notify(more, 4f));
@@ -48,6 +50,7 @@ namespace QuestShade
             more.CreateBool("Hover preview", Color.white, cfg.HoverPreview, v => mod.SetHoverPreview(v));
             more.CreateBool("Controls text on camera", Color.white, cfg.CameraLabel, v => mod.SetCameraLabel(v));
             more.CreateBool("Controller shortcuts (stick / grip)", Color.white, cfg.ControllerShortcuts, v => { cfg.ControllerShortcuts = v; cfg.SaveMenuSettings(); });
+            more.CreateBool("Left-handed (swap shortcut sides)", Color.white, cfg.LeftHanded, v => { cfg.LeftHanded = v; cfg.SaveMenuSettings(); });
             more.CreateFunction("Hide / show camera", Color.white, () => mod.ToggleHidden());
             more.CreateBool("No camera in Fusion lobbies", Color.white, cfg.FusionEffectsOnly, v => cfg.FusionEffectsOnly = v);
             var pv = more.CreatePage("Preview screen", Color.white);
@@ -172,6 +175,20 @@ namespace QuestShade
         {
             var h = hand == 1 ? BoneLib.Player.LeftHand : BoneLib.Player.RightHand;
             return h != null && h.m_CurrentAttachedGO != null;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static bool PlayerHurt(out float health01, out bool dying, out GameObject overlay)
+        {
+            health01 = 1f; dying = false; overlay = null;
+            var rm = BoneLib.Player.RigManager;
+            var h = rm != null ? rm.health : null;
+            if (h == null) return false;
+            health01 = h.max_Health > 0f ? Mathf.Clamp01(h.curr_Health / h.max_Health) : 1f;
+            dying = h.deathIsImminent || !h.alive;
+            var ph = h.TryCast<Il2CppSLZ.Marrow.Player_Health>();
+            if (ph != null) { var r = ph.vigRend; if (r != null) overlay = r.gameObject; else if (ph.Vignetter != null) overlay = ph.Vignetter; }
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

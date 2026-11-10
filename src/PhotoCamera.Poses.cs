@@ -157,7 +157,7 @@ namespace QuestShade
                 _hoverMat.mainTextureScale = new Vector2(sm ? -1f : 1f, 1f);
                 _hoverMat.mainTextureOffset = new Vector2(sm ? 1f : 0f, 0f);
             }
-            float fov = Mode == CamMode.Chest ? cfg.ChestFov : cfg.Fov;
+            float fov = Mode == CamMode.Chest || Mode == CamMode.FirstPerson ? cfg.ChestFov : cfg.Fov;
             if (fov != _appliedFov) { _appliedFov = fov; _cam.fieldOfView = fov; }
             float near = Mode == CamMode.Chest || Mode == CamMode.FirstPerson ? 0.05f : 0.015f;
             if (_handNear && (Mode == CamMode.Chest || Mode == CamMode.FirstPerson)) near = 0.01f;

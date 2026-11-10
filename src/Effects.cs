@@ -115,7 +115,7 @@ namespace QuestShade
             {
                 _matGrade ??= new Material(_matMono) { name = "QuestShade_GradeAgain", hideFlags = HideFlags.HideAndDontSave };
                 _matGrade.CopyPropertiesFromMaterial(_matMono);
-                foreach (var id in new[] { ID.Vignette, ID.Sharpen, ID.CA, ID.Distort, ID.Grain, ID.Scan, ID.Glitch, ID.Noise, ID.Posterize, ID.Curve })
+                foreach (var id in new[] { ID.Vignette, ID.Sharpen, ID.CA, ID.Distort, ID.Grain, ID.Scan, ID.Glitch, ID.Noise, ID.Posterize, ID.Curve, ID.Hurt })
                     _matGrade.SetVector(id, Vector4.zero);
                 _matGrade.SetVector(ID.Texel, new Vector4(1f / dst.width, 1f / dst.height, dst.width, dst.height));
                 _matGrade.SetTexture(SourceTexId, src);
@@ -558,6 +558,16 @@ namespace QuestShade
             return new Vector4(x, y, SunFade(x, y), 0);
         }
 
+        private float _hurtApplied = -1f;
+        public void SetHurt(float k)
+        {
+            if (_matMono == null || Mathf.Abs(k - _hurtApplied) < 0.005f) return;
+            _hurtApplied = k;
+            var v = new Vector4(k, 0, 0, 0);
+            _matMono.SetVector(ID.Hurt, v);
+            if (_matPre != null) _matPre.SetVector(ID.Hurt, v);
+        }
+
         private void TickEyeAdaptation(Config cfg)
         {
             float strength = _adaptStrength >= 0f ? _adaptStrength : cfg.EyeAdaptStrength;
@@ -700,6 +710,7 @@ BokehIntensity = 0.3
 
             _matMono.CopyPropertiesFromMaterial(_mat);
             _matMono.SetVector(ID.God, Vector4.zero);
+            _hurtApplied = -1f;
             ShaderPack.SetStereo(_matMono, false);
             SetTexel();
 
@@ -754,10 +765,10 @@ BokehIntensity = 0.3
                 God = Shader.PropertyToID("_QS_God"), GodTex = Shader.PropertyToID("_QS_GodTex"), Sun = Shader.PropertyToID("_QS_Sun"),
                 SunL = Shader.PropertyToID("_QS_SunL"), SunR = Shader.PropertyToID("_QS_SunR"),
                 Dirt = Shader.PropertyToID("_QS_Dirt"), DirtTex = Shader.PropertyToID("_QS_DirtTex"),
-                SS = Shader.PropertyToID("_QS_SS"),
+                SS = Shader.PropertyToID("_QS_SS"), Hurt = Shader.PropertyToID("_QS_Hurt"),
                 Live = Shader.PropertyToID("_QS_Live"), LiveBloom = Shader.PropertyToID("_QS_LiveBloom"), LiveTint = Shader.PropertyToID("_QS_LiveTint");
             public static readonly int[] Stack = { LutParams, Tone, Vignette, VignetteColor, VignetteCenter, Sharpen, CA, Distort,
-                Grain, Scan, Glitch, Noise, Posterize, Time, Curve };
+                Grain, Scan, Glitch, Noise, Posterize, Time, Curve, Hurt };
         }
     }
 }

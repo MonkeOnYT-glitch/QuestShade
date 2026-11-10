@@ -94,6 +94,7 @@ namespace QuestShade
         private int _builtPW, _builtPH, _builtFW, _builtFH, _builtMsaa;
         private int _layoutMode = -1;
         private int _screenLayer = -1, _fullMask;
+        public int LensHiddenLayer => _screenLayer;
 
         public bool Blocked;
         public void Toggle(Config cfg, Camera head) { if (Open) Close(); else if (!Blocked) OpenCam(cfg, head); }

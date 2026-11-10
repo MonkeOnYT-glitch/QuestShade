@@ -3,7 +3,7 @@ using System.Linq;
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.5.1", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.5.2", "QuestShade")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
 [assembly: MelonOptionalDependencies("BoneLib")]
@@ -90,6 +90,7 @@ namespace QuestShade
                 if (now >= _nextCamCheck) { _nextCamCheck = now + 1f; _fx.EnsureCamera(_cfg); }
                 _fx.Tick(_cfg);
                 Flashlights.Tick(_cfg.FlashlightBoost);
+                if (_boneLib) TickHurt();
                 _fx.TickHeadsetFocus(Time.unscaledDeltaTime);
 
                 _ctl.Update(_cfg, now);
@@ -503,11 +504,11 @@ namespace QuestShade
         private string _hint; private int _hintKey = -1;
         private string ShortcutsHint()
         {
-            int key = (int)_cfg.CameraMode.Gesture | (int)_cfg.TakePhoto.Gesture << 4 | (int)_cfg.HideCamera.Gesture << 8 | (int)_cfg.Record.Gesture << 12;
+            int key = (_cfg.LeftHanded ? 1 << 20 : 0) | (int)_cfg.CameraMode.Gesture | (int)_cfg.TakePhoto.Gesture << 4 | (int)_cfg.HideCamera.Gesture << 8 | (int)_cfg.Record.Gesture << 12;
             if (key == _hintKey) return _hint;
             _hintKey = key;
             var parts = new System.Collections.Generic.List<string>();
-            void Add(Binding b, string what) { if (b.Gesture != Gesture.None) parts.Add(GestureName(b.Gesture) + ": " + what); }
+            void Add(Binding b, string what) { if (b.Gesture != Gesture.None) parts.Add(GestureName(_ctl.Shown(b.Gesture)) + ": " + what); }
             Add(_cfg.CameraMode, "mode"); Add(_cfg.TakePhoto, "photo"); Add(_cfg.Record, "record"); Add(_cfg.HideCamera, "hide");
             return _hint = string.Join("   ", parts);
         }
@@ -525,6 +526,35 @@ namespace QuestShade
         {
             _cfg.PreviewEnabled = on;
             Notify(on ? "Preview on" : "Preview off (camera still shoots)", 1f);
+        }
+
+        private float _hurt, _hurtNext; private float _hurtTarget; private IntPtr _overlayPtr;
+        private void TickHurt()
+        {
+            float now = Time.unscaledTime;
+            if (now >= _hurtNext)
+            {
+                _hurtNext = now + 0.1f;
+                _hurtTarget = 0f;
+                try
+                {
+                    if (BoneMenuUi.PlayerHurt(out float hp, out bool dying, out GameObject overlay))
+                    {
+                        if (_cfg.HurtEffect) _hurtTarget = dying ? 1f : Mathf.Clamp01((0.75f - hp) / 0.6f);
+                        int layer = _cam.LensHiddenLayer;
+                        if (overlay != null && layer >= 0 && (overlay.Pointer != _overlayPtr || overlay.layer != layer))
+                        {
+                            _overlayPtr = overlay.Pointer;
+                            overlay.layer = layer;
+                            Log.Msg("Hurt overlay kept off the camera");
+                        }
+                    }
+                }
+                catch { }
+            }
+            float dt = Time.unscaledDeltaTime;
+            _hurt += (_hurtTarget - _hurt) * (1f - Mathf.Exp(-(_hurtTarget > _hurt ? 6f : 1.5f) * dt));
+            _fx.SetHurt(_hurt < 0.01f ? 0f : _hurt);
         }
 
         internal void SetMic(bool on)

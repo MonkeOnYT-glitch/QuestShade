@@ -75,6 +75,18 @@ half3 QSStack(float2 uv, float2 pixelPos)
     }
     else col = QS_FETCH_MAIN(suv);
 
+    UNITY_BRANCH if (_QS_Hurt.x > 0.001)
+    {
+        float r = _QS_Hurt.x * 0.011 * (0.85 + 0.15 * sin(_QS_Time.x * 3.1));
+        half3 acc = col;
+        [unroll] for (int hi = 0; hi < 8; hi++)
+        {
+            float a = hi * 0.785398;
+            acc += QS_FETCH(suv + float2(cos(a), sin(a) * 1.7) * r);
+        }
+        col = acc / 9.0;
+    }
+
     UNITY_BRANCH if (_QS_Sharpen.x > 0)
     {
         float2 px = _QS_SrcTexel.xy;
@@ -113,6 +125,16 @@ half3 QSStack(float2 uv, float2 pixelPos)
             half v = pow(saturate(1.0 - dot(d, d)), _QS_Vignette.y);
             col *= lerp(_QS_VignetteColor.rgb, (1.0).xxx, v);
         }
+    }
+
+    UNITY_BRANCH if (_QS_Hurt.x > 0.001)
+    {
+        float2 hd = (uv - 0.5) * float2(1.25, 1.0);
+        half edge = saturate(dot(hd, hd) * 3.2 - 0.1);
+        half beat = 0.8 + 0.2 * sin(_QS_Time.x * 5.5);
+        half k = saturate(_QS_Hurt.x * (0.3 + edge * 1.3) * beat);
+        half3 red = col * half3(1.0, 0.22, 0.18) + half3(0.22, 0.0, 0.0) * edge;
+        col = lerp(col, red, k);
     }
 
     UNITY_BRANCH if (_QS_Scan.x > 0)

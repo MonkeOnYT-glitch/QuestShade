@@ -93,8 +93,14 @@ namespace QuestShade
             if (_left.isValid) _left.TryGetFeatureValue(CommonUsages.triggerButton, out _lTrig);
             if (_right.isValid) _right.TryGetFeatureValue(CommonUsages.triggerButton, out _rTrig);
 
+            _leftHanded = cfg.LeftHanded;
             _l.Update(l, now, cfg.HoldTime, cfg.DoubleTapTime);
             _r.Update(r, now, cfg.HoldTime, cfg.DoubleTapTime);
+            Vector2 la = default, ra = default;
+            if (_left.isValid) _left.TryGetFeatureValue(CommonUsages.primary2DAxis, out la);
+            if (_right.isValid) _right.TryGetFeatureValue(CommonUsages.primary2DAxis, out ra);
+            if (_l.Down && la.sqrMagnitude > 0.16f) _l.Consume();
+            if (_r.Down && ra.sqrMagnitude > 0.16f) _r.Consume();
 
             if (_l.Down && _r.Down)
             {
@@ -113,9 +119,19 @@ namespace QuestShade
         public Func<int, bool> HandHolding;
         private bool Holding(int h) { try { return HandHolding != null && HandHolding(h); } catch { return false; } }
 
+        private bool _leftHanded;
+        public Gesture Shown(Gesture g) => Hand(g);
+        private Gesture Hand(Gesture g) => !_leftHanded ? g : g switch
+        {
+            Gesture.LeftStickHold => Gesture.RightStickHold, Gesture.RightStickHold => Gesture.LeftStickHold,
+            Gesture.LeftStickDoubleTap => Gesture.RightStickDoubleTap, Gesture.RightStickDoubleTap => Gesture.LeftStickDoubleTap,
+            Gesture.LeftGripStickHold => Gesture.RightGripStickHold, Gesture.RightGripStickHold => Gesture.LeftGripStickHold,
+            _ => g
+        };
+
         public bool Fired(Binding b)
         {
-            switch (b.Gesture)
+            switch (Hand(b.Gesture))
             {
                 case Gesture.LeftStickHold: return _l.Hold && (!_lGrip || Holding(1));
                 case Gesture.RightStickHold: return _r.Hold && !_rGrip;
