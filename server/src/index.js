@@ -28,10 +28,16 @@ const ALLOWED = {
 const WORDS = new Set(["true", "false", "on", "off", "aces", "neutral", "none"]);
 const BAD = /(n[i1!]gg|f[a@]g|retard|\bkys\b|rap(e|ist)|nazi|hitler|cunt|whore|porn|\bsex|dick|cock|puss(y|ie)|penis|vagina|f+u+c+k|sh[i1]t|b[i1]tch|slut|\bcum\b)/i;
 
+const SLOP = /^(my preset|new preset|preset|untitled|shared preset|test|testing|copy|custom|reshade|bodycam|cctv|cinematic|clean cam|found footage|natural|night ops|night vision|noir|punchy|vivid|warm)( edit)?( ?\(?\d+\)?)?$/i;
+export const isSlop = n => { const s = String(n || "").trim().replace(/\s+/g, " "); return s.length < 3 || SLOP.test(s); };
+
 const MAX_INI = 6000, MAX_NAME = 40, MAX_AUTHOR = 24, SHARES_PER_HOUR = 5;
 
 export default {
-  async scheduled(event, env, ctx) { ctx.waitUntil(discordTick(env).catch(e => console.log("discord tick failed", e))); },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(discordTick(env).catch(e => console.log("discord tick failed", e)));
+    ctx.waitUntil(hideSlop(env).catch(e => console.log("slop cleanup failed", e)));
+  },
 
   async fetch(req, env) {
     const url = new URL(req.url);
@@ -78,11 +84,21 @@ async function getOne(id, env) {
   return json(p);
 }
 
+async function hideSlop(env) {
+  const { results } = await env.DB.prepare("SELECT id, name, author FROM presets WHERE hidden = 0").all();
+  for (const p of results || []) {
+    if (!isSlop(p.name)) continue;
+    await env.DB.prepare("UPDATE presets SET hidden = 2 WHERE id = ?1").bind(p.id).run();
+    await notify(env, `🧹 Hid default-named preset **${esc(p.name)}** by **${esc(p.author)}** (\`${p.id}\`)`);
+  }
+}
+
 async function share(req, env, given) {
   const body = given !== undefined ? given : await req.json().catch(() => null);
   if (!body) return err(400, "Bad request");
   const name = oneLine(body.name, MAX_NAME), author = oneLine(body.author, MAX_AUTHOR) || "Anonymous";
   if (!name) return err(400, "Give your preset a name first");
+  if (isSlop(name)) return err(400, "Rename it first: \"" + name + "\" is a default name (Edit preset > Rename)");
   if (BAD.test(name) || BAD.test(author)) return err(400, "Pick a different name");
   const ini = cleanIni(String(body.ini || "").slice(0, MAX_INI));
   if (!ini) return err(400, "This preset doesn't change anything yet");

@@ -21,6 +21,15 @@ namespace QuestShade
         private static readonly List<(UnityWebRequest req, Action<string, string> done)> _pending = new List<(UnityWebRequest, Action<string, string>)>();
 
         public static void Init(Config cfg) => _cfg = cfg;
+
+        private static readonly System.Text.RegularExpressions.Regex Slop = new System.Text.RegularExpressions.Regex(
+            @"^(my preset|new preset|preset|untitled|shared preset|test|testing|copy|custom|reshade|bodycam|cctv|cinematic|clean cam|found footage|natural|night ops|night vision|noir|punchy|vivid|warm)( edit)?( ?\(?\d+\)?)?$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        public static bool IsDefaultName(string name)
+        {
+            var s = System.Text.RegularExpressions.Regex.Replace((name ?? "").Trim(), @"\s+", " ");
+            return s.Length < 3 || Slop.IsMatch(s);
+        }
         public static bool Busy => _pending.Count > 0;
 
         public static void Tick()

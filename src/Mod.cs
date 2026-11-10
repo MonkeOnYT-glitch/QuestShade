@@ -263,6 +263,11 @@ namespace QuestShade
         internal void SharePreset()
         {
             var name = _cfg.PresetName;
+            if (Sharing.IsDefaultName(name))
+            {
+                Notify($"Rename it first! \"{name}\" is a default name. Edit preset > Rename, then Share", 4f);
+                return;
+            }
             var author = string.IsNullOrWhiteSpace(_cfg.ShareAuthor) ? "Anonymous" : _cfg.ShareAuthor.Trim();
             Notify($"Sharing \"{name}\"...", 2f);
             Sharing.Publish(name, author, _cfg.CurrentPresetText(), (id, err) =>
