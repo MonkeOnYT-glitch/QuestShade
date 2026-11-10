@@ -330,6 +330,7 @@ namespace QuestShade
             _mat.SetVector(ID.Dof, dofV); _mat.SetVector(ID.DofAF, afV);
 
             foreach (var id in ID.Stack) _post.SetVector(id, _mat.GetVector(id));
+            _hurtApplied = -1f;
             if (_lut != null) _post.SetTexture(ID.Lut, _lut);
             if (_bloomIntensity > 0f || _dofStrength > 0f || LensFx)
                 Mod.Log.Msg($"Photo/video extras: bloom {_bloomIntensity:0.##}, depth of field {_dofStrength:0.##} (focus {(focus > 0 ? focus.ToString("0.0") + " m" : "auto")}), lens flare {_flareVec.x:0.##}, lens dirt {_dirtAmt:0.##}");
@@ -566,6 +567,7 @@ namespace QuestShade
             var v = new Vector4(k, 0, 0, 0);
             _matMono.SetVector(ID.Hurt, v);
             if (_matPre != null) _matPre.SetVector(ID.Hurt, v);
+            if (_post != null) _post.SetVector(ID.Hurt, v);
         }
 
         private void TickEyeAdaptation(Config cfg)

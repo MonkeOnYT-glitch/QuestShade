@@ -3,7 +3,7 @@ using System.Linq;
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.5.2", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.5.3", "QuestShade")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
 [assembly: MelonOptionalDependencies("BoneLib")]
@@ -528,7 +528,7 @@ namespace QuestShade
             Notify(on ? "Preview on" : "Preview off (camera still shoots)", 1f);
         }
 
-        private float _hurt, _hurtNext; private float _hurtTarget; private IntPtr _overlayPtr;
+        private float _hurt, _hurtNext; private float _hurtTarget; private IntPtr _overlayPtr; private bool _hurtLogged, _hurtErrLogged;
         private void TickHurt()
         {
             float now = Time.unscaledTime;
@@ -541,6 +541,7 @@ namespace QuestShade
                     if (BoneMenuUi.PlayerHurt(out float hp, out bool dying, out GameObject overlay))
                     {
                         if (_cfg.HurtEffect) _hurtTarget = dying ? 1f : Mathf.Clamp01((0.75f - hp) / 0.6f);
+                        if (!_hurtLogged && _hurtTarget > 0.2f) { _hurtLogged = true; Log.Msg($"Hurt effect on (health {hp * 100f:0}%, dying {dying})"); }
                         int layer = _cam.LensHiddenLayer;
                         if (overlay != null && layer >= 0 && (overlay.Pointer != _overlayPtr || overlay.layer != layer))
                         {
@@ -550,7 +551,7 @@ namespace QuestShade
                         }
                     }
                 }
-                catch { }
+                catch (Exception e) { if (!_hurtErrLogged) { _hurtErrLogged = true; Log.Warning("Hurt effect: can't read health: " + e.Message); } }
             }
             float dt = Time.unscaledDeltaTime;
             _hurt += (_hurtTarget - _hurt) * (1f - Mathf.Exp(-(_hurtTarget > _hurt ? 6f : 1.5f) * dt));
