@@ -130,6 +130,7 @@ namespace QuestShade
         private bool _labelWanted = true;
         private string _labelText;
         public string ControlsHint;
+        public bool MicOn;
         public string LabelExtra;
 
         public void SetLabel(bool on) { _labelWanted = on; ApplyHidden(); }
@@ -196,13 +197,14 @@ namespace QuestShade
             if (Recording)
             {
                 int s = (int)RecordSeconds;
-                line1 = $"<color=#ff3030>\u25CF REC {s / 60}:{s % 60:00}</color>";
+                line1 = $"<color=#ff3030>\u25CF REC {s / 60}:{s % 60:00}</color>" + (MicOn ? "  <color=#80ff80>MIC</color>" : "");
                 line2 = hand != 0 ? "HOLD TRIGGER = stop" : "grab it, then HOLD TRIGGER = stop";
             }
             else if (hand != 0)
             {
                 line1 = "TRIGGER:  tap = <color=#ffa030>PHOTO</color>   hold = <color=#ff5050>RECORD</color>";
-                line2 = Mode == CamMode.Selfie ? "facing you (selfie)" : Mode == CamMode.Hand ? "facing forward" : ModeName(Mode);
+                line2 = (Mode == CamMode.Selfie ? "facing you (selfie)" : Mode == CamMode.Hand ? "facing forward" : ModeName(Mode))
+                        + (MicOn ? "   <color=#80ff80>mic on</color>" : "   <color=#999999>mic off</color>");
             }
             else
             {

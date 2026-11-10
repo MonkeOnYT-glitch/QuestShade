@@ -53,9 +53,9 @@ namespace QuestShade
         public bool PreviewEnabled = true;
         public int RecordWidth = 1920, RecordHeight = 1080, RecordFps = 30, RecordBitrateKbps = 35000;
         public float RecordSupersample = 1.5f;
-        public bool RecordGameAudio = true, RecordMic = false;
+        public bool RecordGameAudio = true, RecordMic = true;
         public float GameVolume = 1f, MicVolume = 1f;
-        internal bool _audioMigrated;
+        internal bool _audioMigrated, _micMigrated;
         public int AudioBitrateKbps = 128;
 
         public Ini Preset { get; private set; }
@@ -244,7 +244,8 @@ namespace QuestShade
             RecordBitrateKbps = int.TryParse(br, out int kb) ? Mathf.Clamp(kb, 1000, 60000) : autoKbps;
             RecordGameAudio = ini.Bool("Camera", "RecordGameAudio", true);
             if (!ini.HasKey("Camera", "AudioDefaultOn")) { RecordGameAudio = true; _audioMigrated = true; }
-            RecordMic = ini.Bool("Camera", "RecordMic", false);
+            RecordMic = ini.Bool("Camera", "RecordMic", true);
+            if (!ini.HasKey("Camera", "MicDefaultOn")) { RecordMic = true; _audioMigrated = true; _micMigrated = true; }
             GameVolume = Mathf.Clamp(ini.Float("Camera", "GameVolume", 1f), 0f, 4f);
             MicVolume = Mathf.Clamp(ini.Float("Camera", "MicVolume", 1f), 0f, 4f);
             AudioBitrateKbps = Mathf.Clamp(ini.Int("Camera", "AudioBitrate", 128), 64, 320);
@@ -516,6 +517,7 @@ namespace QuestShade
             SetKey("Camera", "RecordGameAudio", RecordGameAudio ? "true" : "false");
             SetKey("Camera", "AudioDefaultOn", "true");
             SetKey("Camera", "RecordMic", RecordMic ? "true" : "false");
+            SetKey("Camera", "MicDefaultOn", "true");
             SetKey("Camera", "PhotoTimer", PhotoTimer.ToString());
             SetKey("Camera", "FreezeOnRelease", FreezeOnRelease ? "true" : "false");
             SetKey("Camera", "NoCameraInFusion", FusionEffectsOnly ? "true" : "false");

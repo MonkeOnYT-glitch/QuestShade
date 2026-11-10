@@ -21,6 +21,7 @@ namespace QuestShade
 
             var cam = root.CreatePage("Camera", Color.white);
             cam.CreateFunction("Open / close camera", Color.green, () => mod.ToggleCamera());
+            cam.CreateBool("Mic in videos", new Color(1f, 0.6f, 0.6f), cfg.RecordMic, v => mod.SetMic(v));
             var shoot = cam.CreatePage("Shoot", Color.cyan);
             shoot.CreateFunction("Take photo", Color.cyan, () => mod.TakePhoto());
             shoot.CreateFunction("Record / stop", Color.red, () => mod.ToggleRecording());
@@ -30,8 +31,8 @@ namespace QuestShade
             view.CreateFunction("Flip camera", Color.white, () => mod.FlipCamera());
             view.CreateFloat("Field of view", Color.white, cfg.Fov, 5f, 10f, 150f, v => cfg.Fov = v);
             var audio = cam.CreatePage("Audio", Color.white);
-            audio.CreateBool("Game audio", Color.white, cfg.RecordGameAudio, v => cfg.RecordGameAudio = v);
-            audio.CreateBool("Microphone", Color.white, cfg.RecordMic, v => cfg.RecordMic = v);
+            audio.CreateBool("Game audio", Color.white, cfg.RecordGameAudio, v => { cfg.RecordGameAudio = v; cfg.SaveMenuSettings(); });
+            audio.CreateBool("Microphone", Color.white, cfg.RecordMic, v => mod.SetMic(v));
 
             var help = cam.CreatePage("How to use", Color.yellow);
             void Tip(string line, string more) => help.CreateFunction(line, Color.white, () => Notify(more, 4f));

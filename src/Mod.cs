@@ -31,7 +31,7 @@ namespace QuestShade
             {
                 Config.InitPaths();
                 _cfg.LoadAll();
-                if (_cfg._audioMigrated) { _cfg._audioMigrated = false; _cfg.SaveMenuSettings(); Log.Msg("Game audio in recordings: on (new default)"); }
+                if (_cfg._audioMigrated) { _cfg._audioMigrated = false; _cfg.SaveMenuSettings(); Log.Msg("Game audio + mic in recordings: on (new default)"); }
                 Sharing.Init(_cfg);
                 PhotoSaver.ResolveFolder(_cfg.SaveFolder);
                 _cam.SetMode(_cfg.DefaultMode);
@@ -522,6 +522,12 @@ namespace QuestShade
             Notify(on ? "Preview on" : "Preview off (camera still shoots)", 1f);
         }
 
+        internal void SetMic(bool on)
+        {
+            _cfg.RecordMic = on; _cfg.SaveMenuSettings();
+            Notify(on ? "Mic ON: your voice is in your videos" : "Mic OFF: videos have game sound only", 2f);
+        }
+
         internal void ToggleHidden()
         {
             if (!_cam.Open) { Notify("Open the camera first", 1f); return; }
@@ -789,6 +795,7 @@ namespace QuestShade
         private void HandleInput()
         {
             _ctl.HandHolding = h => _cam.HoldingHand == h || (_cam.HandBusy != null && _cam.HandBusy(h));
+            _cam.MicOn = _cfg.RecordMic;
             _cam.ControlsHint = _cfg.ControllerShortcuts ? ShortcutsHint() : null;
             if (!_cfg.ControllerShortcuts)
             {
