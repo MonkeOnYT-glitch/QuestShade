@@ -34,7 +34,7 @@ namespace QuestShade
         }
 
         public static int PreviewFps(int wanted, bool inUse) => Mathf.Max(24, wanted);
-        public static bool PreviewExtras => Level < 1;
+        public static bool PreviewExtras => Level < 3;
         public static bool RecordingExtras => Level < 3;
     }
 }

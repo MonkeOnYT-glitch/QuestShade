@@ -9,7 +9,7 @@ using InputDevice = UnityEngine.XR.InputDevice;
 
 namespace QuestShade
 {
-    public enum CamMode { Hand, Selfie, Chest, ThirdPerson, Tripod }
+    public enum CamMode { Hand, Selfie, Chest, ThirdPerson, Tripod, FirstPerson }
 
     internal sealed partial class PhotoCamera
     {
@@ -133,6 +133,7 @@ namespace QuestShade
         private MeshRenderer _labelR;
         private bool _labelWanted = true;
         private string _labelText;
+        public string ControlsHint;
         public string LabelExtra;
 
         public void SetLabel(bool on) { _labelWanted = on; ApplyHidden(); }
@@ -199,7 +200,7 @@ namespace QuestShade
             if (Recording)
             {
                 int s = (int)RecordSeconds;
-                line1 = $"<color=#ff3030>Ã¢â€”Â REC {s / 60}:{s % 60:00}</color>";
+                line1 = $"<color=#ff3030>\u25CF REC {s / 60}:{s % 60:00}</color>";
                 line2 = hand != 0 ? "HOLD TRIGGER = stop" : "grab it, then HOLD TRIGGER = stop";
             }
             else if (hand != 0)
@@ -214,6 +215,7 @@ namespace QuestShade
             }
             if (!string.IsNullOrEmpty(LabelExtra)) line1 = LabelExtra;
             string text = line1 + "\n<size=75%>" + line2 + "</size>";
+            if (!string.IsNullOrEmpty(ControlsHint) && hand != 0 && !Recording) text += "\n<size=60%><color=#bbbbbb>" + ControlsHint + "</color></size>";
             if (text == _labelText) return;
             _labelText = text;
             try { _labelTmp.text = text; } catch { }
@@ -221,7 +223,7 @@ namespace QuestShade
 
         private static string ModeName(CamMode m) => m switch
         {
-            CamMode.ThirdPerson => "mode: third person", CamMode.Chest => "mode: chest (bodycam)",
+            CamMode.ThirdPerson => "mode: third person", CamMode.Chest => "mode: chest (bodycam)", CamMode.FirstPerson => "mode: first person (head cam)",
             CamMode.Tripod => "mode: tripod", _ => "mode: " + m.ToString().ToLowerInvariant()
         };
 
@@ -320,7 +322,7 @@ namespace QuestShade
         private bool _headOnLayer, _headWasActor; private float _headLayerAt;
         private void UpdateHeadLayer()
         {
-            bool want = Open && _screenLayer >= 0 && Mode == CamMode.Chest && HeadToLayer != null;
+            bool want = Open && _screenLayer >= 0 && (Mode == CamMode.Chest || Mode == CamMode.FirstPerson) && HeadToLayer != null;
             if (!want)
             {
                 if (_headOnLayer) { try { HeadRestore?.Invoke(); } catch { } _headOnLayer = false; }
@@ -331,10 +333,10 @@ namespace QuestShade
             _headWasActor = _following;
             try { HeadToLayer(_following, _screenLayer); _headOnLayer = true; } catch { }
         }
-        private static readonly CamMode[] CycleOrder = { CamMode.Hand, CamMode.Selfie, CamMode.Chest, CamMode.ThirdPerson, CamMode.Tripod };
+        private static readonly CamMode[] CycleOrder = { CamMode.Hand, CamMode.Selfie, CamMode.FirstPerson, CamMode.Chest, CamMode.ThirdPerson, CamMode.Tripod };
         public void CycleMode() => SetMode(CycleOrder[(Array.IndexOf(CycleOrder, Mode) + 1) % CycleOrder.Length]);
 
-        private bool Detached => Mode == CamMode.ThirdPerson || Mode == CamMode.Chest;
+        private bool Detached => Mode == CamMode.ThirdPerson || Mode == CamMode.Chest || Mode == CamMode.FirstPerson;
 
         public Func<Transform> ChestProvider;
         private bool _chestLogged;

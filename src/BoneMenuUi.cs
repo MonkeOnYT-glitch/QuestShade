@@ -46,6 +46,7 @@ namespace QuestShade
             more.CreateFloat("Smoothing", Color.white, cfg.Smoothing, 0.05f, 0f, 0.9f, v => cfg.Smoothing = v);
             more.CreateBool("Hover preview", Color.white, cfg.HoverPreview, v => mod.SetHoverPreview(v));
             more.CreateBool("Controls text on camera", Color.white, cfg.CameraLabel, v => mod.SetCameraLabel(v));
+            more.CreateBool("Controller shortcuts (stick / grip)", Color.white, cfg.ControllerShortcuts, v => { cfg.ControllerShortcuts = v; cfg.SaveMenuSettings(); });
             more.CreateFunction("Hide / show camera", Color.white, () => mod.ToggleHidden());
             more.CreateBool("No camera in Fusion lobbies", Color.white, cfg.FusionEffectsOnly, v => cfg.FusionEffectsOnly = v);
             var pv = more.CreatePage("Preview screen", Color.white);

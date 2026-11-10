@@ -11,6 +11,7 @@ const SITE = "https://monkeonyt-glitch.github.io/QuestShade/";
 export async function discordTick(env) {
   if (!env.DISCORD_TOKEN) return;
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS answered (thread TEXT PRIMARY KEY, at INTEGER)").run();
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS bug_reports (thread TEXT PRIMARY KEY, title TEXT, author TEXT, body TEXT, url TEXT, at INTEGER)").run();
   const active = await call(env, "GET", `/guilds/${GUILD}/threads/active`);
   for (const th of active?.threads || []) {
     if (th.parent_id !== BUGS && th.parent_id !== SUGGEST) continue;
@@ -28,6 +29,10 @@ export async function discordTick(env) {
     if (th.parent_id === BUGS && !(th.applied_tags || []).includes(BUG_OPEN_TAG))
       await call(env, "PATCH", `/channels/${th.id}`, { applied_tags: [...(th.applied_tags || []), BUG_OPEN_TAG].slice(0, 5) });
     await env.DB.prepare("INSERT OR IGNORE INTO answered (thread, at) VALUES (?1, ?2)").bind(th.id, Date.now()).run();
+    if (th.parent_id === BUGS)
+      await env.DB.prepare("INSERT OR IGNORE INTO bug_reports (thread, title, author, body, url, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+        .bind(th.id, th.name, first?.author?.username || th.owner_id, (first?.content || "").slice(0, 4000),
+              `https://discord.com/channels/${GUILD}/${th.id}`, Date.now()).run();
   }
 }
 

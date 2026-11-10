@@ -25,6 +25,7 @@ namespace QuestShade
         public bool MatchPreview = true;
         public float BloomStrength = 1f, BlurStrength = 1f, GripAngle = 0f;
         public bool HeadsetBloom = true;
+        public bool ControllerShortcuts = true;
         public bool EyeAdapt = true;
         public float EyeAdaptStrength = 0.7f, EyeAdaptSpeed = 1f;
         public bool TimelineFollow = false, TimelineAutoRecord = true;
@@ -155,6 +156,7 @@ namespace QuestShade
             BloomDofAll = ini.Bool("General", "BloomDofEveryPreset", true);
             BloomStrength = Mathf.Clamp(ini.Float("General", "BloomStrength", 1f), 0f, 4f);
             HeadsetBloom = ini.Bool("General", "HeadsetBloom", true);
+            ControllerShortcuts = ini.Bool("Controls", "Shortcuts", true);
             EyeAdapt = ini.Bool("General", "EyeAdaptation", true);
             EyeAdaptStrength = Mathf.Clamp(ini.Float("General", "EyeAdaptationStrength", 0.7f), 0f, 1.5f);
             EyeAdaptSpeed = Mathf.Clamp(ini.Float("General", "EyeAdaptationSpeed", 1f), 0.1f, 4f);
@@ -484,6 +486,7 @@ namespace QuestShade
             SetKey("General", "BloomStrength", BloomStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "BlurStrength", BlurStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "HeadsetBloom", HeadsetBloom ? "true" : "false");
+            SetKey("Controls", "Shortcuts", ControllerShortcuts ? "true" : "false");
             SetKey("General", "EyeAdaptation", EyeAdapt ? "true" : "false");
             SetKey("General", "EyeAdaptationStrength", EyeAdaptStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "EyeAdaptationSpeed", EyeAdaptSpeed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));

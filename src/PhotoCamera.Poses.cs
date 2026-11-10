@@ -112,6 +112,12 @@ namespace QuestShade
                     lr = Quaternion.LookRotation(target - lp, Vector3.up);
                     break;
                 }
+                case CamMode.FirstPerson:
+                {
+                    lp = ht.position + ht.forward * 0.06f;
+                    lr = ht.rotation;
+                    break;
+                }
                 case CamMode.Chest:
                     ChestPose(cfg, head, out lp, out lr, out var chestPivot, _following ? ht : null);
                     lp = AvoidWalls(chestPivot, lp);
@@ -139,7 +145,7 @@ namespace QuestShade
             }
             bool onDevice = Mode == CamMode.Hand || Mode == CamMode.Selfie || Mode == CamMode.Tripod;
             float lk = onDevice && _held < 0 ? 1f : SmoothK(cfg, dt);
-            bool bodyLocked = Mode == CamMode.Chest;
+            bool bodyLocked = Mode == CamMode.Chest || Mode == CamMode.FirstPerson;
             _lensPos = _hasLensPose && !bodyLocked ? Vector3.Lerp(_lensPos, lp, lk) : lp;
             _lensRot = _hasLensPose ? Quaternion.Slerp(_lensRot, lr, lk) : lr;
             _hasLensPose = true;
@@ -153,8 +159,8 @@ namespace QuestShade
             }
             float fov = Mode == CamMode.Chest ? cfg.ChestFov : cfg.Fov;
             if (fov != _appliedFov) { _appliedFov = fov; _cam.fieldOfView = fov; }
-            float near = Mode == CamMode.Chest ? 0.05f : 0.015f;
-            if (_handNear && Mode == CamMode.Chest) near = 0.01f;
+            float near = Mode == CamMode.Chest || Mode == CamMode.FirstPerson ? 0.05f : 0.015f;
+            if (_handNear && (Mode == CamMode.Chest || Mode == CamMode.FirstPerson)) near = 0.01f;
             if (near != _appliedNear) { _appliedNear = near; _cam.nearClipPlane = near; }
 
             bool stereo = ShaderPack.HeadsetActive;

@@ -3,7 +3,7 @@ using System.Linq;
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.4.12", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.5.0", "QuestShade")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
 [assembly: MelonOptionalDependencies("BoneLib")]
@@ -492,6 +492,25 @@ namespace QuestShade
         private const float HoldToRecord = 0.7f;
         private const float MinClip = 1.5f;
 
+        private string _hint; private int _hintKey = -1;
+        private string ShortcutsHint()
+        {
+            int key = (int)_cfg.CameraMode.Gesture | (int)_cfg.TakePhoto.Gesture << 4 | (int)_cfg.HideCamera.Gesture << 8 | (int)_cfg.Record.Gesture << 12;
+            if (key == _hintKey) return _hint;
+            _hintKey = key;
+            var parts = new System.Collections.Generic.List<string>();
+            void Add(Binding b, string what) { if (b.Gesture != Gesture.None) parts.Add(GestureName(b.Gesture) + ": " + what); }
+            Add(_cfg.CameraMode, "mode"); Add(_cfg.TakePhoto, "photo"); Add(_cfg.Record, "record"); Add(_cfg.HideCamera, "hide");
+            return _hint = string.Join("   ", parts);
+        }
+        private static string GestureName(Gesture g) => g switch
+        {
+            Gesture.LeftStickHold => "hold L stick", Gesture.RightStickHold => "hold R stick",
+            Gesture.LeftStickDoubleTap => "2x L stick", Gesture.RightStickDoubleTap => "2x R stick",
+            Gesture.BothSticks => "both sticks", Gesture.LeftGripStickHold => "L grip + L stick", Gesture.RightGripStickHold => "R grip + R stick",
+            _ => g.ToString()
+        };
+
         internal void SetCameraLabel(bool on) { _cfg.CameraLabel = on; _cam.SetLabel(on); }
 
         internal void SetPreview(bool on)
@@ -519,7 +538,7 @@ namespace QuestShade
 
         private static string Pretty(CamMode m) => m switch
         {
-            CamMode.ThirdPerson => "Third person", CamMode.Chest => "Chest (bodycam)", _ => m.ToString()
+            CamMode.ThirdPerson => "Third person", CamMode.Chest => "Chest (bodycam)", CamMode.FirstPerson => "First person (head cam)", _ => m.ToString()
         };
 
         private void RefreshPresetMenu()
@@ -766,6 +785,12 @@ namespace QuestShade
 
         private void HandleInput()
         {
+            _cam.ControlsHint = _cfg.ControllerShortcuts ? ShortcutsHint() : null;
+            if (!_cfg.ControllerShortcuts)
+            {
+                if (_cam.Open) CameraTrigger(Time.unscaledTime);
+                return;
+            }
             if (_ctl.Fired(_cfg.ToggleEffects) || _ctl.Key(_cfg, KeyCode.F7)) { SetEffectsEnabled(!_cfg.Enabled); _ctl.Buzz(_cfg, false); }
             if (_ctl.Fired(_cfg.NextPreset) || _ctl.Key(_cfg, KeyCode.F8)) { StepPreset(1); _ctl.Buzz(_cfg, false, 0.25f, 0.04f); }
             if (_ctl.Fired(_cfg.PrevPreset) || _ctl.Key(_cfg, KeyCode.F6)) { StepPreset(-1); _ctl.Buzz(_cfg, false, 0.25f, 0.04f); }
