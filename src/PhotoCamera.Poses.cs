@@ -112,6 +112,12 @@ namespace QuestShade
                     lr = Quaternion.LookRotation(target - lp, Vector3.up);
                     break;
                 }
+                case CamMode.Helmet:
+                {
+                    lp = ht.position + ht.right * 0.13f + ht.up * 0.06f + ht.forward * 0.04f;
+                    lr = ht.rotation * Quaternion.Euler(6f, 0f, 0f);
+                    break;
+                }
                 case CamMode.FirstPerson:
                 {
                     lp = ht.position + ht.forward * 0.06f;
@@ -145,7 +151,7 @@ namespace QuestShade
             }
             bool onDevice = Mode == CamMode.Hand || Mode == CamMode.Selfie;
             float lk = onDevice && _held < 0 ? 1f : SmoothK(cfg, dt);
-            bool bodyLocked = Mode == CamMode.Chest || Mode == CamMode.FirstPerson;
+            bool bodyLocked = Mode == CamMode.Chest || (Mode == CamMode.FirstPerson || Mode == CamMode.Helmet);
             _lensPos = _hasLensPose && !bodyLocked ? Vector3.Lerp(_lensPos, lp, lk) : lp;
             _lensRot = _hasLensPose ? Quaternion.Slerp(_lensRot, lr, lk) : lr;
             _hasLensPose = true;
@@ -157,10 +163,10 @@ namespace QuestShade
                 _hoverMat.mainTextureScale = new Vector2(sm ? -1f : 1f, 1f);
                 _hoverMat.mainTextureOffset = new Vector2(sm ? 1f : 0f, 0f);
             }
-            float fov = Mode == CamMode.Chest || Mode == CamMode.FirstPerson ? cfg.ChestFov : cfg.Fov;
+            float fov = Mode == CamMode.Chest || (Mode == CamMode.FirstPerson || Mode == CamMode.Helmet) ? cfg.ChestFov : cfg.Fov;
             if (fov != _appliedFov) { _appliedFov = fov; _cam.fieldOfView = fov; }
-            float near = Mode == CamMode.Chest || Mode == CamMode.FirstPerson ? 0.05f : 0.015f;
-            if (_handNear && (Mode == CamMode.Chest || Mode == CamMode.FirstPerson)) near = 0.01f;
+            float near = Mode == CamMode.Chest || (Mode == CamMode.FirstPerson || Mode == CamMode.Helmet) ? 0.05f : 0.015f;
+            if (_handNear && (Mode == CamMode.Chest || (Mode == CamMode.FirstPerson || Mode == CamMode.Helmet))) near = 0.01f;
             if (near != _appliedNear) { _appliedNear = near; _cam.nearClipPlane = near; }
 
             bool stereo = ShaderPack.HeadsetActive;

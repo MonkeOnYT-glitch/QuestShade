@@ -9,7 +9,7 @@ using InputDevice = UnityEngine.XR.InputDevice;
 
 namespace QuestShade
 {
-    public enum CamMode { Hand, Selfie, FirstPerson, Chest, ThirdPerson }
+    public enum CamMode { Hand, Selfie, FirstPerson, Helmet, Chest, ThirdPerson }
 
     internal sealed partial class PhotoCamera
     {
@@ -222,7 +222,7 @@ namespace QuestShade
 
         private static string ModeName(CamMode m) => m switch
         {
-            CamMode.ThirdPerson => "mode: third person", CamMode.Chest => "mode: chest (bodycam)", CamMode.FirstPerson => "mode: first person (head cam)",
+            CamMode.ThirdPerson => "mode: third person", CamMode.Chest => "mode: chest (bodycam)", CamMode.FirstPerson => "mode: first person (head cam)", CamMode.Helmet => "mode: helmet cam",
             _ => "mode: " + m.ToString().ToLowerInvariant()
         };
 
@@ -321,7 +321,7 @@ namespace QuestShade
         private bool _headOnLayer, _headWasActor; private float _headLayerAt;
         private void UpdateHeadLayer()
         {
-            bool want = Open && _screenLayer >= 0 && (Mode == CamMode.Chest || Mode == CamMode.FirstPerson) && HeadToLayer != null;
+            bool want = Open && _screenLayer >= 0 && (Mode == CamMode.Chest || (Mode == CamMode.FirstPerson || Mode == CamMode.Helmet)) && HeadToLayer != null;
             if (!want)
             {
                 if (_headOnLayer) { try { HeadRestore?.Invoke(); } catch { } _headOnLayer = false; }
@@ -332,10 +332,10 @@ namespace QuestShade
             _headWasActor = _following;
             try { HeadToLayer(_following, _screenLayer); _headOnLayer = true; } catch { }
         }
-        private static readonly CamMode[] CycleOrder = { CamMode.Hand, CamMode.Selfie, CamMode.FirstPerson, CamMode.Chest, CamMode.ThirdPerson };
+        private static readonly CamMode[] CycleOrder = { CamMode.Hand, CamMode.Selfie, CamMode.FirstPerson, CamMode.Helmet, CamMode.Chest, CamMode.ThirdPerson };
         public void CycleMode() => SetMode(CycleOrder[(Array.IndexOf(CycleOrder, Mode) + 1) % CycleOrder.Length]);
 
-        private bool Detached => Mode == CamMode.ThirdPerson || Mode == CamMode.Chest || Mode == CamMode.FirstPerson;
+        private bool Detached => Mode == CamMode.ThirdPerson || Mode == CamMode.Chest || (Mode == CamMode.FirstPerson || Mode == CamMode.Helmet);
 
         public Func<Transform> ChestProvider;
         private bool _chestLogged;

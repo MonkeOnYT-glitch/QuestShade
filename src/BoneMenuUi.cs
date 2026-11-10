@@ -187,7 +187,7 @@ namespace QuestShade
             health01 = h.max_Health > 0f ? Mathf.Clamp01(h.curr_Health / h.max_Health) : 1f;
             dying = h.deathIsImminent || !h.alive;
             var ph = h.TryCast<Il2CppSLZ.Marrow.Player_Health>();
-            if (ph != null) { var r = ph.vigRend; if (r != null) overlay = r.gameObject; else if (ph.Vignetter != null) overlay = ph.Vignetter; }
+            if (ph != null) { if (ph.Vignetter != null) overlay = ph.Vignetter; else if (ph.vigRend != null) overlay = ph.vigRend.gameObject; }
             return true;
         }
 

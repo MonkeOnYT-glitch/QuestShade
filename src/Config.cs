@@ -223,7 +223,6 @@ namespace QuestShade
             ChestPitch = Mathf.Clamp(ini.Float("Camera", "ChestPitch", -5f), -60f, 60f);
             SaveFolder = ini.Str("Camera", "SaveFolder", "auto");
             var modeStr = ini.Str("Camera", "Mode", "Hand");
-            if (string.Equals(modeStr?.Trim(), "FirstPerson", StringComparison.OrdinalIgnoreCase)) modeStr = "Chest";
             DefaultMode = Enum.TryParse<CamMode>(modeStr, true, out var dm) ? dm : CamMode.Hand;
             PreviewEnabled = ini.Bool("Camera", "Preview", true);
             var q = (ini.Str("Camera", "RecordQuality", "ultra") ?? "ultra").Trim().ToLowerInvariant();
@@ -233,10 +232,10 @@ namespace QuestShade
                 q = budget >= 1920L * 1080 ? "1080p" : budget >= 1280L * 720 ? "720p" : "540p";
             (RecordWidth, RecordHeight, autoKbps) = q switch
             {
-                "480p" => (848, 480, 1300),
-                "540p" => (960, 540, 1600),
-                "1080p" => (1920, 1080, 4500),
-                _ => (1280, 720, 2500),
+                "480p" => (848, 480, 6000),
+                "540p" => (960, 540, 8000),
+                "1080p" => (1920, 1080, 20000),
+                _ => (1280, 720, 12000),
             };
             RecordSupersample = Mathf.Clamp(ini.Float("Camera", "RecordSupersample", 1f), 1f, 2f);
             double room = Math.Sqrt(budget * 1.3 / ((double)RecordWidth * RecordHeight));

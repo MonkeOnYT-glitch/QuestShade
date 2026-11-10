@@ -3,7 +3,7 @@ using System.Linq;
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.5.3", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.5.4", "QuestShade")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
 [assembly: MelonOptionalDependencies("BoneLib")]
@@ -546,7 +546,7 @@ namespace QuestShade
                         if (overlay != null && layer >= 0 && (overlay.Pointer != _overlayPtr || overlay.layer != layer))
                         {
                             _overlayPtr = overlay.Pointer;
-                            overlay.layer = layer;
+                            foreach (var t in overlay.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = layer;
                             Log.Msg("Hurt overlay kept off the camera");
                         }
                     }
@@ -583,7 +583,7 @@ namespace QuestShade
 
         private static string Pretty(CamMode m) => m switch
         {
-            CamMode.ThirdPerson => "Third person", CamMode.Chest => "Chest (bodycam)", CamMode.FirstPerson => "First person (head cam)", _ => m.ToString()
+            CamMode.ThirdPerson => "Third person", CamMode.Chest => "Chest (bodycam)", CamMode.FirstPerson => "First person (head cam)", CamMode.Helmet => "Helmet cam", _ => m.ToString()
         };
 
         private void RefreshPresetMenu()

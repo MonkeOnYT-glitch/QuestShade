@@ -1,4 +1,4 @@
-﻿#if QUEST
+#if QUEST
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -182,7 +182,7 @@ namespace QuestShade
                     Ndk.AMediaFormat_setInt32(fmt, "color-format", COLOR_FormatYUV420SemiPlanar);
                     Ndk.AMediaFormat_setInt32(fmt, "bitrate", br);
                     Ndk.AMediaFormat_setInt32(fmt, "frame-rate", fps);
-                    Ndk.AMediaFormat_setInt32(fmt, "i-frame-interval", 5);
+                    Ndk.AMediaFormat_setInt32(fmt, "i-frame-interval", 2);
                     Ndk.AMediaFormat_setInt32(fmt, "color-standard", 2);
                     Ndk.AMediaFormat_setInt32(fmt, "color-range", 2);
                     Ndk.AMediaFormat_setInt32(fmt, "color-transfer", 3);
@@ -196,7 +196,7 @@ namespace QuestShade
                         continue;
                     }
                     Codec = name;
-                    Mod.Log.Msg($"Recording: {name} {Width}x{Height} @ {br / 1000} kbps, key frame every 5 s (Quest capture format)");
+                    Mod.Log.Msg($"Recording: {name} {Width}x{Height} @ {br / 1000} kbps, key frame every 2 s");
                     return codec;
                 }
                 finally { Ndk.AMediaFormat_delete(fmt); }
