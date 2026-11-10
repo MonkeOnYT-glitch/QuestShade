@@ -39,7 +39,7 @@ namespace QuestShade
         private bool LensFx => _flareVec.x > 0f || _dirtAmt > 0f || _godVec.x > 0f;
         private Vector4 _godVec;
         private Transform _sunT; private int _sunScene = -1; private float _sunLookAt;
-        private float _baseExposure, _tonemap, _appliedEv = float.NaN, _adaptStrength = -1f;
+        private float _baseExposure, _tonemap, _appliedEv = float.NaN, _appliedLift, _adaptStrength = -1f;
         private int _frame;
 
         private static bool IsQuest => Application.platform == RuntimePlatform.Android;
@@ -563,9 +563,10 @@ namespace QuestShade
             float strength = _adaptStrength >= 0f ? _adaptStrength : cfg.EyeAdaptStrength;
             EyeAdaptation.Tick(BoundTransform, cfg.EyeAdapt, strength, cfg.EyeAdaptSpeed, Time.unscaledDeltaTime);
             float ev = EyeAdaptation.Ev;
-            if (!float.IsNaN(_appliedEv) && Mathf.Abs(ev - _appliedEv) < 0.004f) return;
-            _appliedEv = ev;
-            var tone = new Vector4(MathF.Pow(2f, _baseExposure + ev), _tonemap, 0, 0);
+            float lift = _adaptStrength == 0f ? 0f : 0.6f * cfg.DarkMaps * EyeAdaptation.DarkMap;
+            if (!float.IsNaN(_appliedEv) && Mathf.Abs(ev - _appliedEv) < 0.004f && Mathf.Abs(lift - _appliedLift) < 0.004f) return;
+            _appliedEv = ev; _appliedLift = lift;
+            var tone = new Vector4(MathF.Pow(2f, _baseExposure + ev), _tonemap, lift, 0);
             _mat.SetVector(ID.Tone, tone);
             _matMono.SetVector(ID.Tone, tone);
             if (_matPre != null) _matPre.SetVector(ID.Tone, tone);
@@ -661,7 +662,7 @@ BokehIntensity = 0.3
             _baseExposure = exposure; _tonemap = tm; _appliedEv = float.NaN;
             _adaptStrength = p.Has("EyeAdaptation") ? (p.Enabled("EyeAdaptation") ? Mathf.Clamp(p.Float("EyeAdaptation", "Strength", cfg.EyeAdaptStrength), 0f, 1.5f) : 0f) : -1f;
             m.SetVector(ID.Tone, new Vector4(MathF.Pow(2f, exposure + EyeAdaptation.Ev), tm, 0, 0));
-            if (exposure != 0 || tm > 0 || (cfg.EyeAdapt && _adaptStrength != 0f)) n++;
+            if (exposure != 0 || tm > 0 || ((cfg.EyeAdapt || cfg.DarkMaps > 0f) && _adaptStrength != 0f)) n++;
 
             if (p.Enabled("Vignette") && string.Equals(p.Str("Vignette", "Mode", ""), "reshade", StringComparison.OrdinalIgnoreCase))
             {

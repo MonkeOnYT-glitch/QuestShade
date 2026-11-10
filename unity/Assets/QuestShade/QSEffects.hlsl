@@ -91,6 +91,12 @@ half3 QSStack(float2 uv, float2 pixelPos)
 
     col *= _QS_Tone.x;
     col = Tonemap(col);
+    UNITY_BRANCH if (_QS_Tone.z > 0.001)
+    {
+        half3 c = saturate(col);
+        half k = 1.0 - _QS_Tone.z;
+        col += c / (c + k * (1.0 - c) + 1e-5) - c;
+    }
     UNITY_BRANCH if (_QS_LutParams.w > 0) col = ApplyLut(col);
 
     UNITY_BRANCH if (_QS_Vignette.x > 0)

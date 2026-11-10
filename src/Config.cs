@@ -26,6 +26,7 @@ namespace QuestShade
         public float BloomStrength = 1f, BlurStrength = 1f, GripAngle = 0f;
         public bool HeadsetBloom = true;
         public bool ControllerShortcuts = true;
+        public float DarkMaps = 0.8f, FlashlightBoost = 1f;
         public bool EyeAdapt = true;
         public float EyeAdaptStrength = 0.7f, EyeAdaptSpeed = 1f;
         public bool TimelineFollow = false, TimelineAutoRecord = true;
@@ -114,7 +115,8 @@ namespace QuestShade
             "0cb46f80045875a8330dbdcef42125ff1d6b4120f85f47b5f13b29b695b82e20",
             "1a44a6ccd5affe81bd556b46ecd95cb45498a8bdefb2e1413461208513cc4c87",
             "cdaf1f72e5926ba692043ba6477d3429548757661efd7d75f652d0f689227220",
-            "f6f6ea28d07a0085f6e6de9947c6acb198b600f554dfd0417420a9eb27026d53"
+            "f6f6ea28d07a0085f6e6de9947c6acb198b600f554dfd0417420a9eb27026d53",
+            "3ad01a9582ad0f86997fa3b67c9a764bef7fa943bfd79ec2767ce893de4f8350"
         };
 
         private static string Fingerprint(byte[] b)
@@ -157,6 +159,8 @@ namespace QuestShade
             BloomStrength = Mathf.Clamp(ini.Float("General", "BloomStrength", 1f), 0f, 4f);
             HeadsetBloom = ini.Bool("General", "HeadsetBloom", true);
             ControllerShortcuts = ini.Bool("Controls", "Shortcuts", true);
+            DarkMaps = Mathf.Clamp(ini.Float("General", "DarkMaps", 0.8f), 0f, 1f);
+            FlashlightBoost = Mathf.Clamp(ini.Float("General", "FlashlightBoost", 1f), 0f, 2f);
             EyeAdapt = ini.Bool("General", "EyeAdaptation", true);
             EyeAdaptStrength = Mathf.Clamp(ini.Float("General", "EyeAdaptationStrength", 0.7f), 0f, 1.5f);
             EyeAdaptSpeed = Mathf.Clamp(ini.Float("General", "EyeAdaptationSpeed", 1f), 0.1f, 4f);
@@ -487,6 +491,8 @@ namespace QuestShade
             SetKey("General", "BlurStrength", BlurStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "HeadsetBloom", HeadsetBloom ? "true" : "false");
             SetKey("Controls", "Shortcuts", ControllerShortcuts ? "true" : "false");
+            SetKey("General", "DarkMaps", DarkMaps.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            SetKey("General", "FlashlightBoost", FlashlightBoost.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "EyeAdaptation", EyeAdapt ? "true" : "false");
             SetKey("General", "EyeAdaptationStrength", EyeAdaptStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "EyeAdaptationSpeed", EyeAdaptSpeed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));

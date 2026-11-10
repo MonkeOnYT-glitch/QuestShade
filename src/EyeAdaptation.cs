@@ -11,15 +11,18 @@ namespace QuestShade
         public static float Measured { get; private set; } = -1f;
         public static float Reference { get; private set; } = -1f;
         public static bool Hold;
+        public static float DarkMap { get; private set; }
+        private const float NormalMapLight = 0.12f;
 
         private const float MaxUp = 2.0f, MaxDown = 0.5f;
         private const float DeadZone = 0.6f;
         private static int _probeCount = -1;
-        private static float _nextSample, _target, _smoothLum = -1f;
+        private static float _nextSample, _nextMapCheck, _target, _smoothLum = -1f;
         private static bool _logged;
 
         public static void Tick(Transform head, bool on, float strength, float speed, float dt)
         {
+            if (Time.unscaledTime >= _nextMapCheck) { _nextMapCheck = Time.unscaledTime + 1f; CheckMap(); }
             if (!on || head == null || strength <= 0f)
             {
                 Ev = Mathf.MoveTowards(Ev, 0f, dt * 2f);
@@ -36,7 +39,7 @@ namespace QuestShade
             Ev += (_target - Ev) * (1f - Mathf.Exp(-rate * dt));
         }
 
-        public static void Reset() { _probeCount = -1; _smoothLum = -1f; Ev = 0f; _target = 0f; _logged = false; }
+        public static void Reset() { _probeCount = -1; DarkMap = 0f; _smoothLum = -1f; Ev = 0f; _target = 0f; _logged = false; }
 
         private static void Sample(Transform head, float strength)
         {
@@ -44,7 +47,7 @@ namespace QuestShade
             {
                 var lp = LightmapSettings.lightProbes;
                 int count = lp != null ? lp.count : 0;
-                if (count != _probeCount) { _probeCount = count; Reference = MapReference(lp); _smoothLum = -1f; _logged = false; }
+                if (count != _probeCount) CheckMap();
                 if (Reference <= 0f) { _target = 0f; return; }
 
                 LightProbes.GetInterpolatedProbe(head.position, null, out var sh);
@@ -66,6 +69,23 @@ namespace QuestShade
                 if (!_logged) { _logged = true; Mod.Log.Warning("Eye adaptation off for this map: " + e.Message); }
                 Reference = -1f; _target = 0f;
             }
+        }
+
+        private static void CheckMap()
+        {
+            try
+            {
+                var lp = LightmapSettings.lightProbes;
+                int count = lp != null ? lp.count : 0;
+                if (count == _probeCount) return;
+                _probeCount = count; _smoothLum = -1f; _logged = false;
+                Reference = MapReference(lp);
+                float light = Reference > 0f ? Reference : Lum(RenderSettings.ambientProbe);
+                DarkMap = light > 0f ? Mathf.Clamp01(Mathf.Log(NormalMapLight / light, 2f) / 2.3f) : 0f;
+                Mod.Log.Msg($"Map light {light:0.###} ({(Reference > 0f ? count + " probes" : "ambient")}): " +
+                            (DarkMap > 0f ? $"dark map, lifting shadows {DarkMap * 100f:0}%" : "normally lit"));
+            }
+            catch (Exception e) { DarkMap = 0f; Mod.Log.Warning("Dark map check: " + e.Message); }
         }
 
         private static float MapReference(LightProbes lp)
