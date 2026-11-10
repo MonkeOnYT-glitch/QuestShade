@@ -114,8 +114,8 @@ namespace QuestShade
                 }
                 case CamMode.Helmet:
                 {
-                    lp = ht.position + ht.right * 0.13f + ht.up * 0.06f + ht.forward * 0.04f;
-                    lr = ht.rotation * Quaternion.Euler(6f, 0f, 0f);
+                    lp = ht.position + ht.right * 0.17f + ht.up * 0.07f + ht.forward * 0.10f;
+                    lr = ht.rotation * Quaternion.Euler(6f, 4f, 0f);
                     break;
                 }
                 case CamMode.FirstPerson:
