@@ -8,8 +8,15 @@ const HELP_CH = "1569084792027480075";
 const MAX_AGE_MS = 2 * 24 * 3600_000;
 const SITE = "https://monkeonyt-glitch.github.io/QuestShade/";
 
+const GENERAL = "1569084684430868604", MODLOG = "1569084701615067216";
+const JOIN_BURST = 6, JOIN_WINDOW_MS = 10 * 60_000;
+const FLOOD_MSGS = 8, FLOOD_WINDOW_MS = 3 * 60_000;
+const NEW_MEMBER_MS = 24 * 3600_000;
+const LOCK_MS = 2 * 3600_000;
+
 export async function discordTick(env) {
   if (!env.DISCORD_TOKEN) return;
+  try { await raidGuard(env); } catch (e) { console.log("raid guard: " + e); }
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS answered (thread TEXT PRIMARY KEY, at INTEGER)").run();
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS bug_reports (thread TEXT PRIMARY KEY, title TEXT, author TEXT, body TEXT, url TEXT, at INTEGER)").run();
   const active = await call(env, "GET", `/guilds/${GUILD}/threads/active`);
@@ -33,6 +40,43 @@ export async function discordTick(env) {
       await env.DB.prepare("INSERT OR IGNORE INTO bug_reports (thread, title, author, body, url, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
         .bind(th.id, th.name, first?.author?.username || th.owner_id, (first?.content || "").slice(0, 4000),
               `https://discord.com/channels/${GUILD}/${th.id}`, Date.now()).run();
+  }
+}
+
+async function raidGuard(env) {
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS raid_state (k TEXT PRIMARY KEY, v INTEGER)").run();
+  const now = Date.now();
+  const members = await call(env, "GET", `/guilds/${GUILD}/members?limit=1000`);
+  if (!Array.isArray(members)) return;
+  const joinedAt = new Map(members.map(m => [m.user.id, Date.parse(m.joined_at)]));
+
+  const recent = members.filter(m => !m.user.bot && now - Date.parse(m.joined_at) < JOIN_WINDOW_MS);
+  const locked = await env.DB.prepare("SELECT v FROM raid_state WHERE k = 'locked_until'").first();
+  if (recent.length >= JOIN_BURST && !(locked && locked.v > now)) {
+    const until = new Date(now + LOCK_MS).toISOString();
+    const ok = await call(env, "PUT", `/guilds/${GUILD}/incident-actions`, { invites_disabled_until: until, dms_disabled_until: until });
+    await env.DB.prepare("INSERT OR REPLACE INTO raid_state (k, v) VALUES ('locked_until', ?1)").bind(now + LOCK_MS).run();
+    await call(env, "POST", `/channels/${MODLOG}/messages`, { allowed_mentions: { parse: [] },
+      content: `🚨 **Possible raid:** ${recent.length} people joined in the last 10 minutes. ${ok ? "Invites and DMs are **paused for 2 hours**." : "Couldn't pause invites, do it by hand (Server Settings > Safety Setup)."}\n` +
+               `Joined: ${recent.map(m => m.user.username).join(", ").slice(0, 1500)}` });
+  }
+
+  const msgs = await call(env, "GET", `/channels/${GENERAL}/messages?limit=100`);
+  if (!Array.isArray(msgs)) return;
+  const byAuthor = new Map();
+  for (const m of msgs) {
+    if (m.author.bot || now - snowflakeTime(m.id) > FLOOD_WINDOW_MS) continue;
+    const j = joinedAt.get(m.author.id);
+    if (j === undefined || now - j > NEW_MEMBER_MS) continue;
+    if (!byAuthor.has(m.author.id)) byAuthor.set(m.author.id, { name: m.author.username, ids: [] });
+    byAuthor.get(m.author.id).ids.push(m.id);
+  }
+  for (const [uid, a] of byAuthor) {
+    if (a.ids.length < FLOOD_MSGS) continue;
+    await call(env, "PATCH", `/guilds/${GUILD}/members/${uid}`, { communication_disabled_until: new Date(now + 24 * 3600_000).toISOString() });
+    if (a.ids.length >= 2) await call(env, "POST", `/channels/${GENERAL}/messages/bulk-delete`, { messages: a.ids.slice(0, 100) });
+    await call(env, "POST", `/channels/${MODLOG}/messages`, { allowed_mentions: { parse: [] },
+      content: `🔇 **${a.name}** (<@${uid}>) joined in the last day and posted ${a.ids.length} messages in 3 minutes in <#${GENERAL}>: timed out for 24 h, messages deleted. Ban them if it was a raid.` });
   }
 }
 
