@@ -110,13 +110,16 @@ namespace QuestShade
 
         private bool _both;
 
+        public Func<int, bool> HandHolding;
+        private bool Holding(int h) { try { return HandHolding != null && HandHolding(h); } catch { return false; } }
+
         public bool Fired(Binding b)
         {
             switch (b.Gesture)
             {
-                case Gesture.LeftStickHold: return _l.Hold && !_lGrip;
+                case Gesture.LeftStickHold: return _l.Hold && (!_lGrip || Holding(1));
                 case Gesture.RightStickHold: return _r.Hold && !_rGrip;
-                case Gesture.LeftGripStickHold: return _l.Hold && _lGrip;
+                case Gesture.LeftGripStickHold: return _l.Hold && _lGrip && !Holding(1);
                 case Gesture.RightGripStickHold: return _r.Hold && _rGrip;
                 case Gesture.LeftStickDoubleTap: return _l.DoubleTap;
                 case Gesture.RightStickDoubleTap: return _r.DoubleTap;

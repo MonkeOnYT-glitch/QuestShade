@@ -78,7 +78,7 @@ namespace QuestShade
                 _devPos = gp;
                 _hasDevicePose = true;
             }
-            else if (!((_pinned || Mode == CamMode.Tripod) && _hasDevicePose) && TryHandPose(head, XRNode.LeftHand, out var hp, out var hr))
+            else if (!(_pinned && _hasDevicePose) && TryHandPose(head, XRNode.LeftHand, out var hp, out var hr))
             {
                 var rot = hr * Quaternion.Euler(cfg.HandTilt, 0f, 0f);
                 var pos = hp + rot * cfg.HandOffset;
@@ -143,7 +143,7 @@ namespace QuestShade
                     }
                     break;
             }
-            bool onDevice = Mode == CamMode.Hand || Mode == CamMode.Selfie || Mode == CamMode.Tripod;
+            bool onDevice = Mode == CamMode.Hand || Mode == CamMode.Selfie;
             float lk = onDevice && _held < 0 ? 1f : SmoothK(cfg, dt);
             bool bodyLocked = Mode == CamMode.Chest || Mode == CamMode.FirstPerson;
             _lensPos = _hasLensPose && !bodyLocked ? Vector3.Lerp(_lensPos, lp, lk) : lp;

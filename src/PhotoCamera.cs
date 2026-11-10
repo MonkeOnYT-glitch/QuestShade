@@ -9,7 +9,7 @@ using InputDevice = UnityEngine.XR.InputDevice;
 
 namespace QuestShade
 {
-    public enum CamMode { Hand, Selfie, Chest, ThirdPerson, Tripod, FirstPerson }
+    public enum CamMode { Hand, Selfie, FirstPerson, Chest, ThirdPerson }
 
     internal sealed partial class PhotoCamera
     {
@@ -101,15 +101,11 @@ namespace QuestShade
         public void SetMode(CamMode m)
         {
             if (m == Mode) return;
-            if (m == CamMode.Tripod)
-            {
-                if (Detached) { _devPos = _lensPos; _devRot = _lensRot; }
-            }
             Mode = m;
             _hasLensPose = false;
-            _pinned = m == CamMode.Tripod && _hasDevicePose;
-            if (m != CamMode.Tripod) _hasDevicePose = false;
+            if (_held < 0 && !PropActive && _hasDevicePose) _pinned = true;
             _layoutMode = -1;
+            Mod.Log.Msg($"Camera mode {m}: body {(PropActive ? (_propHand != 0 ? "held" : "placed") : "none")}, floating {(_held >= 0 ? "held" : _pinned ? "placed" : "on hand")}");
         }
 
         public void SetHidden(bool h) { Hidden = h; if (h) _held = -1; ApplyHidden(); }
@@ -224,7 +220,7 @@ namespace QuestShade
         private static string ModeName(CamMode m) => m switch
         {
             CamMode.ThirdPerson => "mode: third person", CamMode.Chest => "mode: chest (bodycam)", CamMode.FirstPerson => "mode: first person (head cam)",
-            CamMode.Tripod => "mode: tripod", _ => "mode: " + m.ToString().ToLowerInvariant()
+            _ => "mode: " + m.ToString().ToLowerInvariant()
         };
 
         public void SetHoverPreview(bool on) { _hoverWanted = on; ApplyHidden(); }
@@ -333,7 +329,7 @@ namespace QuestShade
             _headWasActor = _following;
             try { HeadToLayer(_following, _screenLayer); _headOnLayer = true; } catch { }
         }
-        private static readonly CamMode[] CycleOrder = { CamMode.Hand, CamMode.Selfie, CamMode.FirstPerson, CamMode.Chest, CamMode.ThirdPerson, CamMode.Tripod };
+        private static readonly CamMode[] CycleOrder = { CamMode.Hand, CamMode.Selfie, CamMode.FirstPerson, CamMode.Chest, CamMode.ThirdPerson };
         public void CycleMode() => SetMode(CycleOrder[(Array.IndexOf(CycleOrder, Mode) + 1) % CycleOrder.Length]);
 
         private bool Detached => Mode == CamMode.ThirdPerson || Mode == CamMode.Chest || Mode == CamMode.FirstPerson;
@@ -417,7 +413,6 @@ namespace QuestShade
             Open = true;
             _hasDevicePose = _hasLensPose = false;
             _pinned = false; _held = -1;
-            if (Mode == CamMode.Tripod) Mode = CamMode.Hand;
             ApplyHidden();
             _accum = 1f;
             _propRetryAt = 0f;
@@ -512,7 +507,6 @@ namespace QuestShade
         public void OnSceneLoaded()
         {
             SchedulePrewarm();
-            if (Mode == CamMode.Tripod) Mode = CamMode.Hand;
             _hasDevicePose = _hasLensPose = false;
             _prop = null; _propSpawning = false; _propRetryAt = Time.unscaledTime + 2f;
         }

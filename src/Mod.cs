@@ -31,6 +31,7 @@ namespace QuestShade
             {
                 Config.InitPaths();
                 _cfg.LoadAll();
+                if (_cfg._audioMigrated) { _cfg._audioMigrated = false; _cfg.SaveMenuSettings(); Log.Msg("Game audio in recordings: on (new default)"); }
                 Sharing.Init(_cfg);
                 PhotoSaver.ResolveFolder(_cfg.SaveFolder);
                 _cam.SetMode(_cfg.DefaultMode);
@@ -720,7 +721,7 @@ namespace QuestShade
             }
             else
             {
-                Report($"camera {CamMode.Tripod}");
+                Report($"camera {(CamMode)4}");
                 if (_cam.Open) ToggleCamera();
                 SetCameraMode(CamMode.Hand, true); if (_cam.Open) ToggleCamera();
                 Log.Msg("[SelfTest] done");
@@ -787,6 +788,7 @@ namespace QuestShade
 
         private void HandleInput()
         {
+            _ctl.HandHolding = h => _cam.HoldingHand == h || (_cam.HandBusy != null && _cam.HandBusy(h));
             _cam.ControlsHint = _cfg.ControllerShortcuts ? ShortcutsHint() : null;
             if (!_cfg.ControllerShortcuts)
             {
