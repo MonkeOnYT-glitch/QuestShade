@@ -14,6 +14,7 @@ namespace QuestShade
         private string _stampText;
 
         internal int OverlayMask => _overlayLayer >= 0 ? 1 << _overlayLayer : 0;
+        internal int LensOnlyLayer => Open ? _overlayLayer : -1;
 
         private int PickOverlayLayer()
         {
@@ -24,18 +25,21 @@ namespace QuestShade
 
         private void UpdateStamp(Config cfg, Camera head)
         {
-            bool want = Open && !Hidden && (cfg.Timestamp == StampMode.AllModes || (cfg.Timestamp == StampMode.PoliceBodycam && Mode == CamMode.PoliceCam));
-            if (!want) { if (_stamp != null && _stamp.activeSelf) _stamp.SetActive(false); return; }
             if (_overlayLayer == -2)
             {
                 _overlayLayer = PickOverlayLayer();
-                Mod.Log.Msg(_overlayLayer >= 0 ? $"Timestamp: lens-only layer {_overlayLayer}" : "Timestamp: no free layer, timestamp off");
+                Mod.Log.Msg(_overlayLayer >= 0 ? $"Camera: lens-only layer {_overlayLayer}" : "Camera: no free lens-only layer");
                 _layoutMode = -1;
             }
+            if (_overlayLayer >= 0 && Open && _cam != null)
+            {
+                int ob = 1 << _overlayLayer;
+                if (head != null && (head.cullingMask & ob) != 0) head.cullingMask &= ~ob;
+                if ((_cam.cullingMask & ob) == 0) _cam.cullingMask |= ob;
+            }
+            bool want = Open && !Hidden && (cfg.Timestamp == StampMode.AllModes || (cfg.Timestamp == StampMode.PoliceBodycam && Mode == CamMode.PoliceCam));
+            if (!want) { if (_stamp != null && _stamp.activeSelf) _stamp.SetActive(false); return; }
             if (_overlayLayer < 0 || _lensGo == null || _cam == null) return;
-            int bit = 1 << _overlayLayer;
-            if (head != null && (head.cullingMask & bit) != 0) head.cullingMask &= ~bit;
-            if ((_cam.cullingMask & bit) == 0) _cam.cullingMask |= bit;
             if (_stamp == null)
             {
                 try

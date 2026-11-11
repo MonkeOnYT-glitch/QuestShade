@@ -32,19 +32,32 @@ namespace QuestShade
 
         public static void Reapply() => _applyAt = Time.unscaledTime;
 
-        public static void Tick(Config cfg, Transform head)
+        private static UniversalAdditionalCameraData _camData;
+        private static bool _oCamShadows;
+
+        private static void CameraShadows(Camera head, bool on)
+        {
+            if (head == null) return;
+            var d = head.GetComponent<UniversalAdditionalCameraData>();
+            if (d == null) return;
+            if (_camData == null || d.Pointer != _camData.Pointer) { _camData = d; _oCamShadows = d.renderShadows; }
+            bool want = on || _oCamShadows;
+            if (d.renderShadows != want) d.renderShadows = want;
+        }
+
+        public static void Tick(Config cfg, Camera head)
         {
             float now = Time.unscaledTime;
             if (_applyAt >= 0f && now >= _applyAt)
             {
                 _applyAt = -1f;
-                try { if (cfg.Shadows) Enable(cfg); else Disable(); }
+                try { if (cfg.Shadows) Enable(cfg, head); else Disable(); }
                 catch (Exception e) { Mod.Log.Warning("Shadows: " + e.Message); }
             }
             if (_on && head != null && now >= _nextCasters)
             {
-                _nextCasters = now + 1f;
-                try { NearbyCasters(head.position); } catch { }
+                _nextCasters = now + 3f;
+                try { CameraShadows(head, true); NearbyCasters(head.transform.position); } catch { }
             }
         }
 
@@ -55,9 +68,10 @@ namespace QuestShade
             return false;
         }
 
-        private static void Enable(Config cfg)
+        private static void Enable(Config cfg, Camera head)
         {
             if (!Ready()) return;
+            CameraShadows(head, true);
             if (_urp == null)
             {
                 var rp = QualitySettings.renderPipeline ?? GraphicsSettings.currentRenderPipeline;
@@ -110,7 +124,7 @@ namespace QuestShade
                     if (multiview) m.EnableKeyword("QS_STEREO_MULTIVIEW"); else m.DisableKeyword("QS_STEREO_MULTIVIEW");
                     swaps++;
                 }
-                if (any && r.lightmapIndex < 0 && AddCaster(r)) casters++;
+                if (r.lightmapIndex < 0 && (r.TryCast<MeshRenderer>() != null || r.TryCast<SkinnedMeshRenderer>() != null) && AddCaster(r)) casters++;
             }
             _on = true;
             if (!_namesLogged)
@@ -122,7 +136,7 @@ namespace QuestShade
                 for (int i = 0; i < top.Count && i < 15; i++) parts.Add(top[i].Key + " x" + top[i].Value);
                 Mod.Log.Msg("Shadows: shaders in this map: " + string.Join(", ", parts));
             }
-            Mod.Log.Msg($"Shadows: real shadows on ({swaps} materials, {casters} casters, sun {(_sun != null ? "'" + _sun.name + "'" : "none - indoor map")})");
+            Mod.Log.Msg($"Shadows: real shadows on ({swaps} materials, {casters} casters, sun {(_sun != null ? "'" + _sun.name + "'" : "none - indoor map")}, camera shadows were {_oCamShadows})");
         }
 
         private static bool _namesLogged;
@@ -147,6 +161,8 @@ namespace QuestShade
 
         private static void NearbyCasters(Vector3 pos)
         {
+            foreach (var s in UnityEngine.Object.FindObjectsOfType<SkinnedMeshRenderer>())
+                if (s != null && s.lightmapIndex < 0) AddCaster(s);
             var seen = new HashSet<IntPtr>();
             foreach (var c in Physics.OverlapSphere(pos, 12f, ~0, QueryTriggerInteraction.Ignore))
             {
@@ -173,6 +189,7 @@ namespace QuestShade
                 _urp.m_MainLightShadowsSupported = _oShadows; _urp.m_SoftShadowsSupported = _oSoft; _urp.m_MixedLightingSupported = _oMixed;
                 _urp.m_ShadowDistance = _oDistance; _urp.m_ShadowCascadeCount = _oCascades; _urp.m_MainLightShadowmapResolution = _oRes;
             }
+            if (_camData != null) { try { _camData.renderShadows = _oCamShadows; } catch { } }
             if (_on) Mod.Log.Msg("Shadows: off, original materials back");
             _on = false;
         }

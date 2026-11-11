@@ -81,6 +81,7 @@ namespace QuestShade
             lit.CreateFunction("What is this?", new Color(1f, 0.75f, 0.35f), () => Notify("Real sun shadows, flashlights that light up what they hit, and less plastic-looking shine. Shadows cost performance.", 5f));
             lit.CreateBool("Real shadows", Color.white, cfg.Shadows, v => { cfg.Shadows = v; cfg.SaveMenuSettings(); NativeShadows.Reapply(); });
             lit.CreateFloat("Shadow distance (m)", Color.white, cfg.ShadowDistance, 5f, 5f, 50f, v => { cfg.ShadowDistance = v; cfg.SaveMenuSettings(); NativeShadows.Reapply(); });
+            lit.CreateBool("Flashlight beams (light rays)", Color.white, cfg.FlashlightBeams, v => { cfg.FlashlightBeams = v; cfg.SaveMenuSettings(); });
             lit.CreateBool("Real lights (flashlights light things up)", Color.white, cfg.RealLights, v => { cfg.RealLights = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
             lit.CreateFloat("Less shine", Color.white, cfg.LessShine, 0.1f, 0f, 1f, v => { cfg.LessShine = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
             lit.CreateBool("Bloom in your headset", Color.white, cfg.HeadsetBloom, v => { cfg.HeadsetBloom = v; cfg.SaveMenuSettings(); mod.ReapplyEffects(); });

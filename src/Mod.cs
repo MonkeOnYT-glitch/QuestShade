@@ -56,7 +56,7 @@ namespace QuestShade
             if (_boneLib)
             {
                 try { BoneMenuUi.Build(this, _cfg); _cam.ChestProvider = BoneMenuUi.Chest; Focus.PlayerRoot = BoneMenuUi.PlayerRoot; _cam.HideHead = BoneMenuUi.HideHead; _cam.RestoreHead = BoneMenuUi.RestoreHead; _cam.UiLayerMask = BoneMenuUi.UiLayerMask; _cam.ActorPose = BoneMenuUi.ActorPose; _cam.HideHeadOf = BoneMenuUi.HideHeadOf; _cam.HeadToLayer = BoneMenuUi.HeadToLayer; _cam.HeadRestore = BoneMenuUi.RestoreHeadLayer; _cam.OwnBodyToLayer = BoneMenuUi.OwnBodyToLayer;
-                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Log.Msg("BoneMenu page added"); }
+                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; FlashBeams.HeadsetLayer = () => _cam.LensHiddenLayer; FlashBeams.LensLayer = () => _cam.LensOnlyLayer; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Log.Msg("BoneMenu page added"); }
                 catch (Exception e) { _boneLib = false; Log.Warning("BoneLib found but menu failed (gestures still work): " + e.Message); }
             }
             else Log.Msg("BoneLib not found - using controller gestures only");
@@ -89,9 +89,9 @@ namespace QuestShade
                 if (_cfg.PollChanges(now)) { _fx.MarkDirty(); _cam.Refresh(_cfg, _fx.BoundCamera); RefreshPresetMenu(); }
                 if (now >= _nextCamCheck) { _nextCamCheck = now + 1f; _fx.EnsureCamera(_cfg); }
                 _fx.Tick(_cfg);
-                Flashlights.Tick(_cfg.FlashlightBoost);
+                Flashlights.Tick(_cfg.FlashlightBoost, _cfg.FlashlightBeams);
                 Lighting.Tick(_cfg);
-                NativeShadows.Tick(_cfg, _fx.BoundTransform);
+                NativeShadows.Tick(_cfg, _fx.BoundCamera);
                 _fx.SetFisheye(_cam.Mode == CamMode.PoliceCam ? Mathf.Max(0.35f, _cfg.Fisheye) : _cfg.Fisheye);
                 if (_boneLib) TickHurt();
                 _fx.TickHeadsetFocus(Time.unscaledDeltaTime);

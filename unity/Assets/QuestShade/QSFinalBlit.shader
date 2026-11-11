@@ -166,11 +166,9 @@ Shader "Hidden/QuestShade/FinalBlit"
                 {
                     half3 b = 0;
                     float2 rad = _QS_LiveBloom.z * float2(_QS_SrcTexel.w * _QS_SrcTexel.x, 1);
-                    float2 pix = uv * _QS_SrcTexel.zw;
-                    float rot = 6.2831853 * frac(52.9829189 * frac(dot(pix, float2(0.06711056, 0.00583715))));
                     UNITY_UNROLL for (int k = 0; k < 12; k++)
                     {
-                        float th = k * 2.3999632 + rot;
+                        float th = k * 2.3999632;
                         float2 o = float2(cos(th), sin(th)) * rad * sqrt((k + 0.5) / 12.0);
                         half3 s = FetchRaw(uv + o);
                         half br = max(s.r, max(s.g, s.b));

@@ -48,6 +48,7 @@ namespace QuestShade
             {
                 _urp.m_AdditionalLightsRenderingMode = LightRenderingMode.PerPixel;
                 _urp.m_AdditionalLightsPerObjectLimit = Math.Max(_oAddLimit, 4);
+                Mod.Log.Msg($"Lighting: extra lights now {_urp.m_AdditionalLightsRenderingMode} x{_urp.m_AdditionalLightsPerObjectLimit}");
             }
             else
             {

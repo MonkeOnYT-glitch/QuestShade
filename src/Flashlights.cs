@@ -13,14 +13,15 @@ namespace QuestShade
         private static readonly Dictionary<IntPtr, Orig> _lights = new Dictionary<IntPtr, Orig>();
         private static IntPtr _lastL, _lastR;
         private static float _next, _applied = -1f;
-        private static bool _logged;
+        private static bool _logged, _diag;
 
-        public static void Tick(float boost)
+        public static void Tick(float boost, bool beams)
         {
             if (Held == null) return;
             float now = Time.unscaledTime;
             if (now < _next) return;
             _next = now + 0.25f;
+            try { FlashBeams.Tick(beams); } catch { }
             if (!Mathf.Approximately(boost, _applied))
             {
                 _applied = boost;
@@ -32,7 +33,7 @@ namespace QuestShade
             Check(2, ref _lastR, boost);
         }
 
-        public static void Reset() { _lights.Clear(); _lastL = _lastR = IntPtr.Zero; }
+        public static void Reset() { FlashBeams.Reset(); _lights.Clear(); _lastL = _lastR = IntPtr.Zero; }
 
         private static void Check(int hand, ref IntPtr last, float boost)
         {
@@ -54,9 +55,12 @@ namespace QuestShade
                 {
                     if (l == null || l.type != LightType.Spot) continue;
                     if (_lights.TryGetValue(l.Pointer, out var known) && known.L != null) continue;
+                    if (!_diag) { _diag = true; Mod.Log.Msg($"Flashlight light: mode {l.renderMode}, bake {l.bakingOutput.lightmapBakeType}, intensity {l.intensity:0.##}, range {l.range:0.#}, mask {l.cullingMask}"); }
+                    l.renderMode = LightRenderMode.ForcePixel;
                     var o = new Orig { L = l, I = l.intensity, R = l.range, A = l.spotAngle, IA = l.innerSpotAngle };
                     _lights[l.Pointer] = o;
                     Apply(o, boost);
+                    FlashBeams.Track(l);
                     n++;
                 }
                 if (n > 0 && !_logged) { _logged = true; Mod.Log.Msg($"Flashlight boost: {n} light(s) on '{root.name}'"); }

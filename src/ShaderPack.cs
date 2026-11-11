@@ -7,7 +7,7 @@ namespace QuestShade
 {
     internal static class ShaderPack
     {
-        public static Shader FinalBlit, Screen, Yuv, Post, Body, Outline, LitShadowed;
+        public static Shader FinalBlit, Screen, Yuv, Post, Body, Outline, LitShadowed, Beam;
         public static GameObject Handheld;
         public static string Error;
         private static bool _tried;
@@ -32,6 +32,7 @@ namespace QuestShade
                 Post = Get(bundle, "Assets/QuestShade/QSPost.shader");
                 Body = Get(bundle, "Assets/QuestShade/QSBody.shader");
                 Outline = Get(bundle, "Assets/QuestShade/QSOutline.shader");
+                Beam = Get(bundle, "Assets/QuestShade/QSBeam.shader");
                 try
                 {
                     Handheld = Body != null ? bundle.LoadAsset<GameObject>("Assets/QuestShade/HandheldCam/QSHandheld.prefab") : null;
