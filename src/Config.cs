@@ -29,9 +29,9 @@ namespace QuestShade
         public float DarkMaps = 0.8f, FlashlightBoost = 1f;
         public bool LeftHanded;
         public bool HurtEffect = true;
-        public bool Shadows = true, RealLights = true;
+        public bool RealLights = true;
         public StampMode Timestamp = StampMode.PoliceBodycam;
-        public float ShadowDistance = 20f, LessShine = 0.6f, Fisheye = 0f, ShadowStrength = 0.55f;
+        public float LessShine = 0.6f, Fisheye = 0f;
         public bool EyeAdapt = true;
         public float EyeAdaptStrength = 0.7f, EyeAdaptSpeed = 1f;
 
@@ -167,11 +167,8 @@ namespace QuestShade
             DarkMaps = Mathf.Clamp(ini.Float("General", "DarkMaps", 0.8f), 0f, 1f);
             FlashlightBoost = Mathf.Clamp(ini.Float("General", "FlashlightBoost", 1f), 0f, 2f);
             HurtEffect = ini.Bool("Camera", "HurtEffect", true);
-            Shadows = ini.Bool("Lighting", "Shadows", true);
             RealLights = ini.Bool("Lighting", "RealLights", true);
-            ShadowDistance = Mathf.Clamp(ini.Float("Lighting", "ShadowDistance", 20f), 5f, 60f);
             LessShine = Mathf.Clamp01(ini.Float("Lighting", "LessShine", 0.6f));
-            ShadowStrength = Mathf.Clamp01(ini.Float("Lighting", "ShadowStrength", 0.55f));
             Fisheye = Mathf.Clamp01(ini.Float("Camera", "Fisheye", 0f));
             Timestamp = Enum.TryParse<StampMode>(ini.Str("Camera", "Timestamp", "PoliceBodycam"), true, out var stm) ? stm : StampMode.PoliceBodycam;
             EyeAdapt = ini.Bool("General", "EyeAdaptation", true);
@@ -506,10 +503,7 @@ namespace QuestShade
             SetKey("General", "DarkMaps", DarkMaps.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "FlashlightBoost", FlashlightBoost.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Camera", "HurtEffect", HurtEffect ? "true" : "false");
-            SetKey("Lighting", "Shadows", Shadows ? "true" : "false");
             SetKey("Lighting", "RealLights", RealLights ? "true" : "false");
-            SetKey("Lighting", "ShadowDistance", ShadowDistance.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
-            SetKey("Lighting", "ShadowStrength", ShadowStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Lighting", "LessShine", LessShine.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Camera", "Timestamp", Timestamp.ToString());
             SetKey("Camera", "Fisheye", Fisheye.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));

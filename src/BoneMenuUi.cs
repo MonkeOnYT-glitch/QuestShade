@@ -77,10 +77,8 @@ namespace QuestShade
             fxMore.CreateBool("On every preset", Color.green, cfg.BloomDofAll, v => { cfg.BloomDofAll = v; mod.ReapplyEffects(); });
             fxMore.CreateFloat("Bloom strength", Color.white, cfg.BloomStrength, 0.25f, 0f, 4f, v => { cfg.BloomStrength = v; mod.ReapplyEffects(); });
             fxMore.CreateFloat("Blur strength", Color.white, cfg.BlurStrength, 0.25f, 0f, 3f, v => { cfg.BlurStrength = v; mod.ReapplyEffects(); });
-            var lit = fx.CreatePage("Lighting + shadows", new Color(1f, 0.85f, 0.5f));
-            lit.CreateFunction("What is this?", new Color(1f, 0.75f, 0.35f), () => Notify("Real-time sun shadows from you, NPCs and props, flashlights that light up what they hit, less plastic-looking shine. Costs some performance.", 5f));
-            lit.CreateBool("Real-time shadows", Color.white, cfg.Shadows, v => { cfg.Shadows = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
-            lit.CreateFloat("Shadow darkness", Color.white, cfg.ShadowStrength, 0.1f, 0.1f, 1f, v => { cfg.ShadowStrength = v; cfg.SaveMenuSettings(); });
+            var lit = fx.CreatePage("Lighting", new Color(1f, 0.85f, 0.5f));
+            lit.CreateFunction("What is this?", new Color(1f, 0.75f, 0.35f), () => Notify("Flashlights that light up what they hit, and less plastic-looking shine. Costs a little performance.", 5f));
             lit.CreateBool("Real lights (flashlights light things up)", Color.white, cfg.RealLights, v => { cfg.RealLights = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
             lit.CreateFloat("Less shine", Color.white, cfg.LessShine, 0.1f, 0f, 1f, v => { cfg.LessShine = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
             lit.CreateBool("Bloom in your headset", Color.white, cfg.HeadsetBloom, v => { cfg.HeadsetBloom = v; cfg.SaveMenuSettings(); mod.ReapplyEffects(); });
@@ -217,17 +215,6 @@ namespace QuestShade
         private static Il2CppSLZ.VRMK.Avatar _actor;
 
         public static Transform Hmd;
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public static Renderer[] AvatarRenderers()
-        {
-            var av = BoneLib.Player.Avatar;
-            if (av == null) return null;
-            var a = av.GetComponentsInChildren<Renderer>(false);
-            var list = new Renderer[a.Length];
-            for (int i = 0; i < a.Length; i++) list[i] = a[i];
-            return list;
-        }
         private static readonly System.Collections.Generic.Dictionary<int, Transform> _headBones = new System.Collections.Generic.Dictionary<int, Transform>();
 
         private static Transform HeadBone(Il2CppSLZ.VRMK.Avatar av)

@@ -71,12 +71,12 @@ namespace QuestShade
         private bool HQReady => Active && _post != null && _cfg != null && (_bloomIntensity > 0f || _dofStrength > 0f || LensFx);
         public bool WantsHQ => HQReady && _cfg.BloomDofCapture;
         public bool WantsPreviewHQ => HQReady && _cfg.BloomDofPreview;
-        public bool WantsDepth => _dofStrength > 0f || SunShadows.Active;
+        public bool WantsDepth => _dofStrength > 0f;
 
         private bool _liveDof, _depthForced, _origDepth;
         private void ApplyHeadsetDepth()
         {
-            bool want = Active && (_liveDof || SunShadows.Active) && _data != null;
+            bool want = Active && _liveDof && _data != null;
             if (want == _depthForced) return;
             try
             {
@@ -409,8 +409,6 @@ namespace QuestShade
                     Mod.Log.Msg($"Headset camera path: {(stereo ? "VR stereo" : "flat")} (xr={XRSettings.enabled}, device={XRSettings.isDeviceActive}, eye={XRSettings.eyeTextureWidth}x{XRSettings.eyeTextureHeight}, cam.stereo={cam.stereoEnabled})");
                 }
                 if (photo) CamDiag.Step(PhotoHQ ? "lens render (bloom/dof prepass)" : "lens render");
-                if (head) SunShadows.Apply(stereo ? _mat : _matMono, cam, stereo, true);
-                else if (photo) { SunShadows.Apply(_matPre, cam, false, PhotoHQ); SunShadows.Apply(_matMono, cam, false, false); }
                 fbp.m_BlitMaterial = stereo ? _mat : head ? _matMono : photo ? (PhotoHQ && _matPre != null ? _matPre : _matMono) : _origBlit;
                 if (photo && cam.targetTexture != null)
                 {

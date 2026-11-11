@@ -56,7 +56,7 @@ namespace QuestShade
             if (_boneLib)
             {
                 try { BoneMenuUi.Build(this, _cfg); _cam.ChestProvider = BoneMenuUi.Chest; Focus.PlayerRoot = BoneMenuUi.PlayerRoot; _cam.HideHead = BoneMenuUi.HideHead; _cam.RestoreHead = BoneMenuUi.RestoreHead; _cam.UiLayerMask = BoneMenuUi.UiLayerMask; _cam.ActorPose = BoneMenuUi.ActorPose; _cam.HideHeadOf = BoneMenuUi.HideHeadOf; _cam.HeadToLayer = BoneMenuUi.HeadToLayer; _cam.HeadRestore = BoneMenuUi.RestoreHeadLayer; _cam.OwnBodyToLayer = BoneMenuUi.OwnBodyToLayer;
-                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; SunShadows.AvatarRenderers = BoneMenuUi.AvatarRenderers; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Log.Msg("BoneMenu page added"); }
+                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Log.Msg("BoneMenu page added"); }
                 catch (Exception e) { _boneLib = false; Log.Warning("BoneLib found but menu failed (gestures still work): " + e.Message); }
             }
             else Log.Msg("BoneLib not found - using controller gestures only");
@@ -70,7 +70,6 @@ namespace QuestShade
             _cam.OnSceneLoaded();
             Flashlights.Reset();
             Lighting.OnLevel();
-            SunShadows.OnLevel();
             _fx.ResetCalibration();
             if (_startNotice != null) _noticeAt = Time.unscaledTime + 6f;
             Perf.OnSceneLoaded();
@@ -146,7 +145,6 @@ namespace QuestShade
 
         public override void OnLateUpdate()
         {
-            if (_ready) { try { SunShadows.Tick(_cfg, _fx.BoundCamera); } catch { } }
             if (!_ready) return;
             _sw.Restart();
             try
