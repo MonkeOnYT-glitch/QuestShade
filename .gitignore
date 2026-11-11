@@ -17,3 +17,5 @@ dist/discord/
 docs/
 discord/
 dist/notes-*.md
+installer/bin/
+installer/obj/
