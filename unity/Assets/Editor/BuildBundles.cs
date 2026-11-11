@@ -24,7 +24,7 @@ public static class BuildBundles
         const string handheld = "Assets/QuestShade/HandheldCam/QSHandheld.prefab";
         if (File.Exists(handheld)) names.Add(handheld);
         var build = new[] { new AssetBundleBuild { assetBundleName = "questshade", assetNames = names.ToArray() } };
-        foreach (var (target, dir) in new[] { (BuildTarget.Android, "android"), (BuildTarget.StandaloneWindows64, "windows") })
+        foreach (var (target, dir) in new[] { (BuildTarget.Android, "android") })
         {
             var outDir = Path.Combine("C:/QSBuild/bundles", dir);
             Directory.CreateDirectory(outDir);

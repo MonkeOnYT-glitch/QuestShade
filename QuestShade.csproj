@@ -2,10 +2,9 @@
 
   <PropertyGroup>
     <QSTarget Condition="'$(QSTarget)' == ''">Quest</QSTarget>
-    <TargetFramework Condition="'$(QSTarget)' == 'Quest'">net8.0</TargetFramework>
-    <TargetFramework Condition="'$(QSTarget)' == 'PC'">net6.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <OutputPath>bin\$(QSTarget)\</OutputPath>
-    <DefineConstants Condition="'$(QSTarget)' == 'Quest'">$(DefineConstants);QUEST</DefineConstants>
+    <DefineConstants>$(DefineConstants);QUEST</DefineConstants>
     <DefineConstants Condition="'$(QSStore)' == 'true'">$(DefineConstants);THUNDERSTORE</DefineConstants>
     <OutputPath Condition="'$(QSStore)' == 'true'">bin/$(QSTarget)-Store/</OutputPath>
     <AssemblyName>QuestShade</AssemblyName>
@@ -20,10 +19,8 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <NoWarn>CS0618;CS8632</NoWarn>
     <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\BONELAB</GameDir>
-    <ML Condition="'$(QSTarget)' == 'Quest'">C:\QSBuild\quest\ml</ML>
-    <IA Condition="'$(QSTarget)' == 'Quest'">C:\QSBuild\quest\ia</IA>
-    <ML Condition="'$(QSTarget)' == 'PC'">$(GameDir)\MelonLoader\net6</ML>
-    <IA Condition="'$(QSTarget)' == 'PC'">$(GameDir)\MelonLoader\Il2CppAssemblies</IA>
+    <ML>C:\QSBuild\quest\ml</ML>
+    <IA>C:\QSBuild\quest\ia</IA>
     <Bundles>C:\QSBuild\bundles</Bundles>
   </PropertyGroup>
 
@@ -49,8 +46,8 @@
     <Reference Include="Unity.TextMeshPro"><HintPath>$(IA)\Unity.TextMeshPro.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.AssetBundleModule"><HintPath>$(IA)\UnityEngine.AssetBundleModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.Il2CppAssetBundleManager"><HintPath>$(ML)\UnityEngine.Il2CppAssetBundleManager.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="JNISharp" Condition="'$(QSTarget)' == 'Quest'"><HintPath>$(ML)\JNISharp.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="Unity.RenderPipelines.Universal.StressLevelZero.VRS" Condition="'$(QSTarget)' == 'Quest'"><HintPath>$(IA)\Unity.RenderPipelines.Universal.StressLevelZero.VRS.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="JNISharp"><HintPath>$(ML)\JNISharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.RenderPipelines.Universal.StressLevelZero.VRS"><HintPath>$(IA)\Unity.RenderPipelines.Universal.StressLevelZero.VRS.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Il2CppSLZ.Marrow"><HintPath>$(IA)\Il2CppSLZ.Marrow.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Il2CppSystem"><HintPath>$(IA)\Il2CppSystem.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.UnityWebRequestModule"><HintPath>$(IA)\UnityEngine.UnityWebRequestModule.dll</HintPath><Private>false</Private></Reference>
@@ -63,7 +60,6 @@
 
   <ItemGroup>
     <EmbeddedResource Include="$(Bundles)\android\questshade" LogicalName="QuestShade.Bundles.android" Condition="Exists('$(Bundles)\android\questshade')" />
-    <EmbeddedResource Include="$(Bundles)\windows\questshade" LogicalName="QuestShade.Bundles.windows" Condition="Exists('$(Bundles)\windows\questshade')" />
   </ItemGroup>
 
   <ItemGroup>

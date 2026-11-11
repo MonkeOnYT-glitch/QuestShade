@@ -19,7 +19,7 @@ namespace QuestShade
             _tried = true;
             try
             {
-                var name = Application.platform == RuntimePlatform.Android ? "QuestShade.Bundles.android" : "QuestShade.Bundles.windows";
+                var name = "QuestShade.Bundles.android";
                 using var s = Assembly.GetExecutingAssembly().GetManifestResourceStream(name);
                 if (s == null) { Error = "shader pack missing from DLL"; Mod.Log.Error(Error); return false; }
                 var bytes = new byte[s.Length];

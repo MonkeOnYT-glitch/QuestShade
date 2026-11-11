@@ -1,6 +1,6 @@
 # QuestShade
 
-ReShade for BONELAB on Quest, plus a camera you can grab and film with. Works on PC too.
+ReShade for BONELAB on Quest, plus a camera you can grab and film with.
 
 ## Features
 
@@ -14,7 +14,6 @@ ReShade for BONELAB on Quest, plus a camera you can grab and film with. Works on
 ## Install
 
 - Quest: put `QuestShade.dll` in `/sdcard/MelonLoader/com.StressLevelZero.BONELAB/Mods/`
-- PC: put it in `BONELAB/Mods/`
 - Optional: put `QuestShadeUpdater.dll` in `Plugins/` so updates install when the game starts
 
 Needs BoneLib. Everything is in BoneMenu under QuestShade. On the camera, tap the trigger for a photo and hold it to record.
@@ -28,4 +27,4 @@ Needs BoneLib. Everything is in BoneMenu under QuestShade. On the camera, tap th
 ## Building
 
 - Shaders: `Unity.exe -batchmode -nographics -projectPath unity -executeMethod BuildBundles.Build -quit` (Unity 2021.3.16f1)
-- Mod: `dotnet build QuestShade.csproj -c Release -p:QSTarget=Quest` (or `PC`)
+- Mod: `dotnet build QuestShade.csproj -c Release -p:QSTarget=Quest`

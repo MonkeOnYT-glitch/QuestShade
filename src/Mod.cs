@@ -27,6 +27,7 @@ namespace QuestShade
         public override void OnInitializeMelon()
         {
             Log = LoggerInstance;
+            if (Application.platform != RuntimePlatform.Android) { Log.Warning("QuestShade is Quest only - it does nothing on PC"); return; }
             try
             {
                 Config.InitPaths();
@@ -39,9 +40,7 @@ namespace QuestShade
                 _cam.SetHoverPreview(_cfg.HoverPreview);
                 _cam.Feedback += (msg, left) => { _ctl.Buzz(_cfg, left, 0.5f, 0.05f); if (msg != null) Notify(msg, 1f); };
                 _ready = true;
-#if QUEST
                 _startNotice = VideoRecorder.RecoverInterrupted();
-#endif
                 Log.Msg($"Ready on {Application.platform}. Config: {Config.Root}  Presets: {string.Join(", ", _cfg.Presets)}");
             }
             catch (Exception e) { Log.Error("Init failed, QuestShade disabled: " + e); return; }
@@ -373,9 +372,7 @@ namespace QuestShade
         {
             if (_cam.Blocked && !_cam.Open) { Notify("Camera's off in Fusion lobbies (Camera > Settings to change)", 2f); return; }
             _cam.Toggle(_cfg, _fx.BoundCamera);
-#if QUEST
             if (_cam.Open && _cfg.RecordMic) AudioCapture.AskMicPermission();
-#endif
             Notify(_cam.Open ? $"Camera: {Pretty(_cam.Mode)}" : "Camera closed", 1f);
         }
 
@@ -436,9 +433,7 @@ namespace QuestShade
             {
                 _recStart = Time.unscaledTime;
                 _ctl.Buzz(_cfg, false, 0.8f, 0.1f);
-#if QUEST
                 if (AudioCapture.Notice != null) { Notify(AudioCapture.Notice, 4f); AudioCapture.Notice = null; return; }
-#endif
                 Notify("Recording... (hold trigger again to stop)", 1.5f);
             }
             else Notify(err, 2f);
@@ -728,21 +723,8 @@ namespace QuestShade
         {
             _cam.MicOn = _cfg.RecordMic;
             _cam.ControlsHint = null;
-            if (_ctl.Key(_cfg, KeyCode.F7)) SetEffectsEnabled(!_cfg.Enabled);
-            if (_ctl.Key(_cfg, KeyCode.F8)) StepPreset(1);
-            if (_ctl.Key(_cfg, KeyCode.F6)) StepPreset(-1);
-            if (_ctl.Key(_cfg, KeyCode.F9)) ToggleCamera();
             if (!_cam.Open) return;
             CameraTrigger(Time.unscaledTime);
-            if (_ctl.Key(_cfg, KeyCode.F11))
-            {
-                _cam.CycleMode();
-                _cfg.DefaultMode = _cam.Mode;
-                Notify($"Camera: {Pretty(_cam.Mode)}", 1f);
-            }
-            if (_ctl.Key(_cfg, KeyCode.F10)) TakePhoto();
-            if (_ctl.Key(_cfg, KeyCode.F12)) ToggleHidden();
-            if (_ctl.Key(_cfg, KeyCode.R)) ToggleRecording();
         }
     }
 }

@@ -24,9 +24,7 @@ namespace QuestShade
         public static void ResolveFolder(string configured)
         {
             bool android = Application.platform == RuntimePlatform.Android;
-#if QUEST
             _store = android && Jni.Init();
-#endif
             Folder = null;
             bool custom = !string.IsNullOrWhiteSpace(configured) && !configured.Equals("auto", StringComparison.OrdinalIgnoreCase);
             if (custom)
@@ -143,7 +141,6 @@ namespace QuestShade
 
         private static string Store(bool video, string name, string mime, byte[] bytes, string srcFile)
         {
-#if QUEST
             var e = Jni.Attach(out bool attached);
             try
             {
@@ -152,12 +149,8 @@ namespace QuestShade
                 finally { e.PopFrame(); }
             }
             finally { if (attached) Jni.Detach(); }
-#else
-            throw new PlatformNotSupportedException();
-#endif
         }
 
-#if QUEST
         private static string StoreOn(Jni.Env e, bool video, string name, string mime, byte[] bytes, string srcFile)
         {
             var at = e.Class("android/app/ActivityThread");
@@ -232,6 +225,5 @@ namespace QuestShade
             }
             throw last ?? new Exception("no gallery folder accepted the file");
         }
-#endif
     }
 }

@@ -13,7 +13,6 @@ namespace QuestShade
 
         public static void Scan(string path)
         {
-#if QUEST
             if (_broken || string.IsNullOrEmpty(path)) return;
             System.Threading.Tasks.Task.Run(() =>
             {
@@ -30,6 +29,5 @@ namespace QuestShade
                 }
                 catch (Exception e) { _broken = true; Mod.Log.Warning("Gallery: couldn't add to the Quest gallery (" + e.Message + ")"); }
             });
-#endif
         }    }
 }

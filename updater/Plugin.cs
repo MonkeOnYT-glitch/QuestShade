@@ -16,11 +16,7 @@ namespace QuestShadeUpdater
     public sealed class Plugin : MelonPlugin
     {
         private const string Repo = "MonkeOnYT-glitch/QuestShade";
-#if QUEST
         private const string Asset = "QuestShade.dll";
-#else
-        private const string Asset = "QuestShade-PC.dll";
-#endif
         private const int BudgetMs = 8000;
 
         private static MelonLogger.Instance Log;
@@ -29,6 +25,7 @@ namespace QuestShadeUpdater
         public override void OnPreInitialization()
         {
             Log = LoggerInstance;
+            if (!OperatingSystem.IsAndroid()) return;
             try
             {
                 if (!AutoUpdateOn()) { Log.Msg("Auto-update is off ([General] AutoUpdate in QuestShade.ini)"); return; }

@@ -10,15 +10,6 @@ namespace QuestShadeUpdater
 
         public static string GetString(string url) => Encoding.UTF8.GetString(GetBytes(url, "application/vnd.github+json"));
 
-#if !QUEST
-        public static byte[] GetBytes(string url, string accept = null)
-        {
-            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(7) };
-            http.DefaultRequestHeaders.Add("User-Agent", UserAgent);
-            if (accept != null) http.DefaultRequestHeaders.Add("Accept", accept);
-            return http.GetByteArrayAsync(url).GetAwaiter().GetResult();
-        }
-#else
         private static IntPtr _vm;
 
         public static unsafe byte[] GetBytes(string url, string accept = null)
@@ -140,6 +131,5 @@ namespace QuestShadeUpdater
                 Check("read");
             }
         }
-#endif
     }
 }

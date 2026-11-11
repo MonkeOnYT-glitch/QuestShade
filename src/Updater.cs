@@ -22,17 +22,9 @@ namespace QuestShade
     {
         private const string Repo = "MonkeOnYT-glitch/QuestShade";
         private const string Api = "https://api.github.com/repos/" + Repo + "/releases/latest";
-#if QUEST
         private const string AssetName = "QuestShade.dll";
-#else
-        private const string AssetName = "QuestShade-PC.dll";
-#endif
         private const string DllName = "QuestShade.dll";
-#if QUEST
         private const string PluginAsset = "QuestShadeUpdater.dll";
-#else
-        private const string PluginAsset = "QuestShadeUpdater-PC.dll";
-#endif
         private static string _pluginUrl, _pluginDigest;
 
         public static string Notice;

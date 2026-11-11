@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 using Il2CppInterop.Runtime;
 using UnityEngine;
@@ -14,7 +14,6 @@ namespace QuestShade
         public bool StartRecording(Config cfg, out string error)
         {
             error = null;
-#if QUEST
             if (!Open) { error = "Open the camera first"; return false; }
             if (Recording) return true;
             if (PhotoBusy) { error = "Wait for the photo to finish"; return false; }
@@ -51,15 +50,10 @@ namespace QuestShade
             ApplyHidden();
             _recAccum = 1f; _recRendered = false;
             return true;
-#else
-            error = "Recording is Quest-only (uses the headset's video encoder)";
-            return false;
-#endif
         }
 
         public string StopRecording()
         {
-#if QUEST
             if (!Recording) return null;
             var file = _rec.Stop();
             PhotoSaver.PublishVideo(file);
@@ -74,9 +68,6 @@ namespace QuestShade
             Free(ref _rawRecRT);
             Free(ref _gradeRT);
             return file;
-#else
-            return null;
-#endif
         }
 
         public bool RequestPhoto(Config cfg)

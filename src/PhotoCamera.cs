@@ -21,14 +21,9 @@ namespace QuestShade
         private RenderTexture _recRT, _gradeRT, _photoGraded;
         private bool _recRendered;
         private float _recAccum;
-#if QUEST
         private readonly VideoRecorder _rec = new VideoRecorder();
         public bool Recording => _rec.Recording;
         public float RecordSeconds => _rec.Seconds;
-#else
-        public bool Recording => false;
-        public float RecordSeconds => 0f;
-#endif
         public Camera LensCamera => _cam;
         public Effects Fx;
         private RenderTexture _rawPhotoRT, _rawRecRT, _rawPreviewRT;
@@ -618,7 +613,6 @@ namespace QuestShade
 
         private static void DisableVrsMask(GameObject lens)
         {
-#if QUEST
             try
             {
                 var ov = lens.GetComponent<Il2CppSLZ.Graphics2.VRS.CameraVRSOverride>() ?? lens.AddComponent<Il2CppSLZ.Graphics2.VRS.CameraVRSOverride>();
@@ -632,7 +626,6 @@ namespace QuestShade
                 Mod.Log.Msg("Camera: BONELAB's VRS pixel mask switched off for the in-game camera");
             }
             catch (Exception e) { Mod.Log.Warning("Camera: couldn't override VRS (photos may get a black band): " + e.Message); }
-#endif
         }
 
         private static int PickLayer(int mask)
@@ -700,7 +693,6 @@ namespace QuestShade
 
             if (Recording)
             {
-#if QUEST
                 if (_recRendered)
                 {
                     if (_recHQ) Fx.ProcessHQ(_rawRecRT, _recRT, _recExtras && Perf.RecordingExtras);
@@ -721,7 +713,6 @@ namespace QuestShade
                 if (rrender) SetFar(_fullFar);
                 if (rrender) { _recAccum = Mathf.Min(_recAccum - rstep, rstep); _recRendered = true; }
                 if (_cam.enabled != rrender) _cam.enabled = rrender;
-#endif
                 return;
             }
 
