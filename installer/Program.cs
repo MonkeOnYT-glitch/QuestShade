@@ -348,7 +348,7 @@ namespace QuestShadeInstaller
             }
             using (var db = new SolidBrush(Color.FromArgb(150, 157, 157, 170)))
             {
-                var foot = "GPL-3.0  ·  DOWNLOADS ONLY FROM GITHUB, THUNDERSTORE & GOOGLE  ·  SENDS NOTHING ABOUT YOU";
+                var foot = "GPL-3.0  ·  DOWNLOADS ONLY FROM GITHUB, THUNDERSTORE & GOOGLE";
                 var sz = g.MeasureString(foot, _fMono);
                 g.DrawString(foot, _fMono, db, (W - sz.Width) / 2f, H - 40);
             }
