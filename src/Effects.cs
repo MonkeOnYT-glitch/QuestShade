@@ -97,7 +97,7 @@ namespace QuestShade
             float blur = Mathf.Min(_dofMaxBlur, 14f) * eyeH / 1080f;
             _mat.SetVector(ID.Live, new Vector4(_bloomIntensity * 0.6f, 0, blur, _dofBokeh));
             float thr = Mathf.Clamp(p.Float("Bloom", "Threshold", 0.85f), 0f, 4f);
-            _mat.SetVector(ID.LiveBloom, new Vector4(thr, thr * Mathf.Clamp01(p.Float("Bloom", "SoftKnee", 0.5f)), 0.006f + 0.01f * Mathf.Clamp01(p.Float("Bloom", "Scatter", 0.7f)), 0));
+            _mat.SetVector(ID.LiveBloom, new Vector4(thr, thr * Mathf.Clamp01(p.Float("Bloom", "SoftKnee", 0.5f)), 0.02f + 0.05f * Mathf.Clamp01(p.Float("Bloom", "Scatter", 0.7f)), 0));
             var tint = p.Color("Bloom", "Tint", Color.white);
             _mat.SetVector(ID.LiveTint, new Vector4(tint.r, tint.g, tint.b, 1));
             Mod.Log.Msg($"Headset bloom {(_bloomIntensity > 0 ? "on" : "off")}, depth of field {(_liveDof ? "on" : "off")} (light version)");

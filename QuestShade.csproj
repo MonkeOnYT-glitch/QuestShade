@@ -8,7 +8,7 @@
     <DefineConstants Condition="'$(QSStore)' == 'true'">$(DefineConstants);THUNDERSTORE</DefineConstants>
     <OutputPath Condition="'$(QSStore)' == 'true'">bin/$(QSTarget)-Store/</OutputPath>
     <AssemblyName>QuestShade</AssemblyName>
-    <Version>1.7.2</Version>
+    <Version>1.7.3</Version>
     <RootNamespace>QuestShade</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
@@ -60,7 +60,6 @@
 
   <ItemGroup>
     <EmbeddedResource Include="$(Bundles)\android\questshade" LogicalName="QuestShade.Bundles.android" Condition="Exists('$(Bundles)\android\questshade')" />
-    <EmbeddedResource Include="C:\QSBuild\bundles_lit\android\questshade_lit" LogicalName="QuestShade.Bundles.lit" Condition="Exists('C:\QSBuild\bundles_lit\android\questshade_lit')" />
   </ItemGroup>
 
   <ItemGroup>

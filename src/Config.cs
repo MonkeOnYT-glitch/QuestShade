@@ -24,13 +24,12 @@ namespace QuestShade
         public bool BloomDofHeadset = false, BloomDofPreview = true, BloomDofCapture = true, BloomDofAll = true;
         public bool MatchPreview = true;
         public float BloomStrength = 1f, BlurStrength = 1f, GripAngle = 0f;
-        public bool HeadsetBloom = true;
+        public bool HeadsetBloom = false;
         public bool ControllerShortcuts = true;
         public float DarkMaps = 0.8f, FlashlightBoost = 1f;
         public bool LeftHanded;
         public bool HurtEffect = true;
-        public bool RealLights = true, Shadows = true, FlashlightBeams = true;
-        public float ShadowDistance = 20f;
+        public bool RealLights = true, FlashlightBeams = true;
         public StampMode Timestamp = StampMode.PoliceBodycam;
         public float LessShine = 0.6f, Fisheye = 0f;
         public bool EyeAdapt = true;
@@ -162,7 +161,7 @@ namespace QuestShade
             MatchPreview = ini.Bool("General", "MatchPreview", true);
             BloomDofAll = ini.Bool("General", "BloomDofEveryPreset", true);
             BloomStrength = Mathf.Clamp(ini.Float("General", "BloomStrength", 1f), 0f, 4f);
-            HeadsetBloom = ini.Bool("General", "HeadsetBloom", true);
+            HeadsetBloom = ini.Bool("General", "HeadsetBloomOn", false);
             ControllerShortcuts = ini.Bool("Controls", "Shortcuts", true);
             LeftHanded = ini.Bool("Controls", "LeftHanded", false);
             DarkMaps = Mathf.Clamp(ini.Float("General", "DarkMaps", 0.8f), 0f, 1f);
@@ -170,9 +169,7 @@ namespace QuestShade
             HurtEffect = ini.Bool("Camera", "HurtEffect", true);
             RealLights = ini.Bool("Lighting", "RealLights", true);
             LessShine = Mathf.Clamp01(ini.Float("Lighting", "LessShine", 0.6f));
-            Shadows = ini.Bool("Lighting", "RealShadows", true);
             FlashlightBeams = ini.Bool("Lighting", "FlashlightBeams", true);
-            ShadowDistance = Mathf.Clamp(ini.Float("Lighting", "ShadowDistance", 20f), 5f, 50f);
             Fisheye = Mathf.Clamp01(ini.Float("Camera", "Fisheye", 0f));
             Timestamp = Enum.TryParse<StampMode>(ini.Str("Camera", "Timestamp", "PoliceBodycam"), true, out var stm) ? stm : StampMode.PoliceBodycam;
             EyeAdapt = ini.Bool("General", "EyeAdaptation", true);
@@ -501,7 +498,7 @@ namespace QuestShade
             SetKey("General", "BloomDofEveryPreset", BloomDofAll ? "true" : "false");
             SetKey("General", "BloomStrength", BloomStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "BlurStrength", BlurStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
-            SetKey("General", "HeadsetBloom", HeadsetBloom ? "true" : "false");
+            SetKey("General", "HeadsetBloomOn", HeadsetBloom ? "true" : "false");
             SetKey("Controls", "Shortcuts", ControllerShortcuts ? "true" : "false");
             SetKey("Controls", "LeftHanded", LeftHanded ? "true" : "false");
             SetKey("General", "DarkMaps", DarkMaps.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
@@ -509,8 +506,6 @@ namespace QuestShade
             SetKey("Camera", "HurtEffect", HurtEffect ? "true" : "false");
             SetKey("Lighting", "RealLights", RealLights ? "true" : "false");
             SetKey("Lighting", "FlashlightBeams", FlashlightBeams ? "true" : "false");
-            SetKey("Lighting", "RealShadows", Shadows ? "true" : "false");
-            SetKey("Lighting", "ShadowDistance", ShadowDistance.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Lighting", "LessShine", LessShine.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Camera", "Timestamp", Timestamp.ToString());
             SetKey("Camera", "Fisheye", Fisheye.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
