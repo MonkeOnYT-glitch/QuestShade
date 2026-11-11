@@ -116,6 +116,7 @@ namespace QuestShadeInstaller
         private readonly TextBox _log;
         private Screen _screen = Screen.Welcome;
         private string _status = "", _detail = "", _doneTitle = "", _doneText = "";
+        private string _downloads;
         private bool _busy, _failed, _waitingPatch, _uninstalling;
         private int _step;
         private string _adb;
@@ -166,6 +167,16 @@ namespace QuestShadeInstaller
             MouseMove += (s, e) => { bool c = false; foreach (var b in _buttons) { bool h = b.Visible && b.R.Contains(e.Location); if (h != b.Hover) { b.Hover = h; c = true; } } Cursor = _buttons.Any(b => b.Hover) ? Cursors.Hand : Cursors.Default; if (c) Invalidate(); };
             MouseClick += (s, e) => { var b = _buttons.FirstOrDefault(x => x.Visible && x.R.Contains(e.Location)); b?.Click?.Invoke(); };
             Show(Screen.Welcome);
+            Task.Run(() =>
+            {
+                try
+                {
+                    var json = Get($"https://api.github.com/repos/{Repo}/releases/tags/tools");
+                    var m = Regex.Match(json, "\"name\"\\s*:\\s*\"QuestShadeInstaller\\.exe\".*?\"download_count\"\\s*:\\s*(\\d+)", RegexOptions.Singleline);
+                    if (m.Success && int.TryParse(m.Groups[1].Value, out var n)) UI(() => _downloads = n.ToString("N0"));
+                }
+                catch { }
+            });
         }
 
         protected override void OnHandleCreated(EventArgs e)
@@ -342,7 +353,7 @@ namespace QuestShadeInstaller
             {
                 g.DrawString("REC", _fMono, wb, 54, 32);
                 g.DrawString($"00:{mi:00}:{s:00}:{f:00}", _fMono, wb, 96, 32);
-                var right = _busy ? "USB · ADB · WORKING" : "QUEST · INSTALLER";
+                var right = _busy ? "USB · ADB · WORKING" : _downloads != null ? $"{_downloads} INSTALLER DOWNLOADS" : "QUEST · INSTALLER";
                 var sz = g.MeasureString(right, _fMono);
                 g.DrawString(right, _fMono, wb, W - 40 - sz.Width, 32);
             }
