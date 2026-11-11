@@ -1,0 +1,23 @@
+name: Installer
+
+on:
+  push:
+    branches: [main]
+    paths: ["installer/**", ".github/workflows/installer.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Build
+        run: dotnet build installer/QuestShadeInstaller.csproj -c Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QuestShadeInstaller
+          path: installer/bin/Release/net48/QuestShadeInstaller.exe
+          if-no-files-found: error

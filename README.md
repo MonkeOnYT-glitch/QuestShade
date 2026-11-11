@@ -28,3 +28,7 @@ Needs BoneLib. Everything is in BoneMenu under QuestShade. On the camera, tap th
 
 - Shaders: `Unity.exe -batchmode -nographics -projectPath unity -executeMethod BuildBundles.Build -quit` (Unity 2021.3.16f1)
 - Mod: `dotnet build QuestShade.csproj -c Release -p:QSTarget=Quest`
+
+## License
+
+GPL-3.0. See LICENSE.

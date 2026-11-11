@@ -34,7 +34,7 @@ namespace QuestShadeInstaller
 
         private readonly Label _status;
         private readonly TextBox _log;
-        private readonly Button _go, _continue;
+        private readonly Button _go, _continue, _remove;
         private readonly string _home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QuestShadeInstaller");
         private string _adb;
         private volatile bool _skipWait;
@@ -43,7 +43,7 @@ namespace QuestShadeInstaller
         {
             Http.DefaultRequestHeaders.UserAgent.ParseAdd("QuestShadeInstaller/1.0");
             Text = "QuestShade Installer";
-            ClientSize = new Size(640, 460);
+            ClientSize = new Size(640, 468);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             BackColor = Color.FromArgb(18, 18, 22);
@@ -56,14 +56,17 @@ namespace QuestShadeInstaller
             _log = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Location = new Point(20, 138), Size = new Size(600, 250), BackColor = Color.FromArgb(30, 30, 36), ForeColor = Color.Gainsboro, BorderStyle = BorderStyle.FixedSingle };
             _go = new Button { Text = "Install QuestShade", Location = new Point(20, 400), Size = new Size(200, 40), BackColor = Color.FromArgb(255, 138, 31), ForeColor = Color.Black, FlatStyle = FlatStyle.Flat };
             _continue = new Button { Text = "It's patched, continue", Location = new Point(230, 400), Size = new Size(200, 40), FlatStyle = FlatStyle.Flat, Visible = false };
+            _remove = new Button { Text = "Uninstall QuestShade", Location = new Point(440, 400), Size = new Size(180, 40), FlatStyle = FlatStyle.Flat };
+            _remove.Click += async (s, e) => await Remove();
+            var privacy = new Label { Text = "Only downloads from GitHub, Thunderstore and Google. Sends nothing about you.", AutoSize = true, ForeColor = Color.Gray, Font = new Font("Segoe UI", 8f), Location = new Point(20, 444) };
             _go.Click += async (s, e) => await Go();
             _continue.Click += (s, e) => _skipWait = true;
-            Controls.AddRange(new Control[] { title, sub, _status, _log, _go, _continue });
+            Controls.AddRange(new Control[] { title, sub, _status, _log, _go, _continue, _remove, privacy });
         }
 
         private async Task Go()
         {
-            _go.Enabled = false;
+            _go.Enabled = _remove.Enabled = false;
             try
             {
                 await Task.Run(RunAll);
@@ -75,8 +78,28 @@ namespace QuestShadeInstaller
             }
             finally
             {
-                UI(() => { _go.Enabled = true; _continue.Visible = false; });
+                UI(() => { _go.Enabled = _remove.Enabled = true; _continue.Visible = false; });
             }
+        }
+
+        private async Task Remove()
+        {
+            if (MessageBox.Show(this, "Remove QuestShade and its updater from your Quest? Your other mods, BoneLib and your QuestShade settings stay.", "Uninstall QuestShade", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            _go.Enabled = _remove.Enabled = false;
+            try
+            {
+                await Task.Run(() =>
+                {
+                    Directory.CreateDirectory(_home);
+                    EnsureAdb();
+                    WaitForDevice();
+                    Adb($"shell rm -f {MlDir}/Mods/QuestShade.dll {MlDir}/Plugins/QuestShadeUpdater.dll");
+                    Log("QuestShade removed. Settings are still in UserData/QuestShade if you reinstall.");
+                    Status("QuestShade is uninstalled.");
+                });
+            }
+            catch (Exception e) { Log("Error: " + e.Message); Status("Couldn't uninstall. See the details below."); }
+            finally { UI(() => { _go.Enabled = _remove.Enabled = true; }); }
         }
 
         private void RunAll()

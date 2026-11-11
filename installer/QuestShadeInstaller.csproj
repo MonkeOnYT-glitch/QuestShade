@@ -7,7 +7,14 @@
     <AssemblyName>QuestShadeInstaller</AssemblyName>
     <RootNamespace>QuestShadeInstaller</RootNamespace>
     <Version>1.0.0</Version>
+    <Product>QuestShade Installer</Product>
+    <AssemblyTitle>QuestShade Installer</AssemblyTitle>
+    <Description>Installs the QuestShade mod on BONELAB for Meta Quest</Description>
+    <Company>MonkeOnYT</Company>
+    <Copyright>MonkeOnYT, GPL-3.0</Copyright>
     <Nullable>disable</Nullable>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Deterministic>true</Deterministic>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
