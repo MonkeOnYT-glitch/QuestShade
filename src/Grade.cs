@@ -11,9 +11,9 @@ namespace QuestShade
 
         public static bool HasGrading(Ini p) =>
             p.Enabled("Color") || p.Enabled("WhiteBalance") || p.Enabled("LiftGammaGain") || p.Enabled("ShadowsMidtonesHighlights") ||
-            p.Enabled("SplitToning") || p.Enabled("ChannelMixer") || p.Enabled("LUT") || p.Has("ReShadeChain");
+            p.Enabled("SplitToning") || p.Enabled("ChannelMixer") || p.Has("ReShadeChain");
 
-        public static Texture2D Bake(Ini p, float[] userCube, int userN, float userContribution, Texture2D reuse)
+        public static Texture2D Bake(Ini p, Texture2D reuse)
         {
             bool col = p.Enabled("Color");
             float contrast = col ? 1f + p.Float("Color", "Contrast", 0) / 100f : 1f;
@@ -104,7 +104,6 @@ namespace QuestShade
                 }
                 d = Sat01(d);
                 if (!rsChain.Empty) { float rr = d.x, gg = d.y, bb = d.z; ReShadeColor.Apply(rsChain, ref rr, ref gg, ref bb); d = new V3(rr, gg, bb); }
-                if (userCube != null && userContribution > 0f) d = V3.Lerp(d, Lut.LookupF(userCube, userN, d), userContribution);
 
                 int o = (g * w + b * n + r) * 4;
                 bytes[o] = B(d.x); bytes[o + 1] = B(d.y); bytes[o + 2] = B(d.z); bytes[o + 3] = 255;

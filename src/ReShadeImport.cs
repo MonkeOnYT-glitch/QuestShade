@@ -25,7 +25,7 @@ namespace QuestShade
                 Directory.CreateDirectory(Path.Combine(Dir, "Textures"));
                 var readme = Path.Combine(Dir, "README.txt");
                 if (!File.Exists(readme)) File.WriteAllText(readme,
-                    "Put ReShade presets (.ini) here. LUT textures they use (.png) go in Textures/.\n" +
+                    "Put ReShade presets (.ini) here.\n" +
                     "You don't need ReShade's .fx shader files: QuestShade rebuilds the effects it supports and lists the ones it skipped.\n" +
                     "Each preset shows up in the menu as \"<name> (ReShade)\".\n");
                 foreach (var file in Directory.GetFiles(Dir, "*.ini"))
@@ -162,21 +162,7 @@ namespace QuestShade
                 else if (key.StartsWith("lumasharpen")) { o.Set("Sharpen", "Amount", Fmt(Math.Clamp(F("sharp_strength", 0.65f) * 0.5f, 0f, 1f))); used.Add(label); }
                 else if (key.StartsWith("cas") || key.Contains("adaptivesharpen") || key.Contains("sharpen"))
                 { o.Set("Sharpen", "Amount", Fmt(Math.Clamp(Math.Max(F("Sharpening", 0.6f), F("curve_height", 0.6f)) * 0.55f, 0f, 0.6f))); used.Add(label); }
-                else if (key.Contains("lut"))
-                {
-                    string tex = Define(rs, "fLUT_TextureName") ?? Define(rs, "MultiLUTTexture_Source") ?? (key.StartsWith("lut") ? "lut.png" : null);
-                    if (tex == null) { skipped.Add(label + " (its LUT texture isn't named in the preset - put it in ReShade/Textures and add it under [LUT] File)"); continue; }
-                    string found = FindTexture(tex, Path.GetDirectoryName(file));
-                    if (found != null)
-                    {
-                        string dst = Path.Combine(Config.LutDir, name + "_" + Path.GetFileName(found));
-                        File.Copy(found, dst, true);
-                        o.Set("LUT", "File", Path.GetFileName(dst));
-                        o.Set("LUT", "Contribution", Fmt(Math.Clamp(Math.Max(F("fLUT_AmountChroma", 1f), F("fLUT_AmountLuma", 1f)), 0f, 1f)));
-                        used.Add(label);
-                    }
-                    else skipped.Add(label + $" (texture {tex} not found - put it in ReShade/Textures)");
-                }
+                else if (key.Contains("lut")) { skipped.Add(label + " (LUTs aren't supported)"); continue; }
                 else if (key.Contains("dof"))
                 {
                     var c = Vec(s, "fADOF_AutofocusCenter", 0.5f);
@@ -312,7 +298,7 @@ namespace QuestShade
         }
 
         private static readonly string[] ColourSections = { "Vignette", "CRT", "Scanlines", "Noise", "FilmGrain", "Glitch", "ReShadeChain", "Color", "WhiteBalance", "LiftGammaGain", "SplitToning", "ChannelMixer",
-            "ShadowsMidtonesHighlights", "LUT", "Vignette", "Tonemapping" };
+            "ShadowsMidtonesHighlights", "Vignette", "Tonemapping" };
 
         private static Dictionary<string, Dictionary<string, string>> ReadReShade(string text)
         {
@@ -360,7 +346,7 @@ namespace QuestShade
 
         private static string FindTexture(string tex, string near)
         {
-            foreach (var dir in new[] { Path.Combine(Dir, "Textures"), Dir, near, Config.LutDir })
+            foreach (var dir in new[] { Path.Combine(Dir, "Textures"), Dir, near })
             {
                 if (dir == null) continue;
                 var p = Path.Combine(dir, Path.GetFileName(tex));
@@ -409,7 +395,7 @@ namespace QuestShade
                     c += sec switch
                     {
                         "Sharpen" => 2f, "ChromaticAberration" => 2f, "LensDistortion" => 1.5f, "Glitch" => 1f, "CRT" => 1f,
-                        "FilmGrain" => 1f, "Noise" => 0.5f, "Scanlines" => 0.5f, "Vignette" => 0.3f, "LUT" => 0.5f,
+                        "FilmGrain" => 1f, "Noise" => 0.5f, "Scanlines" => 0.5f, "Vignette" => 0.3f,
                         _ => sec.StartsWith("RS ") || sec == "ReShadeChain" ? 0f : 0.2f,
                     };
                 return c;

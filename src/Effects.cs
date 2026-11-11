@@ -23,7 +23,6 @@ namespace QuestShade
         public Camera PhotoCamera;
         private bool _bundleTried;
         private Texture2D _lut;
-        private float[] _userCube; private int _userN; private string _userKey;
 
         private Camera _cam;
         private UniversalAdditionalCameraData _data;
@@ -666,9 +665,7 @@ BokehIntensity = 0.3
             bool grade = Grade.HasGrading(p);
             if (grade)
             {
-                LoadUserLut(cfg);
-                float contrib = p.Enabled("LUT") ? Mathf.Clamp01(p.Float("LUT", "Contribution", 1f)) : 0f;
-                _lut = Grade.Bake(p, _userCube, _userN, contrib, _lut);
+                _lut = Grade.Bake(p, _lut);
                 m.SetTexture(ID.Lut, _lut);
                 m.SetVector(ID.LutParams, new Vector4(1f / (Grade.Size * Grade.Size), 1f / Grade.Size, Grade.Size - 1, 1));
                 n++;
@@ -743,21 +740,6 @@ BokehIntensity = 0.3
             if (!on(v)) v = Vector4.zero;
             m.SetVector(id, v);
             return on(v) ? 1 : 0;
-        }
-
-        private void LoadUserLut(Config cfg)
-        {
-            var path = cfg.LutPath();
-            if (path == null) { _userCube = null; _userKey = null; return; }
-            string key = path + "|" + SafeMtime(path);
-            if (key == _userKey) return;
-            try
-            {
-                (_userCube, _userN) = Lut.LoadCube(path, cfg.Preset.Str("LUT", "FlipY", "auto"));
-                _userKey = key;
-                Mod.Log.Msg($"Loaded LUT {Path.GetFileName(path)} ({_userN}^3)");
-            }
-            catch (Exception e) { _userCube = null; _userKey = null; Mod.Log.Warning($"LUT '{path}' failed: {e.Message}"); }
         }
 
         private static long SafeMtime(string p) { try { return File.GetLastWriteTimeUtc(p).Ticks; } catch { return 0; } }

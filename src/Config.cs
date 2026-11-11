@@ -10,7 +10,7 @@ namespace QuestShade
 {
     internal sealed class Config
     {
-        public static string Root, PresetDir, LutDir, MainIniPath;
+        public static string Root, PresetDir, MainIniPath;
 
         public bool Enabled = true;
         public string PresetName = "Vivid";
@@ -67,18 +67,15 @@ namespace QuestShade
         public List<string> Presets { get; } = new List<string>();
         public int PresetIndex { get; private set; }
 
-        private DateTime _mainTime, _presetTime, _lutTime;
-        private string _lutWatched;
+        private DateTime _mainTime, _presetTime;
         private float _nextCheck;
 
         public static void InitPaths()
         {
             Root = Path.Combine(MelonEnvironment.UserDataDirectory, "QuestShade");
             PresetDir = Path.Combine(Root, "Presets");
-            LutDir = Path.Combine(Root, "LUTs");
             MainIniPath = Path.Combine(Root, "QuestShade.ini");
             Directory.CreateDirectory(PresetDir);
-            Directory.CreateDirectory(LutDir);
             try { var nm = Path.Combine(Root, ".nomedia"); if (!File.Exists(nm)) File.WriteAllText(nm, ""); } catch { }
 
             ExtractDefaults();
@@ -121,7 +118,8 @@ namespace QuestShade
             "1a44a6ccd5affe81bd556b46ecd95cb45498a8bdefb2e1413461208513cc4c87",
             "cdaf1f72e5926ba692043ba6477d3429548757661efd7d75f652d0f689227220",
             "f6f6ea28d07a0085f6e6de9947c6acb198b600f554dfd0417420a9eb27026d53",
-            "3ad01a9582ad0f86997fa3b67c9a764bef7fa943bfd79ec2767ce893de4f8350"
+            "3ad01a9582ad0f86997fa3b67c9a764bef7fa943bfd79ec2767ce893de4f8350",
+            "2167fad49dcc30218539771edada939ca0e5b468cfa6cd3a6a73815bca2ae284"
         };
 
         private static string Fingerprint(byte[] b)
@@ -280,7 +278,6 @@ namespace QuestShade
             try { Preset = Ini.Parse(File.ReadAllText(PresetFile)); }
             catch (Exception e) { Mod.Log.Warning($"Couldn't read preset {PresetFile}: {e.Message}"); Preset = Ini.Parse(""); }
             _presetTime = Mtime(PresetFile);
-            WatchLut(LutPath());
         }
 
         public void StepPreset(int dir)
@@ -542,18 +539,9 @@ namespace QuestShade
             SetKey("Camera", "ChestSide", F(ChestSide));
             SetKey("Camera", "ChestPitch", F(ChestPitch));
         }
-        public string LutPath()
-        {
-            var f = Preset?.Str("LUT", "File");
-            if (string.IsNullOrEmpty(f) || !Preset.Enabled("LUT")) return null;
-            return Path.IsPathRooted(f) ? f : Path.Combine(LutDir, f);
-        }
-
-        private void WatchLut(string path) { _lutWatched = path; _lutTime = path != null ? Mtime(path) : default; }
-
         private volatile bool _statBusy, _statReady;
-        private DateTime _sMain, _sPreset, _sLut;
-        private string _sPresetPath, _sLutPath;
+        private DateTime _sMain, _sPreset;
+        private string _sPresetPath;
 
         public bool PollChanges(float now)
         {
@@ -564,10 +552,10 @@ namespace QuestShade
                 {
                     _nextCheck = now + ReloadInterval;
                     _statBusy = true;
-                    string mainP = MainIniPath, presetP = PresetFile, lutP = _lutWatched;
+                    string mainP = MainIniPath, presetP = PresetFile;
                     System.Threading.Tasks.Task.Run(() =>
                     {
-                        try { _sMain = Mtime(mainP); _sPreset = Mtime(presetP); _sLut = Mtime(lutP); _sPresetPath = presetP; _sLutPath = lutP; _statReady = true; }
+                        try { _sMain = Mtime(mainP); _sPreset = Mtime(presetP); _sPresetPath = presetP; _statReady = true; }
                         finally { _statBusy = false; }
                     });
                 }
@@ -588,11 +576,6 @@ namespace QuestShade
             {
                 Mod.Log.Msg($"Preset '{PresetName}' changed, reloading");
                 LoadPreset(PresetName);
-                changed = true;
-            }
-            else if (_lutWatched != null && _sLutPath == _lutWatched && _sLut > _lutTime)
-            {
-                WatchLut(_lutWatched);
                 changed = true;
             }
             return changed;
