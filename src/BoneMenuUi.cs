@@ -671,7 +671,7 @@ namespace QuestShade
             }
             int n = 0; foreach (var p in cfg.Presets) if (p.EndsWith(ReShadeImport.Suffix)) n++;
             _importPage.CreateFunction($"{n} imported - pick them in Choose preset", Color.white, () => Notify("Imported ReShade presets end in (ReShade) in Choose preset.", 3f));
-            _importPage.CreateFunction("How to add: UserData/QuestShade/ReShade", Color.gray, () => Notify("Copy a ReShade .ini into UserData/QuestShade/ReShade (LUT .png textures into ReShade/Textures), then Reload. No .fx files needed.", 6f));
+            _importPage.CreateFunction("How to add: UserData/QuestShade/ReShade", Color.gray, () => Notify("Copy a ReShade .ini into UserData/QuestShade/ReShade, then Reload. No .fx files needed.", 6f));
             _importPage.CreateFunction("Reload", Color.yellow, () => _mod.ReloadAll());
             if (pending.Count > 0 && _asked.Add(pending[0])) Notify($"[{pending[0].Replace(ReShadeImport.Suffix, "")}] Was Too Heavy To Run. Would You Like To Compress It? (Effects > ReShade presets)", 6f);
         }

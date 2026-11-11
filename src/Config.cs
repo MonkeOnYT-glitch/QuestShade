@@ -76,6 +76,7 @@ namespace QuestShade
             PresetDir = Path.Combine(Root, "Presets");
             MainIniPath = Path.Combine(Root, "QuestShade.ini");
             Directory.CreateDirectory(PresetDir);
+            try { var oldLuts = Path.Combine(Root, "LUTs"); if (Directory.Exists(oldLuts) && Directory.GetFileSystemEntries(oldLuts).Length == 0) Directory.Delete(oldLuts); } catch { }
             try { var nm = Path.Combine(Root, ".nomedia"); if (!File.Exists(nm)) File.WriteAllText(nm, ""); } catch { }
 
             ExtractDefaults();
