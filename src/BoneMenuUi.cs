@@ -31,6 +31,7 @@ namespace QuestShade
             view.CreateFunction("Flip camera", Color.white, () => mod.FlipCamera());
             view.CreateFloat("Field of view", Color.white, cfg.Fov, 5f, 10f, 150f, v => cfg.Fov = v);
             view.CreateFloat("Fisheye", Color.white, cfg.Fisheye, 0.1f, 0f, 1f, v => { cfg.Fisheye = v; cfg.SaveMenuSettings(); });
+            view.CreateEnum("Timestamp", Color.white, cfg.Timestamp, v => { cfg.Timestamp = (StampMode)v; cfg.SaveMenuSettings(); });
             var audio = cam.CreatePage("Audio", Color.white);
             audio.CreateBool("Game audio", Color.white, cfg.RecordGameAudio, v => { cfg.RecordGameAudio = v; cfg.SaveMenuSettings(); });
             audio.CreateBool("Microphone", Color.white, cfg.RecordMic, v => mod.SetMic(v));

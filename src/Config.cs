@@ -30,6 +30,7 @@ namespace QuestShade
         public bool LeftHanded;
         public bool HurtEffect = true;
         public bool Shadows = true, RealLights = true;
+        public StampMode Timestamp = StampMode.PoliceBodycam;
         public float ShadowDistance = 20f, LessShine = 0.6f, Fisheye = 0f;
         public bool EyeAdapt = true;
         public float EyeAdaptStrength = 0.7f, EyeAdaptSpeed = 1f;
@@ -173,6 +174,7 @@ namespace QuestShade
             ShadowDistance = Mathf.Clamp(ini.Float("Lighting", "ShadowDistance", 20f), 5f, 60f);
             LessShine = Mathf.Clamp01(ini.Float("Lighting", "LessShine", 0.6f));
             Fisheye = Mathf.Clamp01(ini.Float("Camera", "Fisheye", 0f));
+            Timestamp = Enum.TryParse<StampMode>(ini.Str("Camera", "Timestamp", "PoliceBodycam"), true, out var stm) ? stm : StampMode.PoliceBodycam;
             EyeAdapt = ini.Bool("General", "EyeAdaptation", true);
             EyeAdaptStrength = Mathf.Clamp(ini.Float("General", "EyeAdaptationStrength", 0.7f), 0f, 1.5f);
             EyeAdaptSpeed = Mathf.Clamp(ini.Float("General", "EyeAdaptationSpeed", 1f), 0.1f, 4f);
@@ -512,6 +514,7 @@ namespace QuestShade
             SetKey("Lighting", "RealLights", RealLights ? "true" : "false");
             SetKey("Lighting", "ShadowDistance", ShadowDistance.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Lighting", "LessShine", LessShine.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            SetKey("Camera", "Timestamp", Timestamp.ToString());
             SetKey("Camera", "Fisheye", Fisheye.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "EyeAdaptation", EyeAdapt ? "true" : "false");
             SetKey("General", "EyeAdaptationStrength", EyeAdaptStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));

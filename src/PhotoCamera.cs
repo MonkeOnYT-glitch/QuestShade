@@ -452,6 +452,7 @@ namespace QuestShade
             if (_prop != null) { try { _prop.Despawn(); } catch { } _prop = null; }
             if (_cam != null) { _cam.enabled = false; _cam.targetTexture = _previewRT; }
             if (_device != null) _device.SetActive(false);
+            HideStamp();
             if (_lensGo != null) _lensGo.SetActive(false);
             if (!_photoReading && _photoRT != null && _photoRT.IsCreated()) _photoRT.Release();
         }
@@ -588,7 +589,7 @@ namespace QuestShade
             _cam.useOcclusionCulling = true;
             _cam.targetTexture = _previewRT;
 
-            _camData.renderShadows = cfg.PreviewShadows;
+            _camData.renderShadows = cfg.PreviewShadows || cfg.Shadows;
             _camData.renderPostProcessing = false;
             _camData.antialiasing = AntialiasingMode.None;
             _camData.requiresDepthTexture = false;
@@ -686,6 +687,7 @@ namespace QuestShade
             if (hideBody) UpdateOwnBody(true);
             CamDiag.Step("poses");
             UpdateLabel();
+            UpdateStamp(cfg, head);
             CamDiag.Step("label");
             UpdateFocus(dt);
             CamDiag.Step("focus");

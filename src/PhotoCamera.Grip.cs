@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 using Il2CppInterop.Runtime;
 using UnityEngine;
@@ -128,7 +128,7 @@ namespace QuestShade
             _layoutMode = (int)Mode;
 
             bool hide = Detached && _screenLayer >= 0;
-            _cam.cullingMask = (_screenLayer >= 0 ? _fullMask & ~(1 << _screenLayer) : _fullMask) & ~UiLayers;
+            _cam.cullingMask = ((_screenLayer >= 0 ? _fullMask & ~(1 << _screenLayer) : _fullMask) & ~UiLayers) | OverlayMask;
 
             bool selfie = Mode == CamMode.Selfie;
             if (_model != null)
