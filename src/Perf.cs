@@ -33,7 +33,14 @@ namespace QuestShade
             else if (_underFor > 5f && Level > 0) { Level--; _underFor = 0f; Mod.Log.Msg($"Perf: recovered - QuestShade load level {Level}"); }
         }
 
-        public static int PreviewFps(int wanted, bool inUse) => Mathf.Max(24, wanted);
+        public static int PreviewFps(int wanted, bool inUse)
+        {
+            int fps = Mathf.Max(1, wanted);
+            if (!inUse) fps = Mathf.Min(fps, 18);
+            if (Level >= 1) fps = Mathf.Min(fps, 15);
+            if (Level >= 2) fps = Mathf.Min(fps, 10);
+            return fps;
+        }
         public static bool PreviewExtras => Level < 3;
         public static bool RecordingExtras => Level < 3;
     }

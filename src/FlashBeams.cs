@@ -9,7 +9,7 @@ namespace QuestShade
     {
         public static Func<int> HeadsetLayer, LensLayer;
 
-        private sealed class Beam { public Light L; public GameObject Head, Lens; }
+        private sealed class Beam { public Light L; public GameObject Head, Lens; public MeshRenderer HeadR, LensR; }
         private static readonly Dictionary<IntPtr, Beam> _beams = new Dictionary<IntPtr, Beam>();
         private static Mesh _mesh;
         private static Material _matHead, _matLens;
@@ -39,8 +39,8 @@ namespace QuestShade
                 var b = kv.Value;
                 if (b.L == null) { Kill(b.Head); Kill(b.Lens); (dead ??= new List<IntPtr>()).Add(kv.Key); continue; }
                 bool lit = on && b.L.isActiveAndEnabled && b.L.intensity > 0.01f;
-                Place(ref b.Head, b.L, _matHead, hl >= 0 ? hl : b.L.gameObject.layer, lit);
-                Place(ref b.Lens, b.L, _matLens, ll, lit && ll >= 0);
+                Place(ref b.Head, ref b.HeadR, b.L, _matHead, hl >= 0 ? hl : b.L.gameObject.layer, lit);
+                Place(ref b.Lens, ref b.LensR, b.L, _matLens, ll, lit && ll >= 0);
             }
             if (dead != null) foreach (var k in dead) _beams.Remove(k);
         }
@@ -62,15 +62,16 @@ namespace QuestShade
             return true;
         }
 
-        private static void Place(ref GameObject go, Light l, Material mat, int layer, bool show)
+        private static void Place(ref GameObject go, ref MeshRenderer r, Light l, Material mat, int layer, bool show)
         {
             if (!show) { if (go != null && go.activeSelf) go.SetActive(false); return; }
-            if (go == null)
+            if (go == null || r == null)
             {
+                Kill(go);
                 go = new GameObject("QuestShade_Beam");
                 go.transform.SetParent(l.transform, false);
                 go.AddComponent<MeshFilter>().sharedMesh = _mesh;
-                var r = go.AddComponent<MeshRenderer>();
+                r = go.AddComponent<MeshRenderer>();
                 r.sharedMaterial = mat;
                 r.shadowCastingMode = ShadowCastingMode.Off;
                 r.receiveShadows = false;
@@ -86,7 +87,7 @@ namespace QuestShade
             var c = l.color;
             float k = Mathf.Clamp(l.intensity * 0.05f, 0.05f, 0.3f);
             _mpb.SetColor(ColorId, new Color(c.r, c.g, c.b, k));
-            go.GetComponent<MeshRenderer>().SetPropertyBlock(_mpb);
+            r.SetPropertyBlock(_mpb);
         }
 
         private static float Safe(float v) => Mathf.Abs(v) < 1e-4f ? 1f : Mathf.Abs(v);
