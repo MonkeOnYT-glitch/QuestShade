@@ -1,0 +1,4 @@
+Fonts bundled in the installer, all under the SIL Open Font License 1.1 (OFL.txt):
+- Space Grotesk, Copyright 2020 The Space Grotesk Project Authors
+- Inter, Copyright 2020 The Inter Project Authors
+- JetBrains Mono, Copyright 2020 The JetBrains Mono Project Authors
