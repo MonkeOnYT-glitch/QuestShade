@@ -34,7 +34,6 @@ namespace QuestShade
         public float ShadowDistance = 20f, LessShine = 0.6f, Fisheye = 0f;
         public bool EyeAdapt = true;
         public float EyeAdaptStrength = 0.7f, EyeAdaptSpeed = 1f;
-        public bool TimelineFollow = false, TimelineAutoRecord = true;
 
         public Binding ToggleEffects, NextPreset, PrevPreset, ToggleCamera, TakePhoto, CameraMode, HideCamera, Record;
         public bool Haptics = true, Keyboard = true;
@@ -180,8 +179,6 @@ namespace QuestShade
             EyeAdaptSpeed = Mathf.Clamp(ini.Float("General", "EyeAdaptationSpeed", 1f), 0.1f, 4f);
             BlurStrength = Mathf.Clamp(ini.Float("General", "BlurStrength", 1f), 0f, 3f);
             GripAngle = Mathf.Clamp(ini.Float("Camera", "GripAngle", 0f), -90f, 90f);
-            TimelineFollow = ini.Bool("Camera", "TimelineFollow", false);
-            TimelineAutoRecord = ini.Bool("Camera", "TimelineAutoRecord", true);
 
             ToggleEffects = Binding.Parse(ini.Str("Controls", "ToggleEffects", "RightStickHold"));
             NextPreset = Binding.Parse(ini.Str("Controls", "NextPreset", "RightStickDoubleTap"));
@@ -520,8 +517,6 @@ namespace QuestShade
             SetKey("General", "EyeAdaptationStrength", EyeAdaptStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "EyeAdaptationSpeed", EyeAdaptSpeed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Camera", "GripAngle", GripAngle.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
-            SetKey("Camera", "TimelineFollow", TimelineFollow ? "true" : "false");
-            SetKey("Camera", "TimelineAutoRecord", TimelineAutoRecord ? "true" : "false");
             SetKey("Camera", "Mode", DefaultMode.ToString());
             SetKey("Camera", "FieldOfView", F(Fov));
             SetKey("Camera", "Smoothing", F(Smoothing));

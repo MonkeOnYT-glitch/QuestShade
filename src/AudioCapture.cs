@@ -144,9 +144,9 @@ namespace QuestShade
                 var devs = Microphone.devices;
                 if (devs == null || devs.Length == 0) { Mod.Log.Msg("Recording: no microphone"); return false; }
                 _micDev = null;
-                if (Microphone.IsRecording(_micDev) || TimelineLink.RecordingNow())
+                if (Microphone.IsRecording(_micDev))
                 {
-                    Mod.Log.Msg("Recording: the microphone is already in use by another mod (voice chat / Timeline) - recording game audio only");
+                    Mod.Log.Msg("Recording: the microphone is already in use by another mod (voice chat) - recording game audio only");
                     return false;
                 }
                 Microphone.GetDeviceCaps(_micDev, out int minF, out int maxF);
@@ -169,7 +169,6 @@ namespace QuestShade
         private bool MicStillOurs()
         {
             if (_micClip == null) return false;
-            if (TimelineLink.RecordingNow()) return false;
             if (!Microphone.IsRecording(_micDev)) return false;
             return true;
         }
@@ -186,7 +185,7 @@ namespace QuestShade
         private void PumpMic()
         {
             if (!MicOn) return;
-            if (!MicStillOurs()) { LetGoOfMic(TimelineLink.RecordingNow() ? "Timeline started recording a take" : "another mod took the mic"); return; }
+            if (!MicStillOurs()) { LetGoOfMic("another mod took the mic"); return; }
             int pos = Microphone.GetPosition(_micDev);
             if (pos < 0 || pos >= _micLen) return;
             int n = pos - _micLastPos;

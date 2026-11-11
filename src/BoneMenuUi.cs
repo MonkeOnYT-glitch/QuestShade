@@ -104,33 +104,6 @@ namespace QuestShade
         }
 
         private static Page _root;
-        private static bool _timelineBuilt;
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public static void BuildTimeline(Mod mod, Config cfg)
-        {
-            if (_timelineBuilt || _root == null) return;
-            _timelineBuilt = true;
-            var tl = _root.CreatePage("Timeline", Color.yellow);
-            if (!TimelineLink.Populate("PopulateScenePage", tl)) Mod.Log.Warning("Timeline: transport buttons unavailable");
-            tl.CreateFunction("Next person", Color.cyan, () => mod.NextActor());
-            tl.CreateEnum("View", Color.white, ReplayView.Chest, v => mod.SetReplayView((ReplayView)v));
-
-            var more = tl.CreatePage("More", Color.gray);
-            more.CreateBool("Film a replay person", Color.white, cfg.TimelineFollow, v => mod.SetFollowActor(v));
-            more.CreateBool("Record when Timeline plays", Color.white, cfg.TimelineAutoRecord, v => cfg.TimelineAutoRecord = v);
-            var takes = more.CreatePage("Takes + people", Color.white);
-            TimelineLink.Populate("PopulateManagementPage", takes);
-            TimelineLink.Populate("PopulateRecordersPage", takes.CreatePage("People", Color.white));
-            TimelineLink.Populate("PopulateSavingPage", more.CreatePage("Save / load", Color.white));
-            var set = more.CreatePage("Timeline settings", Color.white);
-            TimelineLink.Populate("PopulateSettingsPage", set);
-            TimelineLink.Populate("PopulateMicrophonePage", set);
-            TimelineLink.Populate("PopulateReferenceClipsPage", set.CreatePage("Audio reference", Color.white));
-            TimelineLink.Populate("PopulateDevicesPage", set.CreatePage("Mic device", Color.white));
-            Mod.Log.Msg("Timeline menu added to QuestShade");
-        }
-
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void SpawnCrate(string barcode, Vector3 pos, Quaternion rot, Action<GameObject> done)
             => BoneLib.HelperMethods.SpawnCrate(barcode, pos, rot, Vector3.one, false, done);
@@ -300,7 +273,7 @@ namespace QuestShade
         {
             if (Time.unscaledTime < _actorsAt) return;
             _actorsAt = Time.unscaledTime + (_actors.Count == 0 ? 0.5f : 2f);
-            TimelineLink.PlaybackAvatars(_actors);
+            _actors.Clear();
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

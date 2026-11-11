@@ -67,7 +67,6 @@ namespace QuestShade
         {
             if (!_ready) return;
             if (_cam.Recording) { var f = _cam.StopRecording(); if (f != null) Log.Msg("Recording stopped by level change: " + f); }
-            TimelineLink.CancelPreview();
             if (_boneLib) { try { BoneMenuUi.OutlineSelected(false); } catch { } }
             _cam.OnSceneLoaded();
             Flashlights.Reset();
@@ -114,7 +113,6 @@ namespace QuestShade
                 if (Updater.Notice != null && _noticeAt < 0f) { Notify(Updater.Notice, 6f); Updater.Notice = null; }
                 if (!_justUpdatedChecked && now > 12f) { _justUpdatedChecked = true; ShowJustUpdated(); }
                 if (_noticeAt > 0f && now > _noticeAt && _startNotice != null) { Notify(_startNotice, 6f); _startNotice = null; _noticeAt = -1f; }
-                TimelineTick();
                 FusionTick();
                 if (_uiDumpAt > 0f && now > _uiDumpAt) { _uiDumpAt = -1f; if (_boneLib) BoneMenuUi.DumpUi(); }
                 SelfTest(now);
@@ -166,10 +164,6 @@ namespace QuestShade
                 if (_boneLib)
                 {
                     BoneMenuUi.Hmd = head != null ? head.transform : null;
-                    Vector3 top = default; int which = 0, count = 0;
-                    bool show = _cfg.TimelineFollow && TimelineLink.Present && BoneMenuUi.ActorMarker(_cam.ActorIndex, out top, out which, out count);
-                    _marker.Tick(show, top, head, which, count);
-                    BoneMenuUi.OutlineSelected(show && !TimelineLink.PlayingTake);
                 }
                 _cam.ToastObject = _toast.Object;
             }
@@ -595,47 +589,6 @@ namespace QuestShade
             try { BoneMenuUi.RefreshPresets(_cfg); } catch { }
         }
 
-        private bool _tlWasPlaying, _tlWasRecording, _tlStartedRec, _tlWasBusy, _tlActOn;
-        private float _tlChangedAt;
-        private void TimelineTick()
-        {
-            _cam.FollowActor = _cfg.TimelineFollow;
-            TimelineLink.Tick();
-            if (TimelineLink.JustFound && _boneLib) { try { BoneMenuUi.BuildTimeline(this, _cfg); } catch (Exception e) { Log.Warning("Timeline menu failed: " + e.Message); } }
-            if (!TimelineLink.Present) return;
-            bool rec = TimelineLink.Recording;
-            bool playing = TimelineLink.PlayingTake;
-            bool busy = rec || TimelineLink.Playing;
-            if (busy != _tlWasBusy)
-            {
-                _tlWasBusy = busy;
-                _cam.SuppressBody = busy;
-                Log.Msg(busy ? $"Timeline busy (playing {TimelineLink.Playing}, paused {TimelineLink.Paused}, recording {rec}): camera body put away" : "Timeline idle: camera body back");
-                if (busy && _cam.HasBody) _cam.ParkBody();
-            }
-            if (rec != _tlWasRecording) { _tlWasRecording = rec; Log.Msg("Timeline recording: " + rec); }
-            float tnow = Time.unscaledTime;
-            if (playing != _tlWasPlaying)
-            {
-                _tlWasPlaying = playing; _tlChangedAt = tnow; _tlActOn = true;
-                Log.Msg("Timeline playback: " + (playing ? "started" : "stopped"));
-            }
-            if (!_tlActOn || tnow - _tlChangedAt < (playing ? 0.15f : 0.75f)) return;
-            _tlActOn = false;
-            if (!_cfg.TimelineAutoRecord) return;
-            if (playing && !_cam.Recording)
-            {
-                if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
-                ToggleRecording();
-                _tlStartedRec = _cam.Recording;
-            }
-            else if (!playing && _tlStartedRec)
-            {
-                _tlStartedRec = false;
-                if (_cam.Recording) ToggleRecording();
-            }
-        }
-
         private void FusionTick()
         {
             FusionLink.Tick();
@@ -645,47 +598,6 @@ namespace QuestShade
             if (block && _cam.Open) _cam.Close();
             Log.Msg(block ? "Fusion lobby: camera off, effects stay on" : "Left the Fusion lobby: camera available");
             Notify(block ? "Fusion lobby: camera off, effects still on" : "Camera available again", 2f);
-        }
-
-        private ReplayView _replayView = ReplayView.Chest;
-        private readonly ReplayMarker _marker = new ReplayMarker();
-
-        private static CamMode ModeFor(ReplayView v) => v == ReplayView.OverTheShoulder ? CamMode.ThirdPerson : CamMode.Chest;
-
-        internal void SetReplayView(ReplayView v)
-        {
-            _replayView = v;
-            if (_cfg.TimelineFollow) SetCameraMode(ModeFor(v));
-        }
-
-        internal void SetFollowActor(bool on)
-        {
-            _cfg.TimelineFollow = on;
-            if (!on) { Notify("Camera follows you again", 1.2f); return; }
-            if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
-            SetCameraMode(ModeFor(_replayView));
-            NextActor(advance: false);
-        }
-
-        internal void NextActor() => NextActor(true);
-
-        private void NextActor(bool advance)
-        {
-            if (!_cfg.TimelineFollow) { _cfg.TimelineFollow = true; if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera); SetCameraMode(ModeFor(_replayView)); advance = false; }
-            int n = _boneLib ? BoneMenuUi.ActorCount() : 0;
-            if (n == 0)
-            {
-                if (TimelineLink.Present && !TimelineLink.Playing && TimelineLink.Preview())
-                {
-                    BoneMenuUi.RefreshActorsSoon();
-                    Notify("Loading the take's people (paused). The marker shows who gets filmed", 2.5f);
-                }
-                else if (TimelineLink.Previewing) Notify("Still loading the take's people...", 1.5f);
-                else Notify("No replay people - record a Timeline take first", 2f);
-                return;
-            }
-            if (advance) _cam.ActorIndex = (_cam.ActorIndex + 1) % n;
-            Notify($"Filming person {_cam.ActorIndex % n + 1} of {n}", 1.2f);
         }
 
         private void Notify(string msg, float seconds = 1.6f)
