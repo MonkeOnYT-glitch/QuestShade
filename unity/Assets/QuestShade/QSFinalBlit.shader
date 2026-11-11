@@ -113,6 +113,37 @@ Shader "Hidden/QuestShade/FinalBlit"
             float4 _QS_Dof;
             float4 _QS_DofAF;
             float SceneDist(float2 uv) { return LinearEyeDepth(SampleSceneDepth(uv), _ZBufferParams); }
+
+            TEXTURE2D(_QS_ShadowMap); SAMPLER(sampler_QS_ShadowMap);
+            float4x4 _QS_ShadowVP;
+            float4x4 _QS_ShInvVP0;
+            float4x4 _QS_ShInvVP1;
+            float4 _QS_ShadowO;
+            float4 _QS_ShadowD;
+            float4 _QS_ShadowP;
+            half SunShadow(float2 uv)
+            {
+                float dd = SampleSceneDepth(uv);
+#if UNITY_REVERSED_Z
+                if (dd <= 1e-6) return 1;
+#else
+                if (dd >= 0.999999) return 1;
+#endif
+                float4x4 inv = unity_StereoEyeIndex == 0 ? _QS_ShInvVP0 : _QS_ShInvVP1;
+                float3 wp = ComputeWorldSpacePosition(uv, dd, inv);
+                float3 lp = mul(_QS_ShadowVP, float4(wp, 1)).xyz;
+                float2 suv = lp.xy * 0.5 + 0.5;
+                float edge = 1 - max(abs(lp.x), abs(lp.y));
+                if (edge <= 0) return 1;
+                float d = dot(wp - _QS_ShadowO.xyz, _QS_ShadowD.xyz) * _QS_ShadowO.w - _QS_ShadowP.y;
+                float t = _QS_ShadowP.z;
+                half s = 0;
+                s += d > SAMPLE_TEXTURE2D_LOD(_QS_ShadowMap, sampler_QS_ShadowMap, suv + float2(-t, -t), 0).r ? 1 : 0;
+                s += d > SAMPLE_TEXTURE2D_LOD(_QS_ShadowMap, sampler_QS_ShadowMap, suv + float2(t, -t), 0).r ? 1 : 0;
+                s += d > SAMPLE_TEXTURE2D_LOD(_QS_ShadowMap, sampler_QS_ShadowMap, suv + float2(-t, t), 0).r ? 1 : 0;
+                s += d > SAMPLE_TEXTURE2D_LOD(_QS_ShadowMap, sampler_QS_ShadowMap, suv + float2(t, t), 0).r ? 1 : 0;
+                return 1 - s * 0.25 * saturate(edge * 8) * _QS_ShadowP.x;
+            }
             float FocusDist()
             {
                 float f = _QS_Dof.y;
@@ -141,6 +172,7 @@ Shader "Hidden/QuestShade/FinalBlit"
             half3 FetchMain(float2 uv)
             {
                 half3 c = FetchSrc(uv);
+                UNITY_BRANCH if (_QS_ShadowP.w > 0) c *= SunShadow(uv);
                 UNITY_BRANCH if (_QS_Live.y > 0 && _QS_Dof.x > 0)
                 {
                     float f = FocusDist();
@@ -212,6 +244,7 @@ Shader "Hidden/QuestShade/FinalBlit"
             {
                 half3 c = FetchSrc(uv);
                 c = (any(isnan(c)) || any(isinf(c))) ? half3(0, 0, 0) : min(max(c, 0), 32);
+                UNITY_BRANCH if (_QS_ShadowP.w > 0) c *= SunShadow(uv);
                 half coc = 0;
                 UNITY_BRANCH if (_QS_Dof.x > 0) coc = CoC(SceneDist(uv), FocusDist());
                 coc = isnan(coc) ? 0 : saturate(coc);

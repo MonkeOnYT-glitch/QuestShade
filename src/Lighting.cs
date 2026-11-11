@@ -50,8 +50,6 @@ namespace QuestShade
         private static void Apply(Config cfg)
         {
             Pipeline(cfg);
-            Sun(cfg);
-            Casters(cfg);
             Shine(cfg);
         }
 
@@ -75,7 +73,7 @@ namespace QuestShade
                 _loggedPipeline = true;
                 Mod.Log.Msg($"Lighting: BONELAB settings were shadows {_oShadows} ({_oRes}, {_oDistance:0} m), extra lights {_oAddMode} x{_oAddLimit}, mixed {_oMixed}");
             }
-            if (cfg.Shadows)
+            if (false)
             {
                 _urp.m_MainLightShadowsSupported = true;
                 _urp.m_SoftShadowsSupported = true;

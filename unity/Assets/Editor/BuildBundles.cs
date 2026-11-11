@@ -13,7 +13,7 @@ public static class BuildBundles
         PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.StandaloneWindows64, false);
         PlayerSettings.SetGraphicsAPIs(BuildTarget.StandaloneWindows64, new[] { GraphicsDeviceType.Direct3D11, GraphicsDeviceType.Vulkan });
 
-        var shaders = new[] { "Assets/QuestShade/QSFinalBlit.shader", "Assets/QuestShade/QSScreen.shader", "Assets/QuestShade/QSYUV.shader", "Assets/QuestShade/QSPost.shader", "Assets/QuestShade/QSBody.shader", "Assets/QuestShade/QSOutline.shader" };
+        var shaders = new[] { "Assets/QuestShade/QSFinalBlit.shader", "Assets/QuestShade/QSScreen.shader", "Assets/QuestShade/QSYUV.shader", "Assets/QuestShade/QSPost.shader", "Assets/QuestShade/QSBody.shader", "Assets/QuestShade/QSOutline.shader", "Assets/QuestShade/QSShadowDepth.shader" };
         foreach (var shader in shaders)
         {
             AssetDatabase.ImportAsset(shader, ImportAssetOptions.ForceUpdate);
