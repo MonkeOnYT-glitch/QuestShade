@@ -60,6 +60,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="$(Bundles)\android\questshade" LogicalName="QuestShade.Bundles.android" Condition="Exists('$(Bundles)\android\questshade')" />
+    <EmbeddedResource Include="C:\QSBuild\bundles_lit\android\questshade_lit" LogicalName="QuestShade.Bundles.lit" Condition="Exists('C:\QSBuild\bundles_lit\android\questshade_lit')" />
   </ItemGroup>
 
   <ItemGroup>

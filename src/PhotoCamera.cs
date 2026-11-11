@@ -584,7 +584,7 @@ namespace QuestShade
             _cam.useOcclusionCulling = true;
             _cam.targetTexture = _previewRT;
 
-            _camData.renderShadows = cfg.PreviewShadows;
+            _camData.renderShadows = cfg.PreviewShadows || cfg.Shadows;
             _camData.renderPostProcessing = false;
             _camData.antialiasing = AntialiasingMode.None;
             _camData.requiresDepthTexture = false;

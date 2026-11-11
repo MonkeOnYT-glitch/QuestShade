@@ -70,6 +70,7 @@ namespace QuestShade
             _cam.OnSceneLoaded();
             Flashlights.Reset();
             Lighting.OnLevel();
+            NativeShadows.OnLevel();
             _fx.ResetCalibration();
             if (_startNotice != null) _noticeAt = Time.unscaledTime + 6f;
             Perf.OnSceneLoaded();
@@ -90,6 +91,7 @@ namespace QuestShade
                 _fx.Tick(_cfg);
                 Flashlights.Tick(_cfg.FlashlightBoost);
                 Lighting.Tick(_cfg);
+                NativeShadows.Tick(_cfg, _fx.BoundTransform);
                 _fx.SetFisheye(_cam.Mode == CamMode.PoliceCam ? Mathf.Max(0.35f, _cfg.Fisheye) : _cfg.Fisheye);
                 if (_boneLib) TickHurt();
                 _fx.TickHeadsetFocus(Time.unscaledDeltaTime);

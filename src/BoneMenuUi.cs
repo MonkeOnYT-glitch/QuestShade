@@ -77,8 +77,10 @@ namespace QuestShade
             fxMore.CreateBool("On every preset", Color.green, cfg.BloomDofAll, v => { cfg.BloomDofAll = v; mod.ReapplyEffects(); });
             fxMore.CreateFloat("Bloom strength", Color.white, cfg.BloomStrength, 0.25f, 0f, 4f, v => { cfg.BloomStrength = v; mod.ReapplyEffects(); });
             fxMore.CreateFloat("Blur strength", Color.white, cfg.BlurStrength, 0.25f, 0f, 3f, v => { cfg.BlurStrength = v; mod.ReapplyEffects(); });
-            var lit = fx.CreatePage("Lighting", new Color(1f, 0.85f, 0.5f));
-            lit.CreateFunction("What is this?", new Color(1f, 0.75f, 0.35f), () => Notify("Flashlights that light up what they hit, and less plastic-looking shine. Costs a little performance.", 5f));
+            var lit = fx.CreatePage("Lighting + shadows", new Color(1f, 0.85f, 0.5f));
+            lit.CreateFunction("What is this?", new Color(1f, 0.75f, 0.35f), () => Notify("Real sun shadows, flashlights that light up what they hit, and less plastic-looking shine. Shadows cost performance.", 5f));
+            lit.CreateBool("Real shadows", Color.white, cfg.Shadows, v => { cfg.Shadows = v; cfg.SaveMenuSettings(); NativeShadows.Reapply(); });
+            lit.CreateFloat("Shadow distance (m)", Color.white, cfg.ShadowDistance, 5f, 5f, 50f, v => { cfg.ShadowDistance = v; cfg.SaveMenuSettings(); NativeShadows.Reapply(); });
             lit.CreateBool("Real lights (flashlights light things up)", Color.white, cfg.RealLights, v => { cfg.RealLights = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
             lit.CreateFloat("Less shine", Color.white, cfg.LessShine, 0.1f, 0f, 1f, v => { cfg.LessShine = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
             lit.CreateBool("Bloom in your headset", Color.white, cfg.HeadsetBloom, v => { cfg.HeadsetBloom = v; cfg.SaveMenuSettings(); mod.ReapplyEffects(); });
