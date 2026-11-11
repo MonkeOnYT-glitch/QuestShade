@@ -90,7 +90,7 @@ namespace QuestShade
 
         private void SetLive(Config cfg, Ini p)
         {
-            bool live = false;
+            bool live = cfg.HeadsetBloom && _bloomIntensity > 0f;
             _liveDof = false;
             _matMono.SetVector(ID.Live, Vector4.zero);
             if (!live) { _mat.SetVector(ID.Live, Vector4.zero); return; }
@@ -98,7 +98,7 @@ namespace QuestShade
             float blur = Mathf.Min(_dofMaxBlur, 14f) * eyeH / 1080f;
             _mat.SetVector(ID.Live, new Vector4(_bloomIntensity * 0.6f, 0, blur, _dofBokeh));
             float thr = Mathf.Clamp(p.Float("Bloom", "Threshold", 0.85f), 0f, 4f);
-            _mat.SetVector(ID.LiveBloom, new Vector4(thr, thr * Mathf.Clamp01(p.Float("Bloom", "SoftKnee", 0.5f)), 0.02f + 0.05f * Mathf.Clamp01(p.Float("Bloom", "Scatter", 0.7f)), 0));
+            _mat.SetVector(ID.LiveBloom, new Vector4(thr, thr * Mathf.Clamp01(p.Float("Bloom", "SoftKnee", 0.5f)), 0.006f + 0.01f * Mathf.Clamp01(p.Float("Bloom", "Scatter", 0.7f)), 0));
             var tint = p.Color("Bloom", "Tint", Color.white);
             _mat.SetVector(ID.LiveTint, new Vector4(tint.r, tint.g, tint.b, 1));
             Mod.Log.Msg($"Headset bloom {(_bloomIntensity > 0 ? "on" : "off")}, depth of field {(_liveDof ? "on" : "off")} (light version)");
@@ -330,7 +330,7 @@ namespace QuestShade
             _mat.SetVector(ID.Dof, dofV); _mat.SetVector(ID.DofAF, afV);
 
             foreach (var id in ID.Stack) _post.SetVector(id, _mat.GetVector(id));
-            _hurtApplied = -1f;
+            _hurtApplied = -1f; _fisheyeApplied = -1f;
             if (_lut != null) _post.SetTexture(ID.Lut, _lut);
             if (_bloomIntensity > 0f || _dofStrength > 0f || LensFx)
                 Mod.Log.Msg($"Photo/video extras: bloom {_bloomIntensity:0.##}, depth of field {_dofStrength:0.##} (focus {(focus > 0 ? focus.ToString("0.0") + " m" : "auto")}), lens flare {_flareVec.x:0.##}, lens dirt {_dirtAmt:0.##}");
@@ -559,6 +559,17 @@ namespace QuestShade
             return new Vector4(x, y, SunFade(x, y), 0);
         }
 
+        private float _fisheyeApplied = -1f;
+        private Vector4 _presetDistort;
+        public void SetFisheye(float f)
+        {
+            if (_matMono == null || Mathf.Abs(f - _fisheyeApplied) < 0.005f) return;
+            _fisheyeApplied = f;
+            var v = f > 0.001f ? new Vector4(f * 0.6f, 1f - f * 0.18f, 0, 0) : _presetDistort;
+            _matMono.SetVector(ID.Distort, v);
+            if (_matPre != null) _matPre.SetVector(ID.Distort, v);
+            if (_post != null) _post.SetVector(ID.Distort, v);
+        }
         private float _hurtApplied = -1f;
         public void SetHurt(float k)
         {
@@ -712,7 +723,7 @@ BokehIntensity = 0.3
 
             _matMono.CopyPropertiesFromMaterial(_mat);
             _matMono.SetVector(ID.God, Vector4.zero);
-            _hurtApplied = -1f;
+            _hurtApplied = -1f; _fisheyeApplied = -1f; _presetDistort = _mat.GetVector(ID.Distort);
             ShaderPack.SetStereo(_matMono, false);
             SetTexel();
 

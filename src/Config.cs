@@ -29,6 +29,8 @@ namespace QuestShade
         public float DarkMaps = 0.8f, FlashlightBoost = 1f;
         public bool LeftHanded;
         public bool HurtEffect = true;
+        public bool Shadows = true, RealLights = true;
+        public float ShadowDistance = 20f, LessShine = 0.6f, Fisheye = 0f;
         public bool EyeAdapt = true;
         public float EyeAdaptStrength = 0.7f, EyeAdaptSpeed = 1f;
         public bool TimelineFollow = false, TimelineAutoRecord = true;
@@ -166,6 +168,11 @@ namespace QuestShade
             DarkMaps = Mathf.Clamp(ini.Float("General", "DarkMaps", 0.8f), 0f, 1f);
             FlashlightBoost = Mathf.Clamp(ini.Float("General", "FlashlightBoost", 1f), 0f, 2f);
             HurtEffect = ini.Bool("Camera", "HurtEffect", true);
+            Shadows = ini.Bool("Lighting", "Shadows", true);
+            RealLights = ini.Bool("Lighting", "RealLights", true);
+            ShadowDistance = Mathf.Clamp(ini.Float("Lighting", "ShadowDistance", 20f), 5f, 60f);
+            LessShine = Mathf.Clamp01(ini.Float("Lighting", "LessShine", 0.6f));
+            Fisheye = Mathf.Clamp01(ini.Float("Camera", "Fisheye", 0f));
             EyeAdapt = ini.Bool("General", "EyeAdaptation", true);
             EyeAdaptStrength = Mathf.Clamp(ini.Float("General", "EyeAdaptationStrength", 0.7f), 0f, 1.5f);
             EyeAdaptSpeed = Mathf.Clamp(ini.Float("General", "EyeAdaptationSpeed", 1f), 0.1f, 4f);
@@ -501,6 +508,11 @@ namespace QuestShade
             SetKey("General", "DarkMaps", DarkMaps.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "FlashlightBoost", FlashlightBoost.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Camera", "HurtEffect", HurtEffect ? "true" : "false");
+            SetKey("Lighting", "Shadows", Shadows ? "true" : "false");
+            SetKey("Lighting", "RealLights", RealLights ? "true" : "false");
+            SetKey("Lighting", "ShadowDistance", ShadowDistance.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
+            SetKey("Lighting", "LessShine", LessShine.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            SetKey("Camera", "Fisheye", Fisheye.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "EyeAdaptation", EyeAdapt ? "true" : "false");
             SetKey("General", "EyeAdaptationStrength", EyeAdaptStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "EyeAdaptationSpeed", EyeAdaptSpeed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));

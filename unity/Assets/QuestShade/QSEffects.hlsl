@@ -77,7 +77,7 @@ half3 QSStack(float2 uv, float2 pixelPos)
 
     UNITY_BRANCH if (_QS_Hurt.x > 0.001)
     {
-        float r = _QS_Hurt.x * 0.011 * (0.85 + 0.15 * sin(_QS_Time.x * 3.1));
+        float r = _QS_Hurt.x * 0.006 * (0.85 + 0.15 * sin(_QS_Time.x * 3.1));
         half3 acc = col;
         [unroll] for (int hi = 0; hi < 8; hi++)
         {

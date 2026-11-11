@@ -3,7 +3,7 @@ using System.Linq;
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.5.5", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.6.0", "QuestShade")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
 [assembly: MelonOptionalDependencies("BoneLib")]
@@ -71,6 +71,7 @@ namespace QuestShade
             if (_boneLib) { try { BoneMenuUi.OutlineSelected(false); } catch { } }
             _cam.OnSceneLoaded();
             Flashlights.Reset();
+            Lighting.OnLevel();
             _fx.ResetCalibration();
             if (_startNotice != null) _noticeAt = Time.unscaledTime + 6f;
             Perf.OnSceneLoaded();
@@ -90,6 +91,8 @@ namespace QuestShade
                 if (now >= _nextCamCheck) { _nextCamCheck = now + 1f; _fx.EnsureCamera(_cfg); }
                 _fx.Tick(_cfg);
                 Flashlights.Tick(_cfg.FlashlightBoost);
+                Lighting.Tick(_cfg);
+                _fx.SetFisheye(_cam.Mode == CamMode.PoliceCam ? Mathf.Max(0.35f, _cfg.Fisheye) : _cfg.Fisheye);
                 if (_boneLib) TickHurt();
                 _fx.TickHeadsetFocus(Time.unscaledDeltaTime);
 
@@ -540,7 +543,7 @@ namespace QuestShade
                 {
                     if (BoneMenuUi.PlayerHurt(out float hp, out bool dying, out GameObject overlay))
                     {
-                        if (_cfg.HurtEffect) _hurtTarget = dying ? 1f : Mathf.Clamp01((0.75f - hp) / 0.6f);
+                        if (_cfg.HurtEffect) _hurtTarget = dying ? 0.8f : Mathf.Clamp01((0.55f - hp) / 0.5f) * 0.8f;
                         if (!_hurtLogged && _hurtTarget > 0.2f) { _hurtLogged = true; Log.Msg($"Hurt effect on (health {hp * 100f:0}%, dying {dying})"); }
                         int layer = _cam.LensHiddenLayer;
                         if (overlay != null && layer >= 0 && (overlay.Pointer != _overlayPtr || overlay.layer != layer))
@@ -583,7 +586,7 @@ namespace QuestShade
 
         private static string Pretty(CamMode m) => m switch
         {
-            CamMode.ThirdPerson => "Third person", CamMode.Chest => "Chest (bodycam)", CamMode.FirstPerson => "First person (head cam)", CamMode.Helmet => "Helmet cam", _ => m.ToString()
+            CamMode.ThirdPerson => "Third person", CamMode.Chest => "Chest (bodycam)", CamMode.FirstPerson => "First person (head cam)", CamMode.Helmet => "Helmet cam", CamMode.PoliceCam => "Police bodycam", _ => m.ToString()
         };
 
         private void RefreshPresetMenu()

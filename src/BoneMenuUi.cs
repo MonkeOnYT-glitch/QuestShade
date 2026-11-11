@@ -30,6 +30,7 @@ namespace QuestShade
             view.CreateEnum("Mode", Color.white, cfg.DefaultMode, v => mod.SetCameraMode((CamMode)v));
             view.CreateFunction("Flip camera", Color.white, () => mod.FlipCamera());
             view.CreateFloat("Field of view", Color.white, cfg.Fov, 5f, 10f, 150f, v => cfg.Fov = v);
+            view.CreateFloat("Fisheye", Color.white, cfg.Fisheye, 0.1f, 0f, 1f, v => { cfg.Fisheye = v; cfg.SaveMenuSettings(); });
             var audio = cam.CreatePage("Audio", Color.white);
             audio.CreateBool("Game audio", Color.white, cfg.RecordGameAudio, v => { cfg.RecordGameAudio = v; cfg.SaveMenuSettings(); });
             audio.CreateBool("Microphone", Color.white, cfg.RecordMic, v => mod.SetMic(v));
@@ -78,6 +79,13 @@ namespace QuestShade
             fxMore.CreateBool("On every preset", Color.green, cfg.BloomDofAll, v => { cfg.BloomDofAll = v; mod.ReapplyEffects(); });
             fxMore.CreateFloat("Bloom strength", Color.white, cfg.BloomStrength, 0.25f, 0f, 4f, v => { cfg.BloomStrength = v; mod.ReapplyEffects(); });
             fxMore.CreateFloat("Blur strength", Color.white, cfg.BlurStrength, 0.25f, 0f, 3f, v => { cfg.BlurStrength = v; mod.ReapplyEffects(); });
+            var lit = fx.CreatePage("Lighting + shadows", new Color(1f, 0.85f, 0.5f));
+            lit.CreateFunction("What is this?", new Color(1f, 0.75f, 0.35f), () => Notify("Real-time sun shadows from you, NPCs and props, flashlights that light up what they hit, less plastic-looking shine. Costs some performance.", 5f));
+            lit.CreateBool("Real-time shadows", Color.white, cfg.Shadows, v => { cfg.Shadows = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
+            lit.CreateFloat("Shadow distance (m)", Color.white, cfg.ShadowDistance, 5f, 5f, 60f, v => { cfg.ShadowDistance = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
+            lit.CreateBool("Real lights (flashlights light things up)", Color.white, cfg.RealLights, v => { cfg.RealLights = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
+            lit.CreateFloat("Less shine", Color.white, cfg.LessShine, 0.1f, 0f, 1f, v => { cfg.LessShine = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
+            lit.CreateBool("Bloom in your headset", Color.white, cfg.HeadsetBloom, v => { cfg.HeadsetBloom = v; cfg.SaveMenuSettings(); mod.ReapplyEffects(); });
             var eye = fx.CreatePage("Eye adaptation, dark maps, flashlights", Color.white);
             eye.CreateFunction("What's this?", new Color(1f, 0.75f, 0.35f), () => Notify("Walk into a dark room: it starts dark, then your eyes adjust and it brightens. Walk back out: it's blinding for a moment, then settles.", 5f));
             eye.CreateBool("Eye adaptation", Color.green, cfg.EyeAdapt, v => { cfg.EyeAdapt = v; mod.ReapplyEffects(); });
