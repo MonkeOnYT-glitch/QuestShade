@@ -8,7 +8,7 @@
     <DefineConstants Condition="'$(QSStore)' == 'true'">$(DefineConstants);THUNDERSTORE</DefineConstants>
     <OutputPath Condition="'$(QSStore)' == 'true'">bin/$(QSTarget)-Store/</OutputPath>
     <AssemblyName>QuestShade</AssemblyName>
-    <Version>1.7.1</Version>
+    <Version>1.7.2</Version>
     <RootNamespace>QuestShade</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
@@ -25,7 +25,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="unity\**;bin\**;obj\**;trailer\**;updater\**;server\**;discord\**" />
+    <Compile Remove="unity\**;bin\**;obj\**;trailer\**;updater\**;installer\**;server\**;discord\**" />
   </ItemGroup>
 
   <ItemGroup>
