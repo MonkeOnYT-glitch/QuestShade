@@ -228,6 +228,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m6 11 6 6 6-6"/><path d="M4 21h16"/></svg>
         Download <span class="ver" id="ver">v1.3.0</span>
       </a>
+      <a class="btn ghost" href="https://github.com/MonkeOnYT-glitch/QuestShade/releases/download/tools/QuestShadeInstaller.exe">Easy installer (Windows)</a>
       <a class="btn ghost" href="#install">How to install</a>
     </div>
     <div class="meta">Free &amp; <a href="https://github.com/MonkeOnYT-glitch/QuestShade">open source</a><span id="dls" hidden> · <b id="dln"></b> downloads</span> · MelonLoader · needs <a href="https://thunderstore.io/c/bonelab/p/bonelib/BoneLib/">BoneLib</a> · <a href="https://github.com/MonkeOnYT-glitch/QuestShade/releases">all versions</a></div>
@@ -283,14 +284,15 @@
 
   <section id="install">
     <div class="eyebrow reveal">Install</div>
-    <h2 class="reveal">Four steps, about a minute.</h2>
-    <p class="lede reveal">Works on standalone Quest and on PC.</p>
+    <h2 class="reveal">Easiest: the installer.</h2>
+    <p class="lede reveal">For Quest. Plug your headset into a Windows PC and run <a href="https://github.com/MonkeOnYT-glitch/QuestShade/releases/download/tools/QuestShadeInstaller.exe">QuestShadeInstaller.exe</a>. It finds your Quest, gets BONELAB patched with LemonLoader if it isn't yet (your saves are backed up and put back), then installs QuestShade and BoneLib. Your other mods are kept.</p>
     <ol class="steps">
-      <li class="reveal"><div>Have <b>MelonLoader</b> on BONELAB and install <a href="https://thunderstore.io/c/bonelab/p/bonelib/BoneLib/">BoneLib</a>, which gives you the menu and the grabbable camera.</div></li>
-      <li class="reveal"><div>Download the zip and take <code>Mods/QuestShade.dll</code> out of it.</div></li>
-      <li class="reveal"><div><b>Quest:</b> copy it to <code>/sdcard/MelonLoader/com.StressLevelZero.BONELAB/Mods/</code> with SideQuest or any file manager.<br><b>PC:</b> drop it in <code>BONELAB/Mods/</code>.</div></li>
-      <li class="reveal"><div>Launch the game and open <b>BoneMenu → QuestShade</b>. Click both thumbsticks to pull out the camera.</div></li>
+      <li class="reveal"><div>Turn on <b>Developer mode</b> for your Quest in the Meta Horizon app, then plug it into your PC.</div></li>
+      <li class="reveal"><div>Run the installer and press <b>Install QuestShade</b>. Allow USB debugging in the headset when it asks.</div></li>
+      <li class="reveal"><div>If BONELAB isn't patched yet, a LemonLoader window opens: pick your Quest and BONELAB, press <b>Patch</b>, then start BONELAB once.</div></li>
+      <li class="reveal"><div>Start BONELAB and open <b>BoneMenu &rarr; QuestShade</b>.</div></li>
     </ol>
+    <p class="lede reveal">Doing it by hand instead: with LemonLoader and <a href="https://thunderstore.io/c/bonelab/p/bonelib/BoneLib/">BoneLib</a> already set up, take <code>Mods/QuestShade.dll</code> out of the zip and copy it to <code>/sdcard/MelonLoader/com.StressLevelZero.BONELAB/Mods/</code>.</p>
     <p class="note reveal">Settings live in <code>UserData/QuestShade/</code> and update live while you play. Only download QuestShade from this page, GitHub or Thunderstore.</p>
   </section>
 
@@ -325,6 +327,15 @@
     </a>
   </div>
 </main>
+
+  <section id="signing">
+    <div class="eyebrow reveal">Code signing policy</div>
+    <h2 class="reveal">Installer signing and privacy.</h2>
+    <p class="lede reveal">The Windows installer is built automatically from the public source on GitHub. Free code signing is provided by <a href="https://signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a> (applied for; until it's approved, the installer is unsigned and Windows may warn you).</p>
+    <p class="lede reveal"><b>Team:</b> MonkeOnYT writes and reviews all changes and approves every signed release.</p>
+    <p class="lede reveal"><b>Privacy:</b> the installer and QuestShade don't collect or send anything about you. The installer only downloads files from GitHub, Thunderstore and Google, and only talks to your Quest over USB. QuestShade checks GitHub for updates and, only when you use the preset browser, talks to the QuestShade preset server.</p>
+    <p class="lede reveal">QuestShade is open source under the <a href="https://github.com/MonkeOnYT-glitch/QuestShade/blob/main/LICENSE">GPL-3.0</a>.</p>
+  </section>
 
 <footer>
   <div class="wrap">
