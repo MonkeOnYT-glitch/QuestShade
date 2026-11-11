@@ -32,9 +32,15 @@ namespace QuestShadeInstaller
         private const string Repo = "MonkeOnYT-glitch/QuestShade";
         private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
 
+        private static readonly Color Bg = Color.FromArgb(14, 14, 18), Card = Color.FromArgb(24, 24, 31), Line = Color.FromArgb(44, 44, 56);
+        private static readonly Color Accent = Color.FromArgb(255, 138, 31), Good = Color.FromArgb(80, 220, 130), Dim = Color.FromArgb(120, 120, 135);
+
         private readonly Label _status;
         private readonly TextBox _log;
-        private readonly Button _go, _continue, _remove;
+        private readonly FancyButton _go, _continue, _remove;
+        private readonly LinkLabel _details;
+        private readonly ProgressBar _bar;
+        private readonly Label[] _steps = new Label[4];
         private readonly string _home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QuestShadeInstaller");
         private string _adb;
         private volatile bool _skipWait;
@@ -43,30 +49,71 @@ namespace QuestShadeInstaller
         {
             Http.DefaultRequestHeaders.UserAgent.ParseAdd("QuestShadeInstaller/1.0");
             Text = "QuestShade Installer";
-            ClientSize = new Size(640, 468);
+            ClientSize = new Size(680, 470);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
-            BackColor = Color.FromArgb(18, 18, 22);
+            StartPosition = FormStartPosition.CenterScreen;
+            BackColor = Bg;
             ForeColor = Color.White;
             Font = new Font("Segoe UI", 10f);
+            DoubleBuffered = true;
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
-            var title = new Label { Text = "QuestShade", Font = new Font("Segoe UI", 20f, FontStyle.Bold), ForeColor = Color.FromArgb(255, 138, 31), AutoSize = true, Location = new Point(20, 14) };
-            var sub = new Label { Text = "Installs QuestShade on BONELAB for Quest. Your other mods are kept.", AutoSize = true, ForeColor = Color.Gainsboro, Location = new Point(22, 54) };
-            _status = new Label { Text = "Plug your Quest into this PC, then press Install.", Font = new Font("Segoe UI", 11f, FontStyle.Bold), Location = new Point(20, 86), Size = new Size(600, 48) };
-            _log = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Location = new Point(20, 138), Size = new Size(600, 250), BackColor = Color.FromArgb(30, 30, 36), ForeColor = Color.Gainsboro, BorderStyle = BorderStyle.FixedSingle };
-            _go = new Button { Text = "Install QuestShade", Location = new Point(20, 400), Size = new Size(200, 40), BackColor = Color.FromArgb(255, 138, 31), ForeColor = Color.Black, FlatStyle = FlatStyle.Flat };
-            _continue = new Button { Text = "It's patched, continue", Location = new Point(230, 400), Size = new Size(200, 40), FlatStyle = FlatStyle.Flat, Visible = false };
-            _remove = new Button { Text = "Uninstall QuestShade", Location = new Point(440, 400), Size = new Size(180, 40), FlatStyle = FlatStyle.Flat };
-            _remove.Click += async (s, e) => await Remove();
-            var privacy = new Label { Text = "Only downloads from GitHub, Thunderstore and Google. Sends nothing about you.", AutoSize = true, ForeColor = Color.Gray, Font = new Font("Segoe UI", 8f), Location = new Point(20, 444) };
+            var header = new Panel { Location = new Point(0, 0), Size = new Size(680, 96), BackColor = Card };
+            header.Paint += (s, e) =>
+            {
+                using (var br = new System.Drawing.Drawing2D.LinearGradientBrush(new Rectangle(0, 92, 680, 4), Accent, Color.FromArgb(255, 60, 120), 0f))
+                    e.Graphics.FillRectangle(br, 0, 92, 680, 4);
+            };
+            var logo = new PictureBox { Location = new Point(22, 16), Size = new Size(64, 64), SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.Transparent };
+            try { using (var st = typeof(MainForm).Assembly.GetManifestResourceStream("QuestShadeInstaller.logo.png")) if (st != null) logo.Image = Image.FromStream(st); } catch { }
+            var title = new Label { Text = "QuestShade", Font = new Font("Segoe UI Semibold", 22f), ForeColor = Color.White, AutoSize = true, Location = new Point(98, 14), BackColor = Color.Transparent };
+            var sub = new Label { Text = "ReShade-style effects and a real camera for BONELAB on Quest", AutoSize = true, ForeColor = Color.FromArgb(185, 185, 200), Location = new Point(101, 56), BackColor = Color.Transparent };
+            header.Controls.AddRange(new Control[] { logo, title, sub });
+
+            string[] names = { "Find your Quest", "Patch BONELAB", "Install QuestShade", "Done" };
+            for (int k = 0; k < 4; k++)
+            {
+                _steps[k] = new Label { Text = "\u25CB  " + names[k], AutoSize = true, ForeColor = Dim, Font = new Font("Segoe UI Semibold", 10f), Location = new Point(24 + k * 160, 114) };
+            }
+
+            _status = new Label { Text = "Plug your Quest into this PC, then press Install.", Font = new Font("Segoe UI Semibold", 12.5f), Location = new Point(22, 150), Size = new Size(636, 56) };
+            _bar = new ProgressBar { Location = new Point(24, 210), Size = new Size(632, 6), Style = ProgressBarStyle.Marquee, MarqueeAnimationSpeed = 25, Visible = false };
+            _details = new LinkLabel { Text = "Show details", AutoSize = true, Location = new Point(22, 228), LinkColor = Dim, ActiveLinkColor = Accent, LinkBehavior = LinkBehavior.HoverUnderline };
+            _log = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Location = new Point(24, 252), Size = new Size(632, 120), BackColor = Card, ForeColor = Color.FromArgb(200, 200, 212), BorderStyle = BorderStyle.None, Font = new Font("Consolas", 9f), Visible = false };
+            _details.Click += (s, e) => { _log.Visible = !_log.Visible; _details.Text = _log.Visible ? "Hide details" : "Show details"; };
+
+            _go = new FancyButton("Install QuestShade", Accent, Color.Black, true) { Location = new Point(24, 390), Size = new Size(210, 46) };
+            _continue = new FancyButton("It's patched, continue", Card, Color.White, false) { Location = new Point(244, 390), Size = new Size(200, 46), Visible = false };
+            _remove = new FancyButton("Uninstall", Card, Color.White, false) { Location = new Point(536, 390), Size = new Size(120, 46) };
+            var privacy = new Label { Text = "Downloads only from GitHub, Thunderstore and Google. Sends nothing about you.  \u2022  GPL-3.0", AutoSize = true, ForeColor = Dim, Font = new Font("Segoe UI", 8f), Location = new Point(22, 446) };
             _go.Click += async (s, e) => await Go();
             _continue.Click += (s, e) => _skipWait = true;
-            Controls.AddRange(new Control[] { title, sub, _status, _log, _go, _continue, _remove, privacy });
+            _remove.Click += async (s, e) => await Remove();
+            Controls.Add(header);
+            Controls.AddRange(_steps);
+            Controls.AddRange(new Control[] { _status, _bar, _details, _log, _go, _continue, _remove, privacy });
         }
+
+        private void Step(int n)
+        {
+            UI(() =>
+            {
+                for (int k = 0; k < 4; k++)
+                {
+                    var text = _steps[k].Text.Substring(3);
+                    if (k < n) { _steps[k].Text = "\u2713  " + text; _steps[k].ForeColor = Good; }
+                    else if (k == n) { _steps[k].Text = (n == 3 ? "\u2713  " : "\u25CF  ") + text; _steps[k].ForeColor = n == 3 ? Good : Accent; }
+                    else { _steps[k].Text = "\u25CB  " + text; _steps[k].ForeColor = Dim; }
+                }
+            });
+        }
+
+        private void Busy(bool on) => UI(() => { _bar.Visible = on; _go.Enabled = _remove.Enabled = !on; });
 
         private async Task Go()
         {
-            _go.Enabled = _remove.Enabled = false;
+            Busy(true);
             try
             {
                 await Task.Run(RunAll);
@@ -74,18 +121,20 @@ namespace QuestShadeInstaller
             catch (Exception e)
             {
                 Log("Error: " + e.Message);
-                Status("Something went wrong. See the details below, then press Install to try again.");
+                Status("Something went wrong: " + e.Message);
+                UI(() => { _log.Visible = true; _details.Text = "Hide details"; });
             }
             finally
             {
-                UI(() => { _go.Enabled = _remove.Enabled = true; _continue.Visible = false; });
+                Busy(false);
+                UI(() => _continue.Visible = false);
             }
         }
 
         private async Task Remove()
         {
             if (MessageBox.Show(this, "Remove QuestShade and its updater from your Quest? Your other mods, BoneLib and your QuestShade settings stay.", "Uninstall QuestShade", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-            _go.Enabled = _remove.Enabled = false;
+            Busy(true);
             try
             {
                 await Task.Run(() =>
@@ -98,22 +147,26 @@ namespace QuestShadeInstaller
                     Status("QuestShade is uninstalled.");
                 });
             }
-            catch (Exception e) { Log("Error: " + e.Message); Status("Couldn't uninstall. See the details below."); }
-            finally { UI(() => { _go.Enabled = _remove.Enabled = true; }); }
+            catch (Exception e) { Log("Error: " + e.Message); Status("Couldn't uninstall: " + e.Message); }
+            finally { Busy(false); }
         }
 
         private void RunAll()
         {
             Directory.CreateDirectory(_home);
+            Step(0);
             Status("Getting ADB (the tool that talks to your Quest)...");
             EnsureAdb();
             WaitForDevice();
+            Step(1);
             if (!Adb($"shell pm path {Pkg}").Contains("package:"))
                 throw new Exception("BONELAB isn't installed on this Quest. Install it from the Meta store first.");
             if (!Patched()) Patch();
+            Step(2);
             Status("Installing QuestShade...");
             InstallMods();
-            Status("Done! Start BONELAB on your Quest. QuestShade is in BoneMenu.");
+            Step(3);
+            Status("All done! Start BONELAB on your Quest. QuestShade is in BoneMenu.");
         }
 
         private void EnsureAdb()
@@ -282,6 +335,57 @@ namespace QuestShadeInstaller
         {
             if (IsDisposed) return;
             if (InvokeRequired) BeginInvoke(a); else a();
+        }
+    }
+
+    internal sealed class FancyButton : Control
+    {
+        private readonly Color _fill, _text;
+        private readonly bool _primary;
+        private bool _hover, _down;
+
+        public FancyButton(string text, Color fill, Color textColor, bool primary)
+        {
+            Text = text; _fill = fill; _text = textColor; _primary = primary;
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
+            Font = new Font("Segoe UI Semibold", 10.5f);
+            Cursor = Cursors.Hand;
+            BackColor = Color.Transparent;
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = _down = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseDown(MouseEventArgs e) { _down = true; Invalidate(); base.OnMouseDown(e); }
+        protected override void OnMouseUp(MouseEventArgs e) { _down = false; Invalidate(); base.OnMouseUp(e); }
+        protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            var r = new Rectangle(0, 0, Width - 1, Height - 1);
+            using (var path = Round(r, 10))
+            {
+                var fill = !Enabled ? Color.FromArgb(40, 40, 48) : _down ? Shade(_fill, -30) : _hover ? Shade(_fill, 22) : _fill;
+                using (var b = new SolidBrush(fill)) g.FillPath(b, path);
+                if (!_primary) using (var pen = new Pen(Enabled ? Color.FromArgb(70, 70, 86) : Color.FromArgb(50, 50, 60))) g.DrawPath(pen, path);
+            }
+            TextRenderer.DrawText(g, Text, Font, r, Enabled ? _text : Color.FromArgb(110, 110, 120), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        }
+
+        private static Color Shade(Color c, int d) => Color.FromArgb(Clamp(c.R + d), Clamp(c.G + d), Clamp(c.B + d));
+        private static int Clamp(int v) => v < 0 ? 0 : v > 255 ? 255 : v;
+
+        private static System.Drawing.Drawing2D.GraphicsPath Round(Rectangle r, int rad)
+        {
+            var p = new System.Drawing.Drawing2D.GraphicsPath();
+            int d = rad * 2;
+            p.AddArc(r.X, r.Y, d, d, 180, 90);
+            p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+            p.CloseFigure();
+            return p;
         }
     }
 }
