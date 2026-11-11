@@ -26,7 +26,7 @@ namespace QuestShade
 
         public static void OnLevel()
         {
-            _swapped.Clear(); _casters.Clear(); _sun = null; _on = false;
+            _swapped.Clear(); _casters.Clear(); _sun = null; _on = false; _namesLogged = false;
             _applyAt = Time.unscaledTime + 2f;
         }
 
@@ -88,6 +88,7 @@ namespace QuestShade
 
             bool multiview = XRSettings.enabled && XRSettings.stereoRenderingMode != XRSettings.StereoRenderingMode.MultiPass && SystemInfo.supportsMultiview;
             int swaps = 0, casters = 0;
+            var names = new Dictionary<string, int>();
             foreach (var r in UnityEngine.Object.FindObjectsOfType<Renderer>())
             {
                 if (r == null) continue;
@@ -98,7 +99,10 @@ namespace QuestShade
                 {
                     if (m == null) continue;
                     var sh = m.shader;
-                    if (sh == null || sh.name != GameShader) continue;
+                    if (sh == null) continue;
+                    var sn = sh.name ?? "";
+                    names[sn] = names.TryGetValue(sn, out var cnt) ? cnt + 1 : 1;
+                    if (!IsTarget(sn)) continue;
                     any = true;
                     if (_swapped.ContainsKey(m.Pointer)) continue;
                     _swapped[m.Pointer] = (m, sh);
@@ -109,7 +113,27 @@ namespace QuestShade
                 if (any && r.lightmapIndex < 0 && AddCaster(r)) casters++;
             }
             _on = true;
+            if (!_namesLogged)
+            {
+                _namesLogged = true;
+                var top = new List<KeyValuePair<string, int>>(names);
+                top.Sort((a, b) => b.Value.CompareTo(a.Value));
+                var parts = new List<string>();
+                for (int i = 0; i < top.Count && i < 15; i++) parts.Add(top[i].Key + " x" + top[i].Value);
+                Mod.Log.Msg("Shadows: shaders in this map: " + string.Join(", ", parts));
+            }
             Mod.Log.Msg($"Shadows: real shadows on ({swaps} materials, {casters} casters, sun {(_sun != null ? "'" + _sun.name + "'" : "none - indoor map")})");
+        }
+
+        private static bool _namesLogged;
+
+        private static bool IsTarget(string n)
+        {
+            if (n == GameShader) return true;
+            if (n.IndexOf("LitMAS", StringComparison.OrdinalIgnoreCase) < 0) return false;
+            foreach (var bad in new[] { "Transparent", "Alpha", "Cutout", "Clip", "Triplanar", "AudioLink", "Posespace", "Hair", "Fade", "Additive", "Water" })
+                if (n.IndexOf(bad, StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            return true;
         }
 
         private static bool AddCaster(Renderer r)

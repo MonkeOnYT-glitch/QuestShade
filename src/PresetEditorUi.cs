@@ -71,12 +71,12 @@ namespace QuestShade
         public static void Build(Page effects, Mod mod, Config cfg)
         {
             _mod = mod; _cfg = cfg;
-            _editor = effects.CreatePage("Edit preset", Color.yellow);
-            _light = _editor.CreatePage("Light: brightness, contrast", Color.white, 0, false);
-            _color = _editor.CreatePage("Colour: saturation, warmth", Color.white, 0, false);
-            _lens = _editor.CreatePage("Lens: sharpness, glow", Color.white, 0, false);
-            _retro = _editor.CreatePage("Retro: CRT, scanlines, grain", Color.white, 0, false);
-            _startFrom = _editor.CreatePage("Copy a different preset...", Color.cyan, 0, false);
+            _editor = effects.CreatePage("Edit preset", Color.yellow, 8, true);
+            _light = _editor.CreatePage("Light: brightness, contrast", Color.white, 8, false);
+            _color = _editor.CreatePage("Colour: saturation, warmth", Color.white, 8, false);
+            _lens = _editor.CreatePage("Lens: sharpness, glow", Color.white, 8, false);
+            _retro = _editor.CreatePage("Retro: CRT, scanlines, grain", Color.white, 8, false);
+            _startFrom = _editor.CreatePage("Copy a different preset...", Color.cyan, 8, false);
             BrowserUi.Build(effects, mod, cfg);
             Refresh();
         }
@@ -220,7 +220,7 @@ namespace QuestShade
         public static void Build(Page effects, Mod mod, Config cfg)
         {
             _mod = mod; _cfg = cfg;
-            _page = effects.CreatePage("Preset browser", new Color(0.35f, 0.4f, 0.95f));
+            _page = effects.CreatePage("Preset browser", new Color(0.35f, 0.4f, 0.95f), 8, true);
             Draw();
         }
 

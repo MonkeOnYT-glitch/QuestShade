@@ -71,7 +71,9 @@ half3 QSStack(float2 uv, float2 pixelPos)
     UNITY_BRANCH if (_QS_CA.x > 0)
     {
         float2 d = (suv - 0.5) * _QS_CA.x * 0.02;
-        col = half3(QS_FETCH(suv - d).r, QS_FETCH_MAIN(suv).g, QS_FETCH(suv + d).b);
+        half3 mainC = QS_FETCH_MAIN(suv);
+        half3 baseC = QS_FETCH(suv);
+        col = half3(QS_FETCH(suv - d).r, baseC.g, QS_FETCH(suv + d).b) + (mainC - baseC);
     }
     else col = QS_FETCH_MAIN(suv);
 
