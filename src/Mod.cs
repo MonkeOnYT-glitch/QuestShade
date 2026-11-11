@@ -373,6 +373,9 @@ namespace QuestShade
         {
             if (_cam.Blocked && !_cam.Open) { Notify("Camera's off in Fusion lobbies (Camera > Settings to change)", 2f); return; }
             _cam.Toggle(_cfg, _fx.BoundCamera);
+#if QUEST
+            if (_cam.Open && _cfg.RecordMic) AudioCapture.AskMicPermission();
+#endif
             Notify(_cam.Open ? $"Camera: {Pretty(_cam.Mode)}" : "Camera closed", 1f);
         }
 
@@ -575,12 +578,7 @@ namespace QuestShade
         private void FusionTick()
         {
             FusionLink.Tick();
-            bool block = _cfg.FusionEffectsOnly && FusionLink.InLobby;
-            if (block == _cam.Blocked) return;
-            _cam.Blocked = block;
-            if (block && _cam.Open) _cam.Close();
-            Log.Msg(block ? "Fusion lobby: camera off, effects stay on" : "Left the Fusion lobby: camera available");
-            Notify(block ? "Fusion lobby: camera off, effects still on" : "Camera available again", 2f);
+            if (_cam.Blocked) _cam.Blocked = false;
         }
 
         private void Notify(string msg, float seconds = 1.6f)

@@ -52,7 +52,6 @@ namespace QuestShade
             more.CreateBool("Hover preview", Color.white, cfg.HoverPreview, v => mod.SetHoverPreview(v));
             more.CreateBool("Controls text on camera", Color.white, cfg.CameraLabel, v => mod.SetCameraLabel(v));
             more.CreateFunction("Hide / show camera", Color.white, () => mod.ToggleHidden());
-            more.CreateBool("No camera in Fusion lobbies", Color.white, cfg.FusionEffectsOnly, v => cfg.FusionEffectsOnly = v);
             var pv = more.CreatePage("Preview screen", Color.white);
             pv.CreateBool("Preview on", Color.white, cfg.PreviewEnabled, v => mod.SetPreview(v));
             pv.CreateInt("Preview FPS", Color.white, cfg.PreviewFps, 6, 6, 72, v => cfg.PreviewFps = v);

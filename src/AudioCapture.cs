@@ -142,17 +142,23 @@ namespace QuestShade
             {
                 VideoRecorder.Diag("audio: starting mic");
                 var devs = Microphone.devices;
-                if (devs == null || devs.Length == 0) { Mod.Log.Msg("Recording: no microphone"); return false; }
+                if (devs == null || devs.Length == 0) { AskMicPermission(); Mod.Log.Msg("Recording: no microphone (asked Android for mic permission)"); return false; }
                 _micDev = null;
                 if (Microphone.IsRecording(_micDev))
                 {
-                    Mod.Log.Msg("Recording: the microphone is already in use by another mod (voice chat) - recording game audio only");
-                    return false;
+                    var live = FindLiveMicClip();
+                    if (live == null) { Mod.Log.Msg("Recording: the microphone is busy and couldn't be shared - recording game audio only"); return false; }
+                    _micClip = live;
+                    Mod.Log.Msg(live == _keptClip ? "Recording: microphone reused" : "Recording: sharing the microphone with voice chat");
                 }
-                Microphone.GetDeviceCaps(_micDev, out int minF, out int maxF);
-                _micRate = (minF == 0 && maxF == 0) ? 48000 : Mathf.Clamp(48000, minF, maxF);
-                _micClip = Microphone.Start(_micDev, true, 1, _micRate);
-                if (_micClip == null) return false;
+                else
+                {
+                    Microphone.GetDeviceCaps(_micDev, out int minF, out int maxF);
+                    _micRate = (minF == 0 && maxF == 0) ? 48000 : Mathf.Clamp(48000, minF, maxF);
+                    _micClip = Microphone.Start(_micDev, true, 1, _micRate);
+                    if (_micClip == null) return false;
+                    _keptClip = _micClip;
+                }
                 _micRate = _micClip.frequency;
                 _micLen = _micClip.samples;
                 _micCh = Math.Max(1, _micClip.channels);
@@ -164,6 +170,33 @@ namespace QuestShade
                 return true;
             }
             catch (Exception e) { Mod.Log.Warning("Recording: microphone failed: " + e.Message); return false; }
+        }
+
+        private static AudioClip _keptClip;
+
+        private static AudioClip FindLiveMicClip()
+        {
+            AudioClip other = null;
+            bool keptAlive = false;
+            foreach (var clip in Resources.FindObjectsOfTypeAll<AudioClip>())
+            {
+                if (clip == null || clip.samples <= 0 || clip.name != "Microphone") continue;
+                if (_keptClip != null && clip.Pointer == _keptClip.Pointer) keptAlive = true;
+                else other = clip;
+            }
+            if (other != null) return other;
+            return keptAlive ? _keptClip : null;
+        }
+
+        public static void AskMicPermission()
+        {
+            if (Application.platform != RuntimePlatform.Android) return;
+            try
+            {
+                if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone))
+                    UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Microphone);
+            }
+            catch (Exception e) { Mod.Log.Warning("Mic permission: " + e.Message); }
         }
 
         private bool MicStillOurs()
