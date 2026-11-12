@@ -9,8 +9,8 @@
     <OutputPath Condition="'$(QSStore)' == 'true'">bin/$(QSTarget)-Store/</OutputPath>
     <AssemblyName>QuestShade</AssemblyName>
     <DefineConstants Condition="'$(ShadowDebug)' == 'true'">$(DefineConstants);QS_SHADOW_DEBUG</DefineConstants>
-    <Version>1.7.9</Version>
-    <Version Condition="'$(ShadowDebug)' == 'true'">1.7.10</Version>
+    <Version>1.7.11</Version>
+    <Version Condition="'$(ShadowDebug)' == 'true'">1.7.12</Version>
     <RootNamespace>QuestShade</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>

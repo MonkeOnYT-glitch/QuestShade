@@ -85,6 +85,8 @@ namespace QuestShade
             lit.CreateBool("Real lights (flashlights light things up)", Color.white, cfg.RealLights, v => { cfg.RealLights = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
             lit.CreateFloat("Less shine", Color.white, cfg.LessShine, 0.1f, 0f, 1f, v => { cfg.LessShine = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
             lit.CreateBool("Bloom in your headset", Color.white, cfg.HeadsetBloom, v => { cfg.HeadsetBloom = v; cfg.SaveMenuSettings(); mod.ReapplyEffects(); });
+            lit.CreateBool("Body shadow", Color.white, cfg.Shadows, v => { cfg.Shadows = v; cfg.SaveMenuSettings(); });
+            lit.CreateFloat("Shadow darkness", Color.white, cfg.ShadowDarkness, 0.05f, 0.1f, 1f, v => { cfg.ShadowDarkness = v; cfg.SaveMenuSettings(); });
             var eye = fx.CreatePage("Eye adaptation, dark maps, flashlights", Color.white, 8, true);
             eye.CreateFunction("What's this?", new Color(1f, 0.75f, 0.35f), () => Notify("Walk into a dark room: it starts dark, then your eyes adjust and it brightens. Walk back out: it's blinding for a moment, then settles.", 5f));
             eye.CreateBool("Eye adaptation", Color.green, cfg.EyeAdapt, v => { cfg.EyeAdapt = v; mod.ReapplyEffects(); });
@@ -114,24 +116,7 @@ namespace QuestShade
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public static bool ShadowCasters(System.Collections.Generic.List<Renderer> into)
-        {
-            var av = BoneLib.Player.Avatar;
-            if (av == null) return false;
-            foreach (var r in av.GetComponentsInChildren<Renderer>(true)) if (r != null) into.Add(r);
-            foreach (var h in new[] { BoneLib.Player.LeftHand, BoneLib.Player.RightHand })
-            {
-                try
-                {
-                    var go = h != null ? h.m_CurrentAttachedGO : null;
-                    if (go == null) continue;
-                    var root = ItemRoot(go);
-                    foreach (var r in (root != null ? root.gameObject : go).GetComponentsInChildren<Renderer>(false)) if (r != null && !into.Contains(r)) into.Add(r);
-                }
-                catch { }
-            }
-            return true;
-        }
+        public static Transform AvatarRoot() { var av = BoneLib.Player.Avatar; return av != null ? av.transform : null; }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static int PlayerLayerMask()

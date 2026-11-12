@@ -8,144 +8,36 @@ namespace QuestShade
 {
     internal static class Shadows
     {
-        public static Func<List<Renderer>, bool> Collect;
+        public static Func<Transform> Avatar;
+        public static Func<int, GameObject> Held;
+        public static Func<GameObject, Transform> ItemRoot;
         public static Func<int> PlayerLayers;
 
-        private const int N = 11, Q = N - 1, Res = 256;
-        private const float Ahead = 1.5f, Reach = 14f;
-        private static readonly int TexId = Shader.PropertyToID("_QS_ShadowTex"), KId = Shader.PropertyToID("_QS_ShadowK");
+        private const int MaxParts = 12;
+        private const float Reach = 40f, Lift = 0.012f, Thin = 0.002f;
+        private static readonly int KId = Shader.PropertyToID("_QS_ShadowK"), MaskId = Shader.PropertyToID("_QS_Mask"),
+            CompId = Shader.PropertyToID("_QS_Comp"), PassId = Shader.PropertyToID("_QS_Pass"), ZTestId = Shader.PropertyToID("_QS_ZTest");
 
-        private struct Caster { public Renderer R; public int Subs; }
-        private static readonly List<Renderer> _found = new List<Renderer>();
-        private static readonly List<Caster> _casters = new List<Caster>();
-        private static RenderTexture _rt;
-        private static Material _castMat, _headMat, _lensMat;
-        private static CommandBuffer _cb;
-        private static GameObject _headGo, _lensGo;
-        private static Mesh _mesh;
-        private static Il2CppStructArray<Vector3> _verts;
-        private static readonly Vector3[] _p = new Vector3[N * N], _n = new Vector3[N * N];
-        private static readonly bool[] _ok = new bool[N * N];
+        private static GameObject _root, _sheet;
+        private static Transform _outer, _inner, _anchor;
+        private static Material _shade, _none, _clear;
+        private static Mesh _quad;
+        private static readonly List<Transform> _boneSrc = new List<Transform>(), _boneDst = new List<Transform>();
+        private static readonly List<Transform> _partSrc = new List<Transform>(), _partDst = new List<Transform>();
+        private static readonly List<GameObject> _skins = new List<GameObject>(), _partGo = new List<GameObject>();
+        private static int _avatarId, _itemsKey, _mask, _maskAll, _layer = -1, _frame;
+        private static float _nextItems, _sunAt, _fade, _k = 0.6f;
         private static Light _sun;
-        private static float _sunAt, _scanAt, _fade, _k = 0.6f;
-        private static Vector3 _dir = Vector3.down;
-        private static int _mask;
-        private static bool _perfOff, _failed, _logged;
+        private static Vector3 _dir = Vector3.down, _planeP, _planeN = Vector3.up;
+        private static bool _plane, _perfOff, _failed, _logged, _checked, _fresh;
+
+        private static string StepFile => System.IO.Path.Combine(Config.Root, "shadow2-step.txt");
 
         public static void OnLevel()
         {
-            _casters.Clear(); _sun = null; _sunAt = Time.unscaledTime + 2f; _scanAt = 0f; _mask = 0;
-            _perfOff = false; _fade = 0f; _logged = false;
+            _sun = null; _sunAt = Time.unscaledTime + 2f; _perfOff = false; _fade = 0f; _logged = false; _plane = false;
         }
 
-        public static void Tick(Config cfg, Camera head)
-        {
-            bool want = cfg.Shadows && cfg.Enabled && !_perfOff && !_failed && ShaderPack.Shadow != null && head != null && Collect != null;
-            if (want && DiedLastTime()) want = false;
-            if (want && Perf.Level >= 2) { _perfOff = true; want = false; Mod.Log.Msg("Shadows: game too slow, body shadow off for this level"); }
-            if (!want) { Show(false); return; }
-            try { Run(cfg, head); }
-            catch (Exception e) { _failed = true; Show(false); Mod.Log.Warning("Shadows: turned off, " + e.Message); }
-        }
-
-        private static void Show(bool on)
-        {
-            if (_headGo != null && _headGo.activeSelf != on) _headGo.SetActive(on);
-            if (_lensGo != null && _lensGo.activeSelf != (on && _lensGo.layer != 0)) _lensGo.SetActive(on && _lensGo.layer != 0);
-        }
-
-        private static void Scan()
-        {
-            _found.Clear(); _casters.Clear();
-            bool got; try { got = Collect(_found); } catch { got = false; }
-            if (!got) return;
-            foreach (var r in _found)
-            {
-                if (r == null) continue;
-                int subs = 0;
-                var smr = r.TryCast<SkinnedMeshRenderer>();
-                if (smr != null) { var m = smr.sharedMesh; subs = m != null ? m.subMeshCount : 0; }
-                else if (r.TryCast<MeshRenderer>() != null)
-                {
-                    var mf = r.GetComponent<MeshFilter>();
-                    var m = mf != null ? mf.sharedMesh : null;
-                    subs = m != null ? m.subMeshCount : 0;
-                }
-                if (subs > 0) _casters.Add(new Caster { R = r, Subs = Mathf.Min(subs, 8) });
-            }
-            if (_mask == 0)
-            {
-                int st = LayerMask.NameToLayer("Static");
-                int m = 1;
-                if (st >= 0) m |= 1 << st;
-                int pl = 0; try { pl = PlayerLayers != null ? PlayerLayers() : 0; } catch { }
-                m &= ~pl;
-                _mask = m != 0 ? m : 1;
-            }
-        }
-
-        private static void FindSun()
-        {
-            Light best = null;
-            try { best = RenderSettings.sun; } catch { }
-            if (best == null || !best.isActiveAndEnabled)
-            {
-                best = null; float top = 0.05f;
-                foreach (var l in UnityEngine.Object.FindObjectsOfType<Light>())
-                    if (l != null && l.type == LightType.Directional && l.isActiveAndEnabled && l.intensity > top) { top = l.intensity; best = l; }
-            }
-            _sun = best;
-        }
-
-        private static void Ensure()
-        {
-            if (_rt == null)
-            {
-                _rt = new RenderTexture(Res, Res, 0, RenderTextureFormat.ARGB32) { name = "QuestShade_Shadow", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, useMipMap = false, hideFlags = HideFlags.HideAndDontSave };
-                _rt.Create();
-            }
-            if (_castMat == null) _castMat = new Material(ShaderPack.Shadow) { hideFlags = HideFlags.HideAndDontSave };
-            if (_headMat == null) { _headMat = new Material(ShaderPack.Shadow) { hideFlags = HideFlags.HideAndDontSave }; ShaderPack.SetStereo(_headMat, true); }
-            if (_lensMat == null) { _lensMat = new Material(ShaderPack.Shadow) { hideFlags = HideFlags.HideAndDontSave }; ShaderPack.SetStereo(_lensMat, false); }
-            _headMat.SetTexture(TexId, _rt); _lensMat.SetTexture(TexId, _rt);
-            _cb ??= new CommandBuffer { name = "QuestShade_Shadow" };
-            if (_mesh == null)
-            {
-                int vc = Q * Q * 4;
-                var uv = new Vector2[vc];
-                var tri = new int[Q * Q * 6];
-                for (int j = 0; j < Q; j++)
-                    for (int i = 0; i < Q; i++)
-                    {
-                        int q = j * Q + i, v = q * 4, t = q * 6;
-                        float u0 = i / (float)Q, u1 = (i + 1) / (float)Q, v0 = j / (float)Q, v1 = (j + 1) / (float)Q;
-                        uv[v] = new Vector2(u0, v0); uv[v + 1] = new Vector2(u1, v0); uv[v + 2] = new Vector2(u0, v1); uv[v + 3] = new Vector2(u1, v1);
-                        tri[t] = v; tri[t + 1] = v + 2; tri[t + 2] = v + 1; tri[t + 3] = v + 1; tri[t + 4] = v + 2; tri[t + 5] = v + 3;
-                    }
-                _verts = new Il2CppStructArray<Vector3>(vc);
-                _mesh = new Mesh { name = "QuestShade_Shadow", hideFlags = HideFlags.HideAndDontSave };
-                _mesh.MarkDynamic();
-                _mesh.vertices = _verts; _mesh.uv = uv; _mesh.triangles = tri;
-            }
-            if (_headGo == null) _headGo = Make(_headMat);
-            if (_lensGo == null) _lensGo = Make(_lensMat);
-        }
-
-        private static GameObject Make(Material mat)
-        {
-            var go = new GameObject("QuestShade_Shadow");
-            go.AddComponent<MeshFilter>().sharedMesh = _mesh;
-            var r = go.AddComponent<MeshRenderer>();
-            r.sharedMaterial = mat;
-            r.shadowCastingMode = ShadowCastingMode.Off;
-            r.receiveShadows = false;
-            r.lightProbeUsage = LightProbeUsage.Off;
-            r.reflectionProbeUsage = ReflectionProbeUsage.Off;
-            return go;
-        }
-
-        private static string StepFile => System.IO.Path.Combine(Config.Root, "shadow-step.txt");
-        private static bool _checked;
         private static void S(string s)
         {
             if (_logged) return;
@@ -163,128 +55,315 @@ namespace QuestShade
                 var last = System.IO.File.ReadAllText(StepFile).Trim();
                 if (last == "ok" || last.Length == 0) return false;
                 _failed = true;
-                Mod.Log.Warning($"Shadows: last time the game died at shadow step \"{last}\". Body shadow is OFF now so you can play. Please send this log. (Delete UserData/QuestShade/shadow-step.txt to try again.)");
+                Mod.Log.Warning($"Shadows: last time the game died at shadow step \"{last}\". Body shadow is OFF now so you can play. Please send this log. (Delete UserData/QuestShade/shadow2-step.txt to try again.)");
             }
             catch { }
             return _failed;
         }
 
-        private static bool Flat(int a, int b)
+        public static void Tick(Config cfg, Camera head)
         {
-            var e = _p[b] - _p[a];
-            float len = e.magnitude;
-            if (len > 3f) return false;
-            float lim = 0.3f * len + 0.03f;
-            return Mathf.Abs(Vector3.Dot(_n[a], e)) < lim && Mathf.Abs(Vector3.Dot(_n[b], e)) < lim;
+            bool want = cfg.Shadows && cfg.Enabled && !_perfOff && !_failed && ShaderPack.Shadow != null && head != null && Avatar != null;
+            if (want && DiedLastTime()) want = false;
+            if (want && Perf.Level >= 2) { _perfOff = true; want = false; Mod.Log.Msg("Shadows: game too slow, body shadow off for this level"); }
+            if (!want) { Show(false); return; }
+            try { Run(cfg, head); }
+            catch (Exception e) { _failed = true; Show(false); Mod.Log.Warning("Shadows: turned off, " + e.Message); }
+        }
+
+        private static void Show(bool on)
+        {
+            if (_root != null && _root.activeSelf != on) _root.SetActive(on);
+        }
+
+        private static Material Mat(string name, int queue, float mask, float comp, float pass, float ztest)
+        {
+            var m = new Material(ShaderPack.Shadow) { name = "QuestShade_" + name, hideFlags = HideFlags.HideAndDontSave, renderQueue = queue };
+            m.SetFloat(MaskId, mask); m.SetFloat(CompId, comp); m.SetFloat(PassId, pass); m.SetFloat(ZTestId, ztest);
+            ShaderPack.SetStereo(m, true);
+            return m;
+        }
+
+        private static void Ensure()
+        {
+            if (_shade == null) _shade = Mat("Shadow", 2510, 15f, 6f, 2f, 4f);
+            if (_none == null) _none = Mat("ShadowNone", 2510, 0f, 1f, 0f, 4f);
+            if (_clear == null) _clear = Mat("ShadowClear", 2511, 0f, 8f, 1f, 8f);
+            if (_quad == null)
+            {
+                _quad = new Mesh { name = "QuestShade_ShadowSheet", hideFlags = HideFlags.HideAndDontSave };
+                _quad.vertices = new[] { new Vector3(-0.5f, -0.5f, 0f), new Vector3(0.5f, -0.5f, 0f), new Vector3(-0.5f, 0.5f, 0f), new Vector3(0.5f, 0.5f, 0f) };
+                _quad.triangles = new[] { 0, 2, 1, 1, 2, 3 };
+            }
+            if (_root != null) return;
+            _boneSrc.Clear(); _boneDst.Clear(); _partSrc.Clear(); _partDst.Clear(); _skins.Clear(); _partGo.Clear();
+            _avatarId = 0; _itemsKey = 0; _layer = -1;
+            _root = new GameObject("QuestShade_Shadow");
+            _root.SetActive(false);
+            _outer = new GameObject("Outer").transform; _outer.SetParent(_root.transform, false);
+            _inner = new GameObject("Inner").transform; _inner.SetParent(_outer, false);
+            _anchor = new GameObject("Anchor").transform; _anchor.SetParent(_root.transform, false);
+            _sheet = new GameObject("Sheet");
+            _sheet.transform.SetParent(_root.transform, false);
+            _sheet.AddComponent<MeshFilter>().sharedMesh = _quad;
+            Plain(_sheet.AddComponent<MeshRenderer>()).sharedMaterial = _clear;
+        }
+
+        private static Renderer Plain(Renderer r)
+        {
+            r.shadowCastingMode = ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            r.lightProbeUsage = LightProbeUsage.Off;
+            r.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            return r;
+        }
+
+        private static Il2CppReferenceArray<Material> Mats(Il2CppReferenceArray<Material> original, int subs)
+        {
+            subs = Mathf.Clamp(subs, 1, 16);
+            var a = new Il2CppReferenceArray<Material>(subs);
+            bool any = false;
+            for (int i = 0; i < subs; i++)
+            {
+                var m = original != null && i < original.Length ? original[i] : null;
+                bool solid = m == null || m.renderQueue < 2450;
+                a[i] = solid ? _shade : _none;
+                any |= solid;
+            }
+            return any ? a : null;
+        }
+
+        private static void Build(Transform av)
+        {
+            foreach (var g in _skins) if (g != null) UnityEngine.Object.Destroy(g);
+            foreach (var t in _boneDst) if (t != null) UnityEngine.Object.Destroy(t.gameObject);
+            _skins.Clear(); _boneSrc.Clear(); _boneDst.Clear();
+            _avatarId = av.GetInstanceID();
+            _fresh = true; _layer = -1;
+
+            int pl = 0; try { pl = PlayerLayers != null ? PlayerLayers() : 0; } catch { }
+            pl &= ~1;
+            int st = LayerMask.NameToLayer("Static");
+            _mask = (1 | (st >= 0 ? 1 << st : 0)) & ~pl;
+            _maskAll = ~(1 << 2) & ~pl;
+
+            var index = new Dictionary<int, int>();
+            int meshes = 0;
+            foreach (var smr in av.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+            {
+                if (smr == null) continue;
+                var mesh = smr.sharedMesh;
+                var bones = smr.bones;
+                if (mesh == null || bones == null || bones.Length == 0) continue;
+                var mats = Mats(smr.sharedMaterials, mesh.subMeshCount);
+                if (mats == null) continue;
+                S($"copy mesh \"{smr.name}\": {bones.Length} bones, {mesh.subMeshCount} submesh, {mesh.vertexCount} verts");
+                var mapped = new Il2CppReferenceArray<Transform>(bones.Length);
+                for (int i = 0; i < bones.Length; i++)
+                {
+                    var b = bones[i];
+                    if (b == null) { mapped[i] = _anchor; continue; }
+                    int id = b.GetInstanceID();
+                    if (!index.TryGetValue(id, out int at))
+                    {
+                        at = _boneSrc.Count; index[id] = at;
+                        var p = new GameObject("Bone").transform;
+                        p.SetParent(_inner, false);
+                        p.localScale = b.lossyScale;
+                        _boneSrc.Add(b); _boneDst.Add(p);
+                    }
+                    mapped[i] = _boneDst[at];
+                }
+                var go = new GameObject("Skin");
+                go.transform.SetParent(_root.transform, false);
+                var copy = go.AddComponent<SkinnedMeshRenderer>();
+                copy.sharedMesh = mesh;
+                copy.bones = mapped;
+                copy.rootBone = _anchor;
+                copy.quality = SkinQuality.Bone2;
+                copy.updateWhenOffscreen = false;
+                copy.localBounds = new Bounds(Vector3.zero, Vector3.one * 30f);
+                copy.sharedMaterials = mats;
+                Plain(copy);
+                _skins.Add(go);
+                meshes++;
+            }
+            Mod.Log.Msg($"Shadows: body copied ({meshes} meshes, {_boneSrc.Count} bones)");
+        }
+
+        private static readonly List<Transform> _roots = new List<Transform>();
+        private static readonly List<(MeshRenderer r, Mesh m, float size)> _found = new List<(MeshRenderer, Mesh, float)>();
+
+        private static void Items()
+        {
+            _roots.Clear();
+            for (int h = 1; h <= 2; h++)
+            {
+                GameObject go = null;
+                try { go = Held != null ? Held(h) : null; } catch { }
+                if (go == null) continue;
+                Transform root = null;
+                try { root = ItemRoot != null ? ItemRoot(go) : null; } catch { }
+                root ??= go.transform;
+                if (!_roots.Contains(root)) _roots.Add(root);
+            }
+            int key = 17;
+            foreach (var r in _roots) key = key * 31 + r.GetInstanceID();
+            if (key == _itemsKey) return;
+            _itemsKey = key;
+            foreach (var g in _partGo) if (g != null) UnityEngine.Object.Destroy(g);
+            _partGo.Clear(); _partSrc.Clear(); _partDst.Clear(); _found.Clear();
+            _fresh = true; _layer = -1;
+            foreach (var root in _roots)
+                foreach (var mr in root.GetComponentsInChildren<MeshRenderer>(false))
+                {
+                    if (mr == null || !mr.enabled) continue;
+                    var mf = mr.GetComponent<MeshFilter>();
+                    var mesh = mf != null ? mf.sharedMesh : null;
+                    if (mesh == null || mesh.vertexCount <= 8) continue;
+                    var e = mr.bounds.extents;
+                    _found.Add((mr, mesh, e.x * e.y * e.z));
+                }
+            _found.Sort((x, y) => y.size.CompareTo(x.size));
+            for (int i = 0; i < _found.Count && _partSrc.Count < MaxParts; i++)
+            {
+                var (mr, mesh, _) = _found[i];
+                var mats = Mats(mr.sharedMaterials, mesh.subMeshCount);
+                if (mats == null) continue;
+                var go = new GameObject("Part");
+                go.transform.SetParent(_inner, false);
+                go.transform.localScale = mr.transform.lossyScale;
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var copy = go.AddComponent<MeshRenderer>();
+                copy.sharedMaterials = mats;
+                Plain(copy);
+                _partSrc.Add(mr.transform); _partDst.Add(go.transform); _partGo.Add(go);
+            }
+            _found.Clear();
+        }
+
+        private static void FindSun()
+        {
+            Light best = null;
+            try { best = RenderSettings.sun; } catch { }
+            if (best == null || !best.isActiveAndEnabled)
+            {
+                best = null; float top = 0.05f;
+                foreach (var l in UnityEngine.Object.FindObjectsOfType<Light>())
+                    if (l != null && l.type == LightType.Directional && l.isActiveAndEnabled && l.intensity > top) { top = l.intensity; best = l; }
+            }
+            _sun = best;
         }
 
         private static void Run(Config cfg, Camera head)
         {
             float now = Time.unscaledTime, dt = Mathf.Min(Time.unscaledDeltaTime, 0.1f);
-            if (now >= _scanAt) { _scanAt = now + 3f; Scan(); }
-            if (_casters.Count == 0) { Show(false); return; }
-            S("ensure"); Ensure();
-
-            S("bounds");
-            bool any = false; Bounds b = default;
-            for (int i = 0; i < _casters.Count; i++)
-            {
-                var r = _casters[i].R;
-                if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
-                var rb = r.bounds;
-                if (!any) { b = rb; any = true; } else b.Encapsulate(rb);
-            }
-            if (!any) { Show(false); return; }
-            Vector3 center = b.center;
-            float half = Mathf.Clamp(b.extents.magnitude + 0.15f, 0.6f, 2.2f);
+            Transform av = null;
+            try { av = Avatar(); } catch { }
+            if (av == null) { Show(false); return; }
+            S("setup"); Ensure();
+            if (av.GetInstanceID() != _avatarId) { S("copy body"); Build(av); }
+            if (now >= _nextItems) { _nextItems = now + 0.25f; S("held items"); Items(); }
+            if (_boneDst.Count == 0) { Show(false); return; }
 
             S("sun");
             if (now >= _sunAt) { _sunAt = now + 6f; if (_sun == null || !_sun.isActiveAndEnabled) FindSun(); }
+            Vector3 headAt = head.transform.position;
             Vector3 want = Vector3.down; float wantK = 0.6f;
             if (_sun != null && _sun.isActiveAndEnabled && _sun.intensity > 0.05f)
             {
-                var d = _sun.transform.forward;
-                if (d.y < -0.2f && !Physics.Raycast(head.transform.position, -d, 80f, _mask, QueryTriggerInteraction.Ignore)) { want = d; wantK = 1f; }
+                var sd = _sun.transform.forward;
+                if (sd.y < -0.2f && !Physics.Raycast(headAt, -sd, 80f, _mask, QueryTriggerInteraction.Ignore)) { want = sd; wantK = 1f; }
             }
             float target = 1f;
             if (Vector3.Angle(want, _dir) < 5f) { _dir = want; _k = wantK; }
-            else { target = 0f; if (_fade <= 0.02f) { _dir = want; _k = wantK; } }
+            else { target = 0f; if (_fade <= 0.02f) { _dir = want; _k = wantK; _plane = false; } }
             _fade = Mathf.MoveTowards(_fade, target, dt * 5f);
 
-            float dark = Mathf.Clamp01(cfg.ShadowDarkness) * _k * _fade;
+            S("ground");
+            Vector3 origin = headAt - Vector3.up * 0.75f;
+            Vector3 d = _dir;
+            bool hitAny = Physics.Raycast(origin, d, out var hit, Reach, _mask, QueryTriggerInteraction.Ignore)
+                       || Physics.Raycast(origin, d, out hit, Reach, _maskAll, QueryTriggerInteraction.Ignore);
+            if (hitAny)
+            {
+                Vector3 hp = hit.point, hn = hit.normal;
+                if (!_plane || Vector3.Dot(hn, _planeN) < 0.95f) { _planeP = hp; _planeN = hn; }
+                else
+                {
+                    float k = 1f - Mathf.Exp(-dt * 20f);
+                    _planeN = Vector3.Slerp(_planeN, hn, k).normalized;
+                    _planeP = Vector3.Lerp(_planeP, hp, k);
+                }
+                _plane = true;
+            }
+            else _plane = false;
+            if (!_plane) { Show(false); return; }
+
+            Vector3 n = _planeN;
+            float dn = Vector3.Dot(d, n);
+            float dark = Mathf.Clamp01(cfg.ShadowDarkness) * _k * _fade * Mathf.Clamp01((-dn - 0.1f) / 0.2f);
             if (dark < 0.01f) { Show(false); return; }
 
-            var rot = Quaternion.LookRotation(_dir, Mathf.Abs(_dir.y) > 0.95f ? Vector3.forward : Vector3.up);
-            Vector3 right = rot * Vector3.right, up = rot * Vector3.up;
-
-            var view = Matrix4x4.Scale(new Vector3(1f, 1f, -1f)) * Matrix4x4.TRS(center - _dir * 5f, rot, Vector3.one).inverse;
-            var proj = Matrix4x4.Ortho(-half, half, -half, half, 0.1f, 10f);
-            S($"silhouette build: {_casters.Count} parts, half {half:0.00} m, dir {_dir}, mask {_mask}, {SystemInfo.graphicsDeviceType}, threaded {SystemInfo.graphicsMultiThreaded}, sun {(_sun != null ? _sun.name : "none")}");
-            var prev = RenderTexture.active;
-            _cb.Clear();
-            _cb.SetRenderTarget(new RenderTargetIdentifier(_rt));
-            _cb.ClearRenderTarget(false, true, Color.clear);
-            _cb.SetViewProjectionMatrices(view, proj);
-            for (int i = 0; i < _casters.Count; i++)
-            {
-                var c = _casters[i];
-                if (c.R == null || !c.R.enabled || !c.R.gameObject.activeInHierarchy) continue;
-                if (!_logged)
-                {
-                    S($"draw part {i}: \"{c.R.name}\" {c.R.GetIl2CppType().Name}, {c.Subs} submesh, layer {c.R.gameObject.layer}");
-                    for (int s = 0; s < c.Subs; s++) _cb.DrawRenderer(c.R, _castMat, s, 1);
-                    Graphics.ExecuteCommandBuffer(_cb);
-                    _cb.Clear();
-                    _cb.SetRenderTarget(new RenderTargetIdentifier(_rt));
-                    _cb.SetViewProjectionMatrices(view, proj);
-                }
-                else for (int s = 0; s < c.Subs; s++) _cb.DrawRenderer(c.R, _castMat, s, 1);
-            }
-            S("silhouette draw");
-            Graphics.ExecuteCommandBuffer(_cb);
-            S("silhouette done");
-            RenderTexture.active = prev;
-
-            S("rays");
-            float step = 2f * half / Q;
-            var o = center - _dir * Ahead;
-            for (int j = 0; j < N; j++)
-                for (int i = 0; i < N; i++)
-                {
-                    int k = j * N + i;
-                    var s = o + right * (-half + i * step) + up * (-half + j * step);
-                    if (Physics.Raycast(s, _dir, out var hit, Ahead + Reach, _mask, QueryTriggerInteraction.Ignore))
-                    {
-                        var nrm = hit.normal;
-                        _ok[k] = true; _n[k] = nrm; _p[k] = hit.point + nrm * 0.012f - center;
-                    }
-                    else _ok[k] = false;
-                }
-            S("mesh");
-            int vi = 0;
-            for (int j = 0; j < Q; j++)
-                for (int i = 0; i < Q; i++)
-                {
-                    int a = j * N + i, bb = a + 1, c = a + N, d = c + 1;
-                    bool good = _ok[a] && _ok[bb] && _ok[c] && _ok[d] && Flat(a, bb) && Flat(a, c) && Flat(bb, d) && Flat(c, d);
-                    if (good) { _verts[vi] = _p[a]; _verts[vi + 1] = _p[bb]; _verts[vi + 2] = _p[c]; _verts[vi + 3] = _p[d]; }
-                    else { _verts[vi] = Vector3.zero; _verts[vi + 1] = Vector3.zero; _verts[vi + 2] = Vector3.zero; _verts[vi + 3] = Vector3.zero; }
-                    vi += 4;
-                }
-            S("mesh upload");
-            _mesh.vertices = _verts;
-            _mesh.bounds = new Bounds(Vector3.zero, new Vector3(40f, 40f, 40f));
-
             S("place");
-            _headMat.SetFloat(KId, dark); _lensMat.SetFloat(KId, dark);
-            int hl = FlashBeams.HeadsetLayer != null ? FlashBeams.HeadsetLayer() : -1;
-            int ll = FlashBeams.LensLayer != null ? FlashBeams.LensLayer() : -1;
-            _headGo.layer = hl >= 0 ? hl : 0;
-            _lensGo.layer = ll >= 0 ? ll : 0;
-            _headGo.transform.position = center; _lensGo.transform.position = center;
+            var a = Vector3.Cross(n, d);
+            if (a.sqrMagnitude < 1e-6f) a = Vector3.Cross(n, Mathf.Abs(n.x) < 0.9f ? Vector3.right : Vector3.forward);
+            a.Normalize();
+            var b2 = Vector3.Cross(d, a).normalized;
+            var t = b2 - d * (Vector3.Dot(b2, n) / dn);
+            float stretch = t.magnitude;
+            t /= stretch;
+            var at2 = origin - d * (Vector3.Dot(origin - _planeP, n) / dn) + n * Lift;
+            _outer.SetPositionAndRotation(at2, Quaternion.LookRotation(Vector3.Cross(a, t), t));
+            _outer.localScale = new Vector3(1f, Mathf.Min(stretch, 12f), Thin);
+            _inner.localRotation = Quaternion.Inverse(Quaternion.LookRotation(d, b2));
+            _anchor.position = at2;
+            _sheet.transform.SetPositionAndRotation(at2, Quaternion.LookRotation(n, a));
+            _sheet.transform.localScale = new Vector3(60f, 60f, 1f);
+            _shade.SetFloat(KId, dark);
+
+            int layer = FlashBeams.HeadsetLayer != null ? FlashBeams.HeadsetLayer() : -1;
+            if (layer < 0) layer = 0;
+            if (layer != _layer)
+            {
+                _layer = layer;
+                _sheet.layer = layer;
+                foreach (var g in _skins) if (g != null) g.layer = layer;
+                foreach (var g in _partGo) if (g != null) g.layer = layer;
+            }
+
+            S("follow");
+            bool scale = _fresh || (++_frame & 7) == 0;
+            bool active = _fresh || (_frame & 3) == 0;
+            for (int i = 0; i < _boneSrc.Count; i++)
+            {
+                var src = _boneSrc[i];
+                if (src == null) continue;
+                var dst = _boneDst[i];
+                dst.localPosition = src.position - origin;
+                dst.localRotation = src.rotation;
+                if (scale) dst.localScale = src.lossyScale;
+            }
+            for (int i = 0; i < _partSrc.Count; i++)
+            {
+                var src = _partSrc[i];
+                var go = _partGo[i];
+                if (src == null) { if (go != null && go.activeSelf) go.SetActive(false); continue; }
+                if (active) { bool on = src.gameObject.activeInHierarchy; if (go.activeSelf != on) go.SetActive(on); }
+                var dst = _partDst[i];
+                dst.localPosition = src.position - origin;
+                dst.localRotation = src.rotation;
+                if (scale) dst.localScale = src.lossyScale;
+            }
+            _fresh = false;
             Show(true);
-            if (!_logged) { S("first frame finished"); try { System.IO.File.WriteAllText(StepFile, "ok"); } catch { } }
-            if (!_logged) { _logged = true; Mod.Log.Msg($"Shadows: body shadow on ({_casters.Count} parts, {(_sun != null ? "sun '" + _sun.name + "'" : "no sun on this map, shadow falls straight down")})"); }
+            if (!_logged)
+            {
+                S("first frame finished");
+                try { System.IO.File.WriteAllText(StepFile, "ok"); } catch { }
+                _logged = true;
+                Mod.Log.Msg($"Shadows: body shadow on ({_skins.Count} meshes, {_boneSrc.Count} bones, {_partSrc.Count} held parts, {(_sun != null ? "sun '" + _sun.name + "'" : "no sun on this map, shadow falls straight down")}, {SystemInfo.graphicsDeviceType})");
+            }
         }
     }
 }

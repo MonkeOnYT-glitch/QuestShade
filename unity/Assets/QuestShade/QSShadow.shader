@@ -2,19 +2,31 @@ Shader "Hidden/QuestShade/Shadow"
 {
     Properties
     {
-        _QS_ShadowTex ("Silhouette", 2D) = "black" {}
         _QS_ShadowK ("Darkness", Float) = 0.5
+        _QS_Mask ("Color mask", Float) = 15
+        _QS_Comp ("Stencil compare", Float) = 6
+        _QS_Pass ("Stencil pass", Float) = 2
+        _QS_ZTest ("Depth test", Float) = 4
     }
     SubShader
     {
-        Tags { "RenderPipeline" = "UniversalPipeline" "Queue" = "AlphaTest+49" "RenderType" = "Transparent" "IgnoreProjector" = "True" }
+        Tags { "RenderPipeline" = "UniversalPipeline" "Queue" = "Transparent" "RenderType" = "Transparent" "IgnoreProjector" = "True" }
         Pass
         {
             Blend Zero OneMinusSrcAlpha, Zero One
             ZWrite Off
-            ZTest LEqual
+            ZTest [_QS_ZTest]
             Cull Off
+            ColorMask [_QS_Mask]
             Offset -1, -1
+            Stencil
+            {
+                Ref 64
+                ReadMask 64
+                WriteMask 64
+                Comp [_QS_Comp]
+                Pass [_QS_Pass]
+            }
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment Frag
@@ -26,14 +38,16 @@ Shader "Hidden/QuestShade/Shadow"
             #endif
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            TEXTURE2D(_QS_ShadowTex); SAMPLER(sampler_QS_ShadowTex);
             CBUFFER_START(UnityPerMaterial)
-            float4 _QS_ShadowTex_TexelSize;
             half _QS_ShadowK;
+            half _QS_Mask;
+            half _QS_Comp;
+            half _QS_Pass;
+            half _QS_ZTest;
             CBUFFER_END
 
-            struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; UNITY_VERTEX_OUTPUT_STEREO };
+            struct Attributes { float4 positionOS : POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID };
+            struct Varyings { float4 positionCS : SV_POSITION; UNITY_VERTEX_OUTPUT_STEREO };
 
             Varyings Vert(Attributes i)
             {
@@ -41,47 +55,13 @@ Shader "Hidden/QuestShade/Shadow"
                 UNITY_SETUP_INSTANCE_ID(i);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 o.positionCS = TransformObjectToHClip(i.positionOS.xyz);
-                o.uv = i.uv;
                 return o;
             }
-
-            half Tap(float2 uv) { return SAMPLE_TEXTURE2D_LOD(_QS_ShadowTex, sampler_QS_ShadowTex, uv, 0).r; }
 
             half4 Frag(Varyings i) : SV_Target
             {
-                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
-                float2 t = _QS_ShadowTex_TexelSize.xy * 1.6;
-                half a = Tap(i.uv) * 0.28;
-                a += (Tap(i.uv + float2(t.x, t.y)) + Tap(i.uv + float2(-t.x, t.y)) + Tap(i.uv + float2(t.x, -t.y)) + Tap(i.uv + float2(-t.x, -t.y))) * 0.12;
-                a += (Tap(i.uv + float2(t.x * 2, 0)) + Tap(i.uv + float2(-t.x * 2, 0)) + Tap(i.uv + float2(0, t.y * 2)) + Tap(i.uv + float2(0, -t.y * 2))) * 0.06;
-                float2 e = 0.5 - abs(i.uv - 0.5);
-                a *= saturate(min(e.x, e.y) * 25.0);
-                return half4(0, 0, 0, saturate(a) * _QS_ShadowK);
+                return half4(0, 0, 0, _QS_ShadowK);
             }
-            ENDHLSL
-        }
-        Pass
-        {
-            Tags { "LightMode" = "QSShadowCaster" }
-            ZWrite Off
-            ZTest Always
-            Cull Off
-            HLSLPROGRAM
-            #pragma vertex Vert
-            #pragma fragment Frag
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-
-            struct Attributes { float4 positionOS : POSITION; };
-            struct Varyings { float4 positionCS : SV_POSITION; };
-
-            Varyings Vert(Attributes i)
-            {
-                Varyings o;
-                o.positionCS = TransformObjectToHClip(i.positionOS.xyz);
-                return o;
-            }
-
-            half4 Frag(Varyings i) : SV_Target { return half4(1, 1, 1, 1); }
             ENDHLSL
         }
     }
