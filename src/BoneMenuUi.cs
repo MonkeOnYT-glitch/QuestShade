@@ -8,7 +8,7 @@ namespace QuestShade
 {
     internal static class BoneMenuUi
     {
-        private static Page _presetPage;
+        private static Page _presetPage, _builtinPage;
         private static Mod _mod;
         private static readonly Color Accent = new Color(0.55f, 0.85f, 1f);
 
@@ -69,7 +69,9 @@ namespace QuestShade
 
             var fx = root.CreatePage("Effects", Color.white, 8, true);
             fx.CreateBool("Effects on", Color.green, cfg.Enabled, v => mod.SetEffectsEnabled(v));
-            _presetPage = fx.CreatePage("Choose preset", Color.white, 8, true);
+            var choose = fx.CreatePage("Choose preset", Color.white, 8, true);
+            _builtinPage = choose.CreatePage("Built-in", Color.white, 8, true);
+            _presetPage = choose.CreatePage("Yours + downloaded", Color.cyan, 8, true);
             PresetEditorUi.Build(fx, mod, cfg);
             fx.CreateFunction("Next preset", Color.white, () => mod.StepPreset(1));
             fx.CreateBool("Videos match the preview", Color.white, cfg.MatchPreview, v => cfg.MatchPreview = v);
@@ -669,12 +671,14 @@ namespace QuestShade
         {
             try { RefreshImports(cfg); } catch { }
             try { PresetEditorUi.Refresh(); } catch (Exception e) { Mod.Log.Warning("Preset editor: " + e.Message); }
-            if (_presetPage == null) return;
+            if (_presetPage == null || _builtinPage == null) return;
             _presetPage.RemoveAll();
+            _builtinPage.RemoveAll();
             foreach (var p in cfg.Presets)
             {
                 var name = p;
-                _presetPage.CreateFunction(name, name.Equals(cfg.PresetName, StringComparison.OrdinalIgnoreCase) ? Color.green : Color.white,
+                var page = Config.IsBuiltIn(name) ? _builtinPage : _presetPage;
+                page.CreateFunction(name, name.Equals(cfg.PresetName, StringComparison.OrdinalIgnoreCase) ? Color.green : Color.white,
                     () => _mod.SelectPreset(name));
             }
         }

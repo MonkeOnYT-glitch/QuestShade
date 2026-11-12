@@ -140,6 +140,13 @@ namespace QuestShade
             try
             {
                 VideoRecorder.Diag("audio: starting mic");
+                if (!HasMicPermission())
+                {
+                    AskMicPermission();
+                    Notice = "Allow the microphone on your Quest, then record again to get your voice. This video has game audio only.";
+                    Mod.Log.Msg("Recording: no microphone permission yet (asked Android)");
+                    return false;
+                }
                 var devs = Microphone.devices;
                 if (devs == null || devs.Length == 0) { AskMicPermission(); Mod.Log.Msg("Recording: no microphone (asked Android for mic permission)"); return false; }
                 _micDev = null;
@@ -185,6 +192,13 @@ namespace QuestShade
             }
             if (other != null) return other;
             return keptAlive ? _keptClip : null;
+        }
+
+        private static bool HasMicPermission()
+        {
+            if (Application.platform != RuntimePlatform.Android) return true;
+            try { return UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone); }
+            catch { return true; }
         }
 
         public static void AskMicPermission()

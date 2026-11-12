@@ -24,7 +24,7 @@ namespace QuestShade
                     if (asm.GetName().Name != "LabFusion") continue;
                     _hasServer = asm.GetType("LabFusion.Network.NetworkInfo")?.GetProperty("HasServer", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
                     _present = _hasServer != null;
-                    if (_present) Mod.Log.Msg("Fusion found: the camera turns off in lobbies (Camera > Settings)");
+                    if (_present) Mod.Log.Msg("Fusion found: camera and mic work in lobbies");
                     break;
                 }
                 if (!_present) return;
