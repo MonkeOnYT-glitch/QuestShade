@@ -3,7 +3,7 @@ using System.Linq;
 using MelonLoader;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.6", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.7", "QuestShade")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
 [assembly: MelonOptionalDependencies("BoneLib")]
@@ -56,7 +56,7 @@ namespace QuestShade
             if (_boneLib)
             {
                 try { BoneMenuUi.Build(this, _cfg); _cam.ChestProvider = BoneMenuUi.Chest; Focus.PlayerRoot = BoneMenuUi.PlayerRoot; _cam.HideHead = BoneMenuUi.HideHead; _cam.RestoreHead = BoneMenuUi.RestoreHead; _cam.UiLayerMask = BoneMenuUi.UiLayerMask; _cam.ActorPose = BoneMenuUi.ActorPose; _cam.HideHeadOf = BoneMenuUi.HideHeadOf; _cam.HeadToLayer = BoneMenuUi.HeadToLayer; _cam.HeadRestore = BoneMenuUi.RestoreHeadLayer; _cam.OwnBodyToLayer = BoneMenuUi.OwnBodyToLayer;
-                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; FlashBeams.HeadsetLayer = () => _cam.LensHiddenLayer; FlashBeams.LensLayer = () => _cam.LensOnlyLayer; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Log.Msg("BoneMenu page added"); }
+                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; FlashBeams.HeadsetLayer = () => _cam.LensHiddenLayer; FlashBeams.LensLayer = () => _cam.LensOnlyLayer; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Shadows.Collect = BoneMenuUi.ShadowCasters; Shadows.PlayerLayers = BoneMenuUi.PlayerLayerMask; Log.Msg("BoneMenu page added"); }
                 catch (Exception e) { _boneLib = false; Log.Warning("BoneLib found but menu failed (gestures still work): " + e.Message); }
             }
             else Log.Msg("BoneLib not found - using controller gestures only");
@@ -70,6 +70,7 @@ namespace QuestShade
             _cam.OnSceneLoaded();
             Flashlights.Reset();
             Lighting.OnLevel();
+            Shadows.OnLevel();
             _fx.ResetCalibration();
             if (_startNotice != null) _noticeAt = Time.unscaledTime + 6f;
             Perf.OnSceneLoaded();
@@ -159,6 +160,7 @@ namespace QuestShade
                     if (_fx.CalibrationWanted && !_cam.Prewarming && now > _nextCalibAt && _calibTries < 8)
                     { _calibTries++; _nextCalibAt = now + 5f; _cam.SchedulePrewarm(0f); }
                 }
+                Shadows.Tick(_cfg, head);
                 _toast.LateTick(head);
                 if (_boneLib)
                 {

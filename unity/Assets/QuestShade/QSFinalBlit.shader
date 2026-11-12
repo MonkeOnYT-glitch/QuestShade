@@ -138,9 +138,8 @@ Shader "Hidden/QuestShade/FinalBlit"
             float4 _QS_SunR;
             half3 FetchRaw(float2 uv) { return SAMPLE_TEXTURE2D_X_LOD(_SourceTex, sampler_SourceTex, uv, 0).rgb; }
 
-            half3 FetchMain(float2 uv)
+            half3 FetchMainFrom(half3 c, float2 uv)
             {
-                half3 c = FetchSrc(uv);
                 UNITY_BRANCH if (_QS_Live.y > 0 && _QS_Dof.x > 0)
                 {
                     float f = FocusDist();
@@ -202,7 +201,7 @@ Shader "Hidden/QuestShade/FinalBlit"
             }
 
             #define QS_FETCH(uv) FetchSrc(uv)
-            #define QS_FETCH_MAIN(uv) FetchMain(uv)
+            #define QS_FETCH_MAIN_FROM(c, uv) FetchMainFrom(c, uv)
             #include "QSEffects.hlsl"
 
 #if defined(QS_PREPASS)

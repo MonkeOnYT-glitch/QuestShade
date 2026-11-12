@@ -2,8 +2,8 @@
 #define QS_EFFECTS_INCLUDED
 
 #include "QSEffectsParams.hlsl"
-#ifndef QS_FETCH_MAIN
-#define QS_FETCH_MAIN(uv) QS_FETCH(uv)
+#ifndef QS_FETCH_MAIN_FROM
+#define QS_FETCH_MAIN_FROM(c, uv) (c)
 #endif
 
 float Hash12(float2 p) { float3 p3 = frac(float3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return frac((p3.x + p3.y) * p3.z); }
@@ -71,11 +71,11 @@ half3 QSStack(float2 uv, float2 pixelPos)
     UNITY_BRANCH if (_QS_CA.x > 0)
     {
         float2 d = (suv - 0.5) * _QS_CA.x * 0.02;
-        half3 mainC = QS_FETCH_MAIN(suv);
         half3 baseC = QS_FETCH(suv);
+        half3 mainC = QS_FETCH_MAIN_FROM(baseC, suv);
         col = half3(QS_FETCH(suv - d).r, baseC.g, QS_FETCH(suv + d).b) + (mainC - baseC);
     }
-    else col = QS_FETCH_MAIN(suv);
+    else col = QS_FETCH_MAIN_FROM(QS_FETCH(suv), suv);
 
     UNITY_BRANCH if (_QS_Hurt.x > 0.001)
     {

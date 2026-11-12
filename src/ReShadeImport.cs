@@ -232,7 +232,7 @@ namespace QuestShade
         private static bool TryPort(string file, string outFile)
         {
             string name = Path.GetFileNameWithoutExtension(file);
-            if (name.IndexOf("limit", StringComparison.OrdinalIgnoreCase) < 0 && name.IndexOf("beckcam", StringComparison.OrdinalIgnoreCase) < 0) return false;
+            if (name.IndexOf("limit", StringComparison.OrdinalIgnoreCase) < 0 && name.IndexOf("beckcam", StringComparison.OrdinalIgnoreCase) < 0 && name.IndexOf("spectrumb", StringComparison.OrdinalIgnoreCase) < 0) return false;
             string want = Key(name);
             var asm = System.Reflection.Assembly.GetExecutingAssembly();
             const string prefix = "QuestShade.Ports.";
