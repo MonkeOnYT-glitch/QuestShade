@@ -31,11 +31,15 @@ namespace QuestShade
         private static Vector3 _dir = Vector3.down, _planeP, _planeN = Vector3.up;
         private static bool _plane, _perfOff, _failed, _logged, _checked, _fresh;
 
-        private static string StepFile => System.IO.Path.Combine(Config.Root, "shadow2-step.txt");
+        private static float _wait;
+        private static int _seenAvatar;
+
+        private static string StepFile => System.IO.Path.Combine(Config.Root, "shadow3-step.txt");
 
         public static void OnLevel()
         {
             _sun = null; _sunAt = Time.unscaledTime + 2f; _perfOff = false; _fade = 0f; _logged = false; _plane = false;
+            _wait = Time.unscaledTime + 4f;
         }
 
         private static void S(string s)
@@ -55,7 +59,7 @@ namespace QuestShade
                 var last = System.IO.File.ReadAllText(StepFile).Trim();
                 if (last == "ok" || last.Length == 0) return false;
                 _failed = true;
-                Mod.Log.Warning($"Shadows: last time the game died at shadow step \"{last}\". Body shadow is OFF now so you can play. Please send this log. (Delete UserData/QuestShade/shadow2-step.txt to try again.)");
+                Mod.Log.Warning($"Shadows: last time the game died at shadow step \"{last}\". Body shadow is OFF now so you can play. Please send this log. (Delete UserData/QuestShade/shadow3-step.txt to try again.)");
             }
             catch { }
             return _failed;
@@ -68,7 +72,12 @@ namespace QuestShade
             if (want && Perf.Level >= 2) { _perfOff = true; want = false; Mod.Log.Msg("Shadows: game too slow, body shadow off for this level"); }
             if (!want) { Show(false); return; }
             try { Run(cfg, head); }
-            catch (Exception e) { _failed = true; Show(false); Mod.Log.Warning("Shadows: turned off, " + e.Message); }
+            catch (Exception e)
+            {
+                _failed = true; Show(false);
+                Mod.Log.Warning("Shadows: turned off after an error (not a crash): " + e);
+                try { System.IO.File.WriteAllText(StepFile, "ok"); } catch { }
+            }
         }
 
         private static void Show(bool on)
@@ -141,7 +150,9 @@ namespace QuestShade
             _avatarId = av.GetInstanceID();
             _fresh = true; _layer = -1;
 
+            S("copy body: player layers");
             int pl = 0; try { pl = PlayerLayers != null ? PlayerLayers() : 0; } catch { }
+            S("copy body: find meshes");
             pl &= ~1;
             int st = LayerMask.NameToLayer("Static");
             _mask = (1 | (st >= 0 ? 1 << st : 0)) & ~pl;
@@ -152,9 +163,12 @@ namespace QuestShade
             foreach (var smr in av.GetComponentsInChildren<SkinnedMeshRenderer>(false))
             {
                 if (smr == null) continue;
+                S("copy body: read mesh");
                 var mesh = smr.sharedMesh;
+                S("copy body: read bones");
                 var bones = smr.bones;
                 if (mesh == null || bones == null || bones.Length == 0) continue;
+                S("copy body: read materials");
                 var mats = Mats(smr.sharedMaterials, mesh.subMeshCount);
                 if (mats == null) continue;
                 S($"copy mesh \"{smr.name}\": {bones.Length} bones, {mesh.subMeshCount} submesh, {mesh.vertexCount} verts");
@@ -174,11 +188,14 @@ namespace QuestShade
                     }
                     mapped[i] = _boneDst[at];
                 }
+                S("copy body: make copy");
                 var go = new GameObject("Skin");
                 go.transform.SetParent(_root.transform, false);
                 var copy = go.AddComponent<SkinnedMeshRenderer>();
                 copy.sharedMesh = mesh;
+                S("copy body: set bones");
                 copy.bones = mapped;
+                S("copy body: set materials");
                 copy.rootBone = _anchor;
                 copy.quality = SkinQuality.Bone2;
                 copy.updateWhenOffscreen = false;
@@ -261,6 +278,9 @@ namespace QuestShade
             Transform av = null;
             try { av = Avatar(); } catch { }
             if (av == null) { Show(false); return; }
+            int avId = av.GetInstanceID();
+            if (avId != _seenAvatar) { _seenAvatar = avId; _wait = Mathf.Max(_wait, now + 3f); }
+            if (now < _wait) { Show(false); return; }
             S("setup"); Ensure();
             if (av.GetInstanceID() != _avatarId) { S("copy body"); Build(av); }
             if (now >= _nextItems) { _nextItems = now + 0.25f; S("held items"); Items(); }
