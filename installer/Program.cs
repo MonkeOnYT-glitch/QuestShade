@@ -115,7 +115,7 @@ namespace QuestShadeInstaller
         private readonly List<Btn> _buttons = new List<Btn>();
         private readonly TextBox _log;
         private Screen _screen = Screen.Welcome;
-        private string _status = "", _detail = "", _doneTitle = "", _doneText = "";
+        private string _status = "", _detail = "", _doneTitle = "", _doneText = "", _note = "";
         private string _downloads;
         private bool _busy, _failed, _waitingPatch, _uninstalling;
         private int _step;
@@ -225,13 +225,13 @@ namespace QuestShadeInstaller
         {
             if (_busy) return;
             if (uninstall && MessageBox.Show(this, "Remove QuestShade and its updater from your Quest? Your other mods, BoneLib and your QuestShade settings stay.", "Uninstall QuestShade", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-            _uninstalling = uninstall; _busy = true; _failed = false; _step = 0; _status = "Starting..."; _detail = "";
+            _uninstalling = uninstall; _busy = true; _failed = false; _note = ""; _step = 0; _status = "Starting..."; _detail = "";
             Show(Screen.Work);
             try
             {
                 await Task.Run(() => { if (uninstall) RunUninstall(); else RunAll(); });
                 _doneTitle = uninstall ? "QuestShade removed" : "You're all set";
-                _doneText = uninstall ? "QuestShade is off your Quest. Your other mods and settings are still there." : "Start BONELAB on your Quest. QuestShade is in BoneMenu.";
+                _doneText = uninstall ? "QuestShade is off your Quest. Your other mods and settings are still there." : "Start BONELAB on your Quest. QuestShade is in BoneMenu." + _note;
             }
             catch (Exception e)
             {
@@ -571,15 +571,27 @@ namespace QuestShadeInstaller
             }
         }
 
-        private bool Patched() => !Adb($"shell ls {MlDir}").Contains("No such file");
+        private static readonly string[] SaveItems = { "Saves", "Fusion", "QuestShade", "settings.json", "settings.backup.json", "mod_settings.json", "repositories.txt" };
+
+        private bool Patched()
+        {
+            var inst = Regex.Match(Adb($"shell pm list packages -i {Pkg}").ToLowerInvariant(), "installer=(\\S+)").Groups[1].Value;
+            if (inst.Contains("melonloader") || inst.Contains("lemonloader")) return true;
+            if (inst.Contains("oculus") || inst.Contains("meta") || inst.Contains("vending")) return false;
+            return !Adb($"shell ls {MlDir}").Contains("No such file");
+        }
 
         private void Patch()
         {
             var backup = Path.Combine(_home, "save-backup-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"));
-            Status("Backing up your BONELAB saves to this PC...");
-            Adb($"pull /sdcard/Android/data/{Pkg}/files \"{backup}\"", 600000);
-            bool haveBackup = Directory.Exists(backup) && Directory.EnumerateFileSystemEntries(backup).Any();
-            Log(haveBackup ? "Saves backed up to " + backup : "No saves found to back up.");
+            Status("Backing up your BONELAB saves and settings to this PC...");
+            Directory.CreateDirectory(backup);
+            var files = $"/sdcard/Android/data/{Pkg}/files";
+            foreach (var item in SaveItems) Adb($"pull {files}/{item} \"{backup}\"", 600000);
+            bool haveBackup = Directory.EnumerateFileSystemEntries(backup).Any();
+            if (!haveBackup) Directory.Delete(backup, true);
+            bool hadMods = !Adb($"shell ls {files}/Mods").Contains("No such file");
+            Log(haveBackup ? "Saves and settings backed up to " + backup : "No saves found to back up.");
 
             Status("Getting LemonLoader (it patches BONELAB so mods can load)...");
             var lemonDir = Path.Combine(_home, "lemonloader");
@@ -593,7 +605,7 @@ namespace QuestShadeInstaller
                 File.Delete(zip);
             }
             Status("In the LemonLoader window: pick your Quest and BONELAB, press Patch.");
-            Detail("When it's done, start BONELAB once on your Quest and wait for the main menu. This carries on by itself.");
+            Detail("This carries on by itself as soon as LemonLoader finishes.");
             Log("LemonLoader is made by the LemonLoader team, GPL-3.0: github.com/LemonLoader/MelonLoaderInstaller");
             try { Process.Start(new ProcessStartInfo(lemonExe) { UseShellExecute = true, WorkingDirectory = lemonDir }); }
             catch (Exception e) { Log("Couldn't open LemonLoader: " + e.Message); }
@@ -610,6 +622,11 @@ namespace QuestShadeInstaller
                 Adb($"shell mkdir -p /sdcard/Android/data/{Pkg}/files");
                 Adb($"push \"{backup}{Path.DirectorySeparatorChar}.\" /sdcard/Android/data/{Pkg}/files/", 600000);
                 Log("Saves restored.");
+            }
+            if (hadMods && Adb($"shell ls /sdcard/Android/data/{Pkg}/files/Mods").Contains("No such file"))
+            {
+                _note = " Patching removed the mods you downloaded inside BONELAB, so get them again from the in-game mod menu.";
+                Log(_note.Trim());
             }
         }
 
