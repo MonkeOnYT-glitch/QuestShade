@@ -166,17 +166,23 @@ Shader "Hidden/QuestShade/FinalBlit"
                     half3 b = 0;
                     float2 rad = _QS_LiveBloom.z * float2(_QS_SrcTexel.w * _QS_SrcTexel.x, 1);
                     half knee = max(_QS_LiveBloom.y, 1e-4);
+                    float2 cell = floor(frac(uv * _QS_SrcTexel.zw * 0.5) * 2.0);
+                    float phase = cell.x + cell.y * 2.0;
+                    float sp, cp;
+                    sincos(phase * 2.3999632, sp, cp);
+                    float2 rx = float2(cp, -sp) * rad.x, ry = float2(sp, cp) * rad.y;
                     UNITY_UNROLL for (int k = 0; k < 16; k++)
                     {
-                        float th = k * 2.3999632;
-                        float2 o = float2(cos(th), sin(th)) * rad * sqrt((k + 0.5) / 16.0);
+                        float a = k * 9.5998528;
+                        float2 dir = float2(cos(a), sin(a));
+                        float2 o = float2(dot(dir, rx), dot(dir, ry)) * sqrt((k * 4.0 + phase + 0.5) / 64.0);
                         half3 s = FetchRaw(uv + o);
                         half br = max(s.r, max(s.g, s.b));
                         half soft = clamp(br - _QS_LiveBloom.x + knee, 0, 2 * knee);
                         soft = soft * soft / (4 * knee + 1e-4);
-                        b += s * (max(soft, br - _QS_LiveBloom.x) / max(br, 1e-4)) * (1.6 - (k / 16.0) * 1.2);
+                        b += s * (max(soft, br - _QS_LiveBloom.x) / max(br, 1e-4)) * exp(-2.5 * (k * 4.0 + 0.5) / 64.0);
                     }
-                    c += b / 16.0 * _QS_Live.x * _QS_LiveTint.rgb;
+                    c += b * (2.72 / 16.0 * exp(-0.0390625 * phase)) * _QS_Live.x * _QS_LiveTint.rgb;
                 }
                 UNITY_BRANCH if (_QS_God.x > 0)
                 {
