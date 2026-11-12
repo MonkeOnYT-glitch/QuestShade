@@ -85,8 +85,6 @@ namespace QuestShade
             lit.CreateBool("Real lights (flashlights light things up)", Color.white, cfg.RealLights, v => { cfg.RealLights = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
             lit.CreateFloat("Less shine", Color.white, cfg.LessShine, 0.1f, 0f, 1f, v => { cfg.LessShine = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
             lit.CreateBool("Bloom in your headset", Color.white, cfg.HeadsetBloom, v => { cfg.HeadsetBloom = v; cfg.SaveMenuSettings(); mod.ReapplyEffects(); });
-            lit.CreateBool("Body shadow", Color.white, cfg.Shadows, v => { cfg.Shadows = v; cfg.SaveMenuSettings(); });
-            lit.CreateFloat("Shadow darkness", Color.white, cfg.ShadowDarkness, 0.05f, 0.1f, 1f, v => { cfg.ShadowDarkness = v; cfg.SaveMenuSettings(); });
             var eye = fx.CreatePage("Eye adaptation, dark maps, flashlights", Color.white, 8, true);
             eye.CreateFunction("What's this?", new Color(1f, 0.75f, 0.35f), () => Notify("Walk into a dark room: it starts dark, then your eyes adjust and it brightens. Walk back out: it's blinding for a moment, then settles.", 5f));
             eye.CreateBool("Eye adaptation", Color.green, cfg.EyeAdapt, v => { cfg.EyeAdapt = v; mod.ReapplyEffects(); });
