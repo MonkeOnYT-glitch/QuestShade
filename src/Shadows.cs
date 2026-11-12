@@ -71,7 +71,7 @@ namespace QuestShade
 
         public static void Retry()
         {
-            _checked = true; _failed = false; _logged = false;
+            _checked = true; _failed = false; _logged = false; _perfOff = false; _wait = 0f;
             try { if (System.IO.File.Exists(StepFile)) System.IO.File.Delete(StepFile); } catch { }
             Mod.Log.Msg("Shadows: trying the body shadow again");
         }
@@ -80,7 +80,6 @@ namespace QuestShade
         {
             bool want = cfg.Shadows && cfg.Enabled && !_perfOff && !_failed && ShaderPack.Shadow != null && head != null && Avatar != null;
             if (want && DiedLastTime()) want = false;
-            if (want && Perf.Level >= 2) { _perfOff = true; want = false; Mod.Log.Msg("Shadows: game too slow, body shadow off for this level"); }
             if (!want) { Show(false); return; }
             try { Run(cfg, head); }
             catch (Exception e)

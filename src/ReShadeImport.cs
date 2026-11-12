@@ -11,7 +11,7 @@ namespace QuestShade
     {
         public static string Dir => Path.Combine(Config.Root, "ReShade");
         public const string Suffix = " (ReShade)";
-        private const int Version = 11;
+        private const int Version = 12;
 
         private static readonly string[] Heavy = { "MXAO", "RTGI", "SSR", "MotionBlur", "Reflective", "GloomAO", "SSDO", "HBAO",
             "SSAO", "MiAO", "XeGTAO", "NeoGI", "SCGI", "SCAO", "TurboGI", "RadiantGI", "Pirate_Depth_GI", "ZN_GI", "DAMP_RT", "LSAO", "RTAO",
@@ -177,6 +177,27 @@ namespace QuestShade
                         float.TryParse(kv.Value.Split(',')[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var v)) { sum += v; cnt++; }
                     if (cnt > 0) sat += sum / cnt * 60f;
                     used.Add(label + " (saturation)");
+                }
+                else if (key.StartsWith("imageadjustment"))
+                {
+                    float lum = F("ia_luminance", 1f);
+                    if (lum > 0.01f) exposure += MathF.Log(lum, 2f);
+                    exposure += F("ia_bright_boost", 0f) * 1.5f;
+                    contrast += (F("ia_contrast", 1f) - 1f) * 100f; sat += (F("ia_saturation", 1f) - 1f) * 100f;
+                    lift += F("ia_black_level", 0f);
+                    float tg = F("ia_target_gamma", 2.2f), mg = F("ia_monitor_gamma", 2.2f);
+                    if (tg > 0.1f && mg > 0.1f && Math.Abs(tg / mg - 1f) > 0.02f) o.Set("LiftGammaGain", "Gamma", V(1, 1, 1, mg / tg - 1f));
+                    float r = F("ia_R", 1f), g = F("ia_G", 1f), b = F("ia_B", 1f);
+                    if (Math.Abs(r - 1f) > 0.01f || Math.Abs(g - 1f) > 0.01f || Math.Abs(b - 1f) > 0.01f)
+                    { o.Set("ChannelMixer", "Red", $"{Fmt(r * 100f)}, 0, 0"); o.Set("ChannelMixer", "Green", $"0, {Fmt(g * 100f)}, 0"); o.Set("ChannelMixer", "Blue", $"0, 0, {Fmt(b * 100f)}"); }
+                    if (F("ia_GRAIN_STR", 0f) > 0f) grain = Math.Max(grain, Math.Clamp(F("ia_GRAIN_STR", 0f) / 64f, 0.1f, 1f));
+                    used.Add(label + " (brightness, contrast, saturation)");
+                }
+                else if (key.StartsWith("fgfxlargescaleperceptual") || techName.StartsWith("FGFXLSPOIrr", StringComparison.OrdinalIgnoreCase))
+                {
+                    float k = Math.Clamp(F("LSPOIrrEffectIntensity", 0.5f), 0f, 1f);
+                    contrast += 8f * k; sharp = Math.Max(sharp, 0.2f * k);
+                    used.Add(label + " (as local contrast)");
                 }
                 else if (key.StartsWith("clarity") || key.Contains("localcontrast") || key.StartsWith("zenlc") || key.StartsWith("quark_local"))
                 { sharp = Math.Max(sharp, Math.Clamp(Any(0.4f, "ClarityStrength", "strength", "intensity", "amount") * 0.6f, 0.1f, 0.8f)); contrast += 5; used.Add(label + " (as sharpen)"); }
