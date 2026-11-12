@@ -9,8 +9,8 @@
     <OutputPath Condition="'$(QSStore)' == 'true'">bin/$(QSTarget)-Store/</OutputPath>
     <AssemblyName>QuestShade</AssemblyName>
     <DefineConstants Condition="'$(ShadowDebug)' == 'true'">$(DefineConstants);QS_SHADOW_DEBUG</DefineConstants>
-    <Version>1.7.18</Version>
-    <Version Condition="'$(ShadowDebug)' == 'true'">1.7.19</Version>
+    <Version>1.7.19</Version>
+    <Version Condition="'$(ShadowDebug)' == 'true'">1.7.20</Version>
     <RootNamespace>QuestShade</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
@@ -67,6 +67,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Defaults\**\*" LogicalName="QuestShade.Defaults.%(RecursiveDir)%(Filename)%(Extension)" />
     <EmbeddedResource Include="Ports\*.ini" LogicalName="QuestShade.Ports.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Luts\*.bin" LogicalName="QuestShade.Luts.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

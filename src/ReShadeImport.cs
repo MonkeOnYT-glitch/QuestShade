@@ -11,7 +11,7 @@ namespace QuestShade
     {
         public static string Dir => Path.Combine(Config.Root, "ReShade");
         public const string Suffix = " (ReShade)";
-        private const int Version = 9;
+        private const int Version = 10;
 
         private static readonly string[] Heavy = { "MXAO", "RTGI", "SSR", "MotionBlur", "Reflective", "GloomAO", "SSDO", "HBAO",
             "SSAO", "MiAO", "XeGTAO", "NeoGI", "SCGI", "SCAO", "TurboGI", "RadiantGI", "Pirate_Depth_GI", "ZN_GI", "DAMP_RT", "LSAO", "RTAO",
@@ -27,15 +27,16 @@ namespace QuestShade
             try
             {
                 Directory.CreateDirectory(Dir);
-                Directory.CreateDirectory(Path.Combine(Dir, "Textures"));
+                MoveOldLuts();
                 var readme = Path.Combine(Dir, "README.txt");
-                if (!File.Exists(readme)) File.WriteAllText(readme,
-                    "Put ReShade presets (.ini) here.\n" +
+                const string text = "Put ReShade presets (.ini) here. If a preset comes with LUT pictures (.png / .cube), put them next to it, or drop the preset's whole folder in here.\n" +
                     "You don't need ReShade's .fx shader files: QuestShade rebuilds the effects it supports and lists the ones it skipped.\n" +
-                    "Each preset shows up in the menu as \"<name> (ReShade)\".\n");
-                foreach (var file in Directory.GetFiles(Dir, "*.ini"))
+                    "prod80's Cinetools and Bonus LUT packs are built in.\n" +
+                    "Each preset shows up in the menu as \"<name> (ReShade)\".\n";
+                try { if (!File.Exists(readme) || File.ReadAllText(readme) != text) File.WriteAllText(readme, text); } catch { }
+                foreach (var file in Directory.GetFiles(Dir, "*.ini", SearchOption.AllDirectories))
                 {
-                    try { ImportOne(file); }
+                    try { if (IsPreset(file)) ImportOne(file); }
                     catch (Exception e) { Mod.Log.Warning($"ReShade import of {Path.GetFileName(file)} failed: {e.Message}"); }
                 }
             }
@@ -48,9 +49,12 @@ namespace QuestShade
         {
             string name = Path.GetFileNameWithoutExtension(file);
             string outFile = OutPath(name);
-            if (File.Exists(outFile) && File.GetLastWriteTimeUtc(outFile) >= File.GetLastWriteTimeUtc(file) &&
-                Ini.Parse(File.ReadAllText(outFile)).Float("Import", "Version", 1) >= Version)
-                return;
+            if (File.Exists(outFile) && File.GetLastWriteTimeUtc(outFile) >= File.GetLastWriteTimeUtc(file))
+            {
+                var old = Ini.Parse(File.ReadAllText(outFile));
+                bool waiting = old.Bool("Import", "LutMissing", false) && NewestPicture(file, name) > File.GetLastWriteTimeUtc(outFile);
+                if (old.Float("Import", "Version", 1) >= Version && !waiting) return;
+            }
 
             if (TryPort(file, outFile)) return;
 
@@ -61,6 +65,7 @@ namespace QuestShade
             float sat = 0, contrast = 0, exposure = 0, temp = 0, tint = 0, eye = 0, lift = 0, gain = 0;
             float bloomI = 0, bloomT = 1f, bloomS = 0.7f, bloomK = 0.5f, flare = 0, dirt = 0, sharp = 0, ca = 0, grain = 0;
             var chain = new List<string>();
+            bool lutMissing = false;
             void Bloom(float i, float t, float sc)
             {
                 bloomI = bloomI <= 0 ? i : Math.Max(bloomI, i) + Math.Min(bloomI, i) * 0.25f;
@@ -230,7 +235,50 @@ namespace QuestShade
                 { grain = Math.Max(grain, Math.Clamp(Any(0.5f, "Intensity", "amount", "strength") * 0.6f, 0.1f, 1f)); used.Add(label); }
                 else if (key.Contains("sharp") || key.StartsWith("cas") || key.StartsWith("ccas") || key.StartsWith("rcas") || key.StartsWith("crcas") || key.StartsWith("unsharp") || key.StartsWith("finesharp") || key.StartsWith("jasharpen"))
                 { sharp = Math.Max(sharp, Math.Clamp(Any(0.6f, "Sharpening", "sharp_strength", "curve_height", "strength", "amount", "intensity") * 0.55f, 0.1f, 0.6f)); used.Add(label + " (sharpen)"); }
-                else if (key.Contains("lut") || key.Contains("colorgrading") || key.Contains("adaptivecolorgrading")) { skipped.Add(label + " (needs its LUT picture, not supported yet)"); continue; }
+                else if (key.Contains("lut") || key.Contains("colorgrading"))
+                {
+                    string tex = null, mode = "reshade"; int index; float chroma, luma, amount;
+                    if (key.StartsWith("pd80_02"))
+                    {
+                        tex = key.StartsWith("pd80_02_cinetools") ? "pd80_cinelut.png" : key.StartsWith("pd80_02_bonus") ? "pd80_example-lut.png" : null;
+                        mode = "pd80"; index = (int)F("PD80_LutSelector", 0);
+                        chroma = F("PD80_MixChroma", 1); luma = F("PD80_MixLuma", 1); amount = F("PD80_Intensity", 1);
+                    }
+                    else
+                    {
+                        index = (int)Any(0, "LutSelector");
+                        chroma = F("fLUT_AmountChroma", 1); luma = F("fLUT_AmountLuma", 1); amount = F("fLUT_Intensity", 1);
+                        tex = Define(rs, "fLUT_TextureName") ?? (key == "lut.fx" ? "lut.png" : key == "multilut.fx" && F("fLUT_MultiLUTSelector", 0) == 0 ? "MultiLut_atlas1.png" : null);
+                    }
+                    byte[] cube = null; string from = null;
+                    try
+                    {
+                        string pic = tex != null ? FindPicture(tex, file, name) : null;
+                        if (pic == null && tex != null && ReShadeLut.BuiltIn.ContainsKey(tex)) { cube = ReShadeLut.FromBuiltIn(tex, index); from = "built in"; }
+                        else
+                        {
+                            pic ??= GuessPicture(file, name);
+                            if (pic != null)
+                            {
+                                cube = pic.EndsWith(".cube", StringComparison.OrdinalIgnoreCase) ? ReShadeLut.FromCube(pic) : ReShadeLut.FromPicture(pic, index);
+                                from = Path.GetFileName(pic);
+                            }
+                        }
+                    }
+                    catch (Exception e) { skipped.Add(label + $" (its LUT couldn't be read: {e.Message})"); continue; }
+                    if (cube == null)
+                    {
+                        lutMissing = true;
+                        skipped.Add(label + $" (its LUT picture{(tex != null ? " " + tex : "")} didn't come with the preset - put it next to the .ini)");
+                        continue;
+                    }
+                    string id = "LUT#" + (chain.Count(ReShadeColor.IsLut) + 1), sec = "RS " + id;
+                    o.Set(sec, "Mode", mode); o.Set(sec, "Chroma", Fmt(chroma)); o.Set(sec, "Luma", Fmt(luma)); o.Set(sec, "Intensity", Fmt(amount));
+                    if (mode == "pd80") foreach (var k in new[] { "ib", "iw", "ob", "ow", "ig" }) if (s.TryGetValue(k, out var v)) o.Set(sec, k, v);
+                    o.Set(sec, "Source", from);
+                    o.Set(sec, "Data", Convert.ToBase64String(cube));
+                    chain.Add(id); used.Add(label + $" (exact, LUT {from})");
+                }
                 else if (key.Contains("dof") || key.StartsWith("defocus") || key.StartsWith("tiltshift"))
                 {
                     var c = Vec(s, "fADOF_AutofocusCenter", 0.5f);
@@ -295,6 +343,7 @@ namespace QuestShade
             sb.AppendLine("Source = " + Path.GetFileName(file));
             sb.AppendLine("Version = " + Version);
             sb.AppendLine("Heavy = " + (tooHeavy ? "true" : "false"));
+            if (lutMissing) sb.AppendLine("LutMissing = true");
             sb.AppendLine("Answer = " + answer);
             bool compress = answer == "compress";
             sb.AppendLine("Cost = " + cost.ToString("0.0", CultureInfo.InvariantCulture));
@@ -372,7 +421,7 @@ namespace QuestShade
                 foreach (var l in lines)
                 {
                     var t = l.Trim();
-                    if (t.StartsWith("[") && t.EndsWith("]")) on = keep.Contains(t.Substring(1, t.Length - 2));
+                    if (t.StartsWith("[") && t.EndsWith("]")) { var sn = t.Substring(1, t.Length - 2); on = keep.Contains(sn) || sn.StartsWith("RS "); }
                     if (on || t.StartsWith(";")) outL.Add(l);
                 }
                 lines = outL;
@@ -427,15 +476,91 @@ namespace QuestShade
             return null;
         }
 
-        private static string FindTexture(string tex, string near)
+        private static bool IsPreset(string file)
         {
-            foreach (var dir in new[] { Path.Combine(Dir, "Textures"), Dir, near })
+            if (Path.GetFileName(file).Equals("ReShade.ini", StringComparison.OrdinalIgnoreCase)) return false;
+            try { foreach (var l in File.ReadLines(file)) if (l.TrimStart().StartsWith("Techniques", StringComparison.OrdinalIgnoreCase)) return true; }
+            catch { }
+            return false;
+        }
+
+        private static IEnumerable<string> PresetDirs(string file, string name)
+        {
+            var near = Path.GetDirectoryName(file);
+            var list = new List<string> { near, Path.Combine(near, "Textures"), Path.Combine(Dir, name), Path.Combine(Dir, name, "Textures") };
+            if (!string.Equals(Path.GetFullPath(near).TrimEnd('/', '\\'), Path.GetFullPath(Dir).TrimEnd('/', '\\'), StringComparison.OrdinalIgnoreCase))
+                try { list.AddRange(Directory.GetDirectories(near, "*", SearchOption.AllDirectories)); } catch { }
+            list.Add(Path.Combine(Dir, "Textures"));
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var d in list) if (Directory.Exists(d) && seen.Add(Path.GetFullPath(d))) yield return d;
+        }
+
+        private static IEnumerable<string> Pictures(string dir)
+        {
+            string[] files;
+            try { files = Directory.GetFiles(dir); } catch { yield break; }
+            foreach (var f in files)
             {
-                if (dir == null) continue;
-                var p = Path.Combine(dir, Path.GetFileName(tex));
-                if (File.Exists(p)) return p;
+                var ext = Path.GetExtension(f).ToLowerInvariant();
+                if (ext == ".cube") yield return f;
+                else if (ext == ".png" && LutPng.Size(f, out int w, out int h) && ReShadeLut.Layout(w, h, out _, out _)) yield return f;
+            }
+        }
+
+        private static string FindPicture(string tex, string file, string name)
+        {
+            string want = Path.GetFileName(tex.Replace('\\', '/'));
+            foreach (var d in PresetDirs(file, name))
+            {
+                try { foreach (var f in Directory.GetFiles(d)) if (Path.GetFileName(f).Equals(want, StringComparison.OrdinalIgnoreCase)) return f; }
+                catch { }
             }
             return null;
+        }
+
+        private static string GuessPicture(string file, string name)
+        {
+            var all = PresetDirs(file, name).SelectMany(Pictures).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var named = all.Where(f => Path.GetFileName(f).IndexOf(name, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            if (named.Count == 1) return named[0];
+            var notNeutral = all.Where(f => Path.GetFileName(f).IndexOf("neutral", StringComparison.OrdinalIgnoreCase) < 0 &&
+                Path.GetFileName(f).IndexOf("clean", StringComparison.OrdinalIgnoreCase) < 0).ToList();
+            return notNeutral.Count == 1 ? notNeutral[0] : all.Count == 1 ? all[0] : null;
+        }
+
+        private static DateTime NewestPicture(string file, string name)
+        {
+            var t = DateTime.MinValue;
+            foreach (var d in PresetDirs(file, name))
+                try
+                {
+                    foreach (var f in Directory.GetFiles(d))
+                    {
+                        var ext = Path.GetExtension(f).ToLowerInvariant();
+                        if (ext != ".png" && ext != ".cube") continue;
+                        var m = File.GetLastWriteTimeUtc(f); if (m > t) t = m;
+                    }
+                }
+                catch { }
+            return t;
+        }
+
+        private static void MoveOldLuts()
+        {
+            try
+            {
+                var old = Path.Combine(Config.Root, "LUTs");
+                if (!Directory.Exists(old)) return;
+                foreach (var f in Directory.GetFiles(old))
+                {
+                    var dst = Path.Combine(Dir, Path.GetFileName(f));
+                    if (!File.Exists(dst)) File.Move(f, dst);
+                }
+                if (Directory.GetFileSystemEntries(old).Length == 0) Directory.Delete(old);
+                var tex = Path.Combine(Dir, "Textures");
+                if (Directory.Exists(tex) && Directory.GetFileSystemEntries(tex).Length == 0) Directory.Delete(tex);
+            }
+            catch (Exception e) { Mod.Log.Warning("Couldn't tidy the old LUTs folder: " + e.Message); }
         }
 
         private static float Num(Dictionary<string, string> s, string k, float def)
@@ -494,7 +619,7 @@ namespace QuestShade
                 var sb = new StringBuilder();
                 foreach (var (sec, kv) in _s)
                 {
-                    if (colourOnly && Array.IndexOf(ColourSections, sec) < 0) continue;
+                    if (colourOnly && Array.IndexOf(ColourSections, sec) < 0 && !sec.StartsWith("RS ")) continue;
                     sb.AppendLine($"[{sec}]");
                     foreach (var (k, v) in kv) sb.AppendLine($"{k} = {v}");
                 }

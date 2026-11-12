@@ -10,7 +10,9 @@ namespace QuestShade
         { "Vibrance.fx", "Tonemap.fx", "LiftGammaGain.fx", "Curves.fx", "Levels.fx", "DPX.fx", "Technicolor.fx",
           "Technicolor2.fx", "Sepia.fx", "Monochrome.fx", "ColorMatrix.fx" };
 
-        internal struct Op { public string Fx; public Dictionary<string, string> P; }
+        internal struct Op { public string Fx; public Dictionary<string, string> P; public byte[] Cube; }
+
+        public static bool IsLut(string fx) => fx.StartsWith("LUT#", StringComparison.OrdinalIgnoreCase);
 
         public sealed class Chain
         {
@@ -26,7 +28,18 @@ namespace QuestShade
             foreach (var raw in order.Split(','))
             {
                 var fx = raw.Trim();
-                if (fx.Length == 0 || !Exact.Contains(fx)) continue;
+                if (fx.Length == 0) continue;
+                if (IsLut(fx))
+                {
+                    var sec = p.Section("RS " + fx);
+                    if (sec == null || !sec.TryGetValue("Data", out var data)) continue;
+                    byte[] cube;
+                    try { cube = Convert.FromBase64String(data); } catch { continue; }
+                    if (cube.Length != ReShadeLut.N * ReShadeLut.N * ReShadeLut.N * 3) continue;
+                    ch.Ops.Add(new Op { Fx = fx, P = sec, Cube = cube });
+                    continue;
+                }
+                if (!Exact.Contains(fx)) continue;
                 ch.Ops.Add(new Op { Fx = fx, P = p.Section("RS " + fx) });
             }
             return ch;
@@ -37,6 +50,7 @@ namespace QuestShade
             foreach (var op in ch.Ops)
             {
                 var c = new[] { r, g, b };
+                if (op.Cube != null) { Lut(op, c); r = Clamp01(c[0]); g = Clamp01(c[1]); b = Clamp01(c[2]); continue; }
                 switch (op.Fx.ToLowerInvariant())
                 {
                     case "vibrance.fx": Vibrance(op.P, c); break;
@@ -232,6 +246,62 @@ namespace QuestShade
             var b = V(p, "ColorMatrix_Blue", 0, 0.125f, 0.875f); float s = F(p, "Strength", 1f);
             var m = new[] { Dot(r, c), Dot(g, c), Dot(b, c) };
             for (int i = 0; i < 3; i++) c[i] = Clamp01(Lerp(c[i], m[i], s));
+        }
+
+        private static void Lut(Op op, float[] c)
+        {
+            var p = op.P;
+            var l = new float[3];
+            ReShadeLut.Sample(op.Cube, c[0], c[1], c[2], l);
+            float chroma = Clamp01(F(p, "Chroma", 1)), luma = Clamp01(F(p, "Luma", 1)), amount = Clamp01(F(p, "Intensity", 1));
+            var m = new float[3];
+            if (string.Equals(p.TryGetValue("Mode", out var mode) ? mode : "", "pd80", StringComparison.OrdinalIgnoreCase))
+            {
+                var ib = V(p, "ib", 0, 0, 0); var iw = V(p, "iw", 1, 1, 1); var ob = V(p, "ob", 0, 0, 0); var ow = V(p, "ow", 1, 1, 1);
+                float ig = F(p, "ig", 1);
+                for (int i = 0; i < 3; i++)
+                {
+                    float x = Clamp01(l[i] - ib[i]) / Math.Max(iw[i] - ib[i], 1e-6f);
+                    x = MathF.Pow(Math.Max(0, x), ig);
+                    l[i] = x * Clamp01(ow[i] - ob[i]) + ob[i];
+                }
+                var lab = SrgbToLab(c); var labl = SrgbToLab(l);
+                var mixed = LabToSrgb(new[] { Lerp(lab[0], labl[0], luma), Lerp(lab[1], labl[1], chroma), Lerp(lab[2], labl[2], chroma) });
+                for (int i = 0; i < 3; i++) m[i] = Clamp01(mixed[i]);
+            }
+            else
+            {
+                float lc = MathF.Sqrt(Dot(c, c)), ll = MathF.Sqrt(Dot(l, l));
+                float len = Lerp(lc, ll, luma);
+                for (int i = 0; i < 3; i++)
+                {
+                    float nc = lc > 1e-6f ? c[i] / lc : 0, nl = ll > 1e-6f ? l[i] / ll : 0;
+                    m[i] = Lerp(nc, nl, chroma) * len;
+                }
+            }
+            for (int i = 0; i < 3; i++) c[i] = Lerp(c[i], m[i], amount);
+        }
+
+        private static readonly float[] White = { 0.95047f, 1f, 1.08883f };
+        private const float E = 0.008856f, K = 903.3f;
+
+        private static float[] SrgbToLab(float[] c)
+        {
+            var x = new[] { 0.4124564f * c[0] + 0.3575761f * c[1] + 0.1804375f * c[2], 0.2126729f * c[0] + 0.7151522f * c[1] + 0.0721750f * c[2],
+                0.0193339f * c[0] + 0.1191920f * c[1] + 0.9503041f * c[2] };
+            var v = new float[3];
+            for (int i = 0; i < 3; i++) { float w = Math.Max(x[i] / White[i], 0); v[i] = w > E ? MathF.Pow(w, 1f / 3f) : (K * w + 16f) / 116f; }
+            return new[] { (116f * v[1] - 16f) / 100f, 500f * (v[0] - v[1]) / 108f, 200f * (v[1] - v[2]) / 108f };
+        }
+
+        private static float[] LabToSrgb(float[] lab)
+        {
+            float L = lab[0] * 100f, a = lab[1] * 108f, bb = lab[2] * 108f;
+            float vy = (L + 16f) / 116f, vx = a / 500f + vy, vz = vy - bb / 200f;
+            var x = new[] { vx * vx * vx > E ? vx * vx * vx : (116f * vx - 16f) / K, L > K * E ? vy * vy * vy : L / K, vz * vz * vz > E ? vz * vz * vz : (116f * vz - 16f) / K };
+            for (int i = 0; i < 3; i++) x[i] = Math.Clamp(x[i] * White[i], 0, White[i]);
+            return new[] { Clamp01(3.2404542f * x[0] - 1.5371385f * x[1] - 0.4985314f * x[2]), Clamp01(-0.9692660f * x[0] + 1.8760108f * x[1] + 0.0415560f * x[2]),
+                Clamp01(0.0556434f * x[0] - 0.2040259f * x[1] + 1.0572252f * x[2]) };
         }
 
         private static float[] MulM(float[,] m, float[] v)
