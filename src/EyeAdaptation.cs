@@ -10,7 +10,7 @@ namespace QuestShade
         public static float Ev { get; private set; }
         public static float Measured { get; private set; } = -1f;
         public static float Reference { get; private set; } = -1f;
-        public static bool Hold;
+        public static bool Hold, BrightenOnly;
         public static float DarkMap { get; private set; }
         private const float NormalMapLight = 0.12f;
 
@@ -35,8 +35,9 @@ namespace QuestShade
                 Sample(head, strength);
             }
             if (Hold) { Ev += (0f - Ev) * (1f - Mathf.Exp(-9f * dt)); return; }
-            float rate = (_target > Ev ? 0.55f : 0.9f) * Mathf.Max(0.05f, speed);
-            Ev += (_target - Ev) * (1f - Mathf.Exp(-rate * dt));
+            float target = BrightenOnly ? Mathf.Max(0f, _target) : _target;
+            float rate = (target > Ev ? 0.55f : 0.9f) * Mathf.Max(0.05f, speed);
+            Ev += (target - Ev) * (1f - Mathf.Exp(-rate * dt));
         }
 
         public static void Reset() { _probeCount = -1; DarkMap = 0f; _smoothLum = -1f; Ev = 0f; _target = 0f; _logged = false; }

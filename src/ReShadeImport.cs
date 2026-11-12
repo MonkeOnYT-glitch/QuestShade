@@ -11,7 +11,7 @@ namespace QuestShade
     {
         public static string Dir => Path.Combine(Config.Root, "ReShade");
         public const string Suffix = " (ReShade)";
-        private const int Version = 10;
+        private const int Version = 11;
 
         private static readonly string[] Heavy = { "MXAO", "RTGI", "SSR", "MotionBlur", "Reflective", "GloomAO", "SSDO", "HBAO",
             "SSAO", "MiAO", "XeGTAO", "NeoGI", "SCGI", "SCAO", "TurboGI", "RadiantGI", "Pirate_Depth_GI", "ZN_GI", "DAMP_RT", "LSAO", "RTAO",
@@ -94,10 +94,10 @@ namespace QuestShade
                     float ai = F("alInt", 10.15f), at = F("alThreshold", 15f);
                     Bloom(Math.Clamp(ai / 9f, 0.2f, 2f), Math.Clamp(0.9f - at * 0.02f, 0.3f, 1f), 0.8f);
                     bloomK = Math.Max(bloomK, 0.6f);
-                    float k = Math.Clamp(ai / 13.7f, 0f, 1.5f); lift += 0.01f * k; gain += 0.04f * k;
+                    float k = Math.Clamp(ai / 13.7f, 0f, 1.5f); lift += 0.02f * k; gain += 0.04f * k; exposure += 0.15f * k;
                     if (F("AL_Lens", 0) > 0) flare = Math.Max(flare, Math.Clamp(F("alLensInt", 2f) * 0.35f, 0.1f, 1.5f));
                     if (F("AL_Dirt", 0) > 0) dirt = Math.Max(dirt, Math.Clamp(F("alDirtInt", 1f), 0f, 2f));
-                    if (F("AL_Adaptation", 0) > 0) eye = Math.Max(eye, Math.Clamp(F("alAdapt", 0.7f) / 0.7f, 0.3f, 1f));
+                    if (F("AL_Adaptation", 0) > 0) eye = Math.Max(eye, Math.Clamp(F("alAdapt", 0.7f), 0.3f, 0.7f));
                     used.Add(label + " (glow, lens flare, dirt, eye adaptation)");
                 }
                 else if (key.StartsWith("bloominghdr"))
@@ -106,7 +106,7 @@ namespace QuestShade
                     Bloom(Math.Clamp(bi[0] * 2f, 0.1f, 2f), 0.75f, Math.Clamp(0.6f + F("Bloom_Spread", 1f) * 0.2f, 0.5f, 0.9f));
                     var bs = Vec(s, "Saturation", 0f); sat += (bs[0] + bs[1]) * 50f;
                     contrast += (F("Contrast", 1f) - 1f) * 50f; exposure += F("Exp", 0f);
-                    if (F("Auto_Exposure", 0) > 0) eye = Math.Max(eye, 1f);
+                    if (F("Auto_Exposure", 0) > 0) eye = Math.Max(eye, 0.7f);
                     used.Add(label + " (glow, saturation, eye adaptation)");
                 }
                 else if (key.Contains("lightroom"))
@@ -123,7 +123,7 @@ namespace QuestShade
                 }
                 else if (Hit("autoexposure") || Hit("eyeadaption") || Hit("eyeadaptation") || Hit("adaptivetonemapper") || Hit("filmic_adaptation"))
                 {
-                    eye = Math.Max(eye, 1f);
+                    eye = Math.Max(eye, 0.7f);
                     if (key.Contains("bloom")) Bloom(0.5f, 0.8f, 0.7f);
                     used.Add(label + " (eye adaptation)");
                 }
@@ -309,7 +309,7 @@ namespace QuestShade
                 o.Set("Bloom", "Intensity", Fmt(Math.Clamp(bloomI, 0.05f, 2f))); o.Set("Bloom", "Threshold", Fmt(bloomT));
                 o.Set("Bloom", "SoftKnee", Fmt(bloomK)); o.Set("Bloom", "Scatter", Fmt(bloomS));
             }
-            if (eye > 0) o.Set("EyeAdaptation", "Strength", Fmt(eye));
+            if (eye > 0) { o.Set("EyeAdaptation", "Strength", Fmt(eye)); o.Set("EyeAdaptation", "BrightenOnly", "true"); }
             if (sharp > 0) o.Set("Sharpen", "Amount", Fmt(sharp));
             if (ca > 0) o.Set("ChromaticAberration", "Intensity", Fmt(ca));
             if (grain > 0) o.Set("FilmGrain", "Intensity", Fmt(grain));

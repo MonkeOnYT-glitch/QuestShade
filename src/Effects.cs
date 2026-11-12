@@ -683,6 +683,7 @@ BokehIntensity = 0.3
             }
             _baseExposure = exposure; _tonemap = tm; _appliedEv = float.NaN;
             _adaptStrength = p.Has("EyeAdaptation") ? (p.Enabled("EyeAdaptation") ? Mathf.Clamp(p.Float("EyeAdaptation", "Strength", cfg.EyeAdaptStrength), 0f, 1.5f) : 0f) : -1f;
+            EyeAdaptation.BrightenOnly = p.Bool("EyeAdaptation", "BrightenOnly", false);
             m.SetVector(ID.Tone, new Vector4(MathF.Pow(2f, exposure + EyeAdaptation.Ev), tm, 0, 0));
             if (exposure != 0 || tm > 0 || ((cfg.EyeAdapt || cfg.DarkMaps > 0f) && _adaptStrength != 0f)) n++;
 

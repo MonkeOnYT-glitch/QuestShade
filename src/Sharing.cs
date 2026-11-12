@@ -151,7 +151,7 @@ namespace QuestShade
             ["Noise"] = new[] { "Enabled", "Intensity" },
             ["Glitch"] = new[] { "Enabled", "Amount", "Rows", "Speed" },
             ["Posterize"] = new[] { "Enabled", "Levels" },
-            ["EyeAdaptation"] = new[] { "Enabled", "Strength" },
+            ["EyeAdaptation"] = new[] { "Enabled", "Strength", "BrightenOnly" },
             ["LensFlare"] = new[] { "Enabled", "Intensity", "Spacing", "Halo", "Fringe" },
             ["LensDirt"] = new[] { "Enabled", "Intensity" },
             ["GodRays"] = new[] { "Enabled", "Intensity", "Length", "Threshold" },
