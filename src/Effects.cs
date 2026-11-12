@@ -35,8 +35,9 @@ namespace QuestShade
         private Vector4 _flareVec;
         private float _dirtAmt;
         private Texture2D _dirtTex;
-        private bool LensFx => _flareVec.x > 0f || _dirtAmt > 0f || _godVec.x > 0f;
+        private bool LensFx => _flareVec.x > 0f || _dirtAmt > 0f;
         private Vector4 _godVec;
+        public float GodRays => _godVec.x;
         private Transform _sunT; private int _sunScene = -1; private float _sunLookAt;
         private float _baseExposure, _tonemap, _appliedEv = float.NaN, _appliedLift, _adaptStrength = -1f;
         private int _frame;
@@ -184,15 +185,7 @@ namespace QuestShade
                         _post.SetTexture(ID.FlareTex, flare2);
                     }
                     else _post.SetTexture(ID.FlareTex, Texture2D.blackTexture);
-                    if (lens && _godVec.x > 0f && levels >= 2 && SunOnScreen(PhotoCamera, out var sunUv))
-                    {
-                        _post.SetVector(ID.God, _godVec);
-                        _post.SetVector(ID.Sun, sunUv);
-                        god = RenderTexture.GetTemporary(_down[1].width, _down[1].height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
-                        Graphics.Blit(_down[1], god, _post, 7);
-                        _post.SetTexture(ID.GodTex, god);
-                    }
-                    else _post.SetVector(ID.God, Vector4.zero);
+                    _post.SetVector(ID.God, Vector4.zero);
                     float norm = 0, wgt = 1; for (int i = 0; i < levels; i++) { norm += wgt; wgt *= bloomV.w; }
                     _post.SetVector(ID.Bloom, new Vector4(bloomV.x * 1.8f / Mathf.Max(1f, norm), bloomV.y, bloomV.z, bloomV.w));
                 }

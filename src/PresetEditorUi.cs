@@ -157,7 +157,7 @@ namespace QuestShade
             if (Sharing.CleanIni(_cfg.CurrentPresetText()).Length == 0) { BoneMenuUi.Notify("Move a few sliders first: this preset doesn't do anything yet", 3f); return; }
             var author = string.IsNullOrWhiteSpace(_cfg.ShareAuthor) ? "Anonymous" : _cfg.ShareAuthor.Trim();
             Menu.DisplayDialog("Share publicly?",
-                $"\"{name}\" by {author} will show up in everyone's Preset browser. (Set your creator name in Effects > Preset browser.)",
+                $"\"{name}\" by {author} will show up in everyone's Preset browser. (Set your creator name in Presets > Preset browser.)",
                 null, () => _mod.SharePreset());
         }
 

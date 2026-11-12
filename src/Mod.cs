@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.23-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.24-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.22", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.23", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -60,7 +60,7 @@ namespace QuestShade
             if (_boneLib)
             {
                 try { BoneMenuUi.Build(this, _cfg); _cam.ChestProvider = BoneMenuUi.Chest; Focus.PlayerRoot = BoneMenuUi.PlayerRoot; _cam.HideHead = BoneMenuUi.HideHead; _cam.RestoreHead = BoneMenuUi.RestoreHead; _cam.UiLayerMask = BoneMenuUi.UiLayerMask; _cam.ActorPose = BoneMenuUi.ActorPose; _cam.HideHeadOf = BoneMenuUi.HideHeadOf; _cam.HeadToLayer = BoneMenuUi.HeadToLayer; _cam.HeadRestore = BoneMenuUi.RestoreHeadLayer; _cam.OwnBodyToLayer = BoneMenuUi.OwnBodyToLayer;
-                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; FlashBeams.HeadsetLayer = () => _cam.LensHiddenLayer; FlashBeams.LensLayer = () => _cam.LensOnlyLayer; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Shadows.Avatar = BoneMenuUi.AvatarRoot; Shadows.Held = BoneMenuUi.HeldObject; Shadows.ItemRoot = BoneMenuUi.ItemRoot; Shadows.PlayerLayers = BoneMenuUi.PlayerLayerMask; Log.Msg("BoneMenu page added"); }
+                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; FlashBeams.HeadsetLayer = () => _cam.LensHiddenLayer; FlashBeams.LensLayer = () => _cam.LensOnlyLayer; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Shadows.Avatar = BoneMenuUi.AvatarRoot; Shadows.Held = BoneMenuUi.HeldObject; Shadows.ItemRoot = BoneMenuUi.ItemRoot; Shadows.PlayerLayers = BoneMenuUi.PlayerLayerMask; SunShafts.PlayerLayers = BoneMenuUi.PlayerLayerMask; Log.Msg("BoneMenu page added"); }
                 catch (Exception e) { _boneLib = false; Log.Warning("BoneLib found but menu failed (gestures still work): " + e.Message); }
             }
             else Log.Msg("BoneLib not found - using controller gestures only");
@@ -75,6 +75,7 @@ namespace QuestShade
             Flashlights.Reset();
             Lighting.OnLevel();
             Shadows.OnLevel();
+            SunShafts.OnLevel();
             _fx.ResetCalibration();
             if (_startNotice != null) _noticeAt = Time.unscaledTime + 6f;
             Perf.OnSceneLoaded();
@@ -165,6 +166,7 @@ namespace QuestShade
                     { _calibTries++; _nextCalibAt = now + 5f; _cam.SchedulePrewarm(0f); }
                 }
                 Shadows.Tick(_cfg, head);
+                SunShafts.Tick(_cfg.Enabled ? _fx.GodRays : 0f, head != null ? head.transform : null);
                 _toast.LateTick(head);
                 if (_boneLib)
                 {
@@ -241,7 +243,7 @@ namespace QuestShade
             var name = _cfg.NewPreset(copyCurrent);
             if (name == null) { Notify("Couldn't make a new preset"); return; }
             AfterPresetChange();
-            Notify(copyCurrent ? $"Copied to \"{name}\": edit it in Effects > Edit preset" : $"New preset \"{name}\": edit it in Effects > Edit preset", 3f);
+            Notify(copyCurrent ? $"Copied to \"{name}\": edit it in Presets > Edit preset" : $"New preset \"{name}\": edit it in Presets > Edit preset", 3f);
         }
 
         internal void RenamePreset(string name)
@@ -276,7 +278,7 @@ namespace QuestShade
             Sharing.Publish(name, author, _cfg.CurrentPresetText(), (id, err) =>
             {
                 if (err != null) { Notify("Couldn't share: " + err, 3f); return; }
-                Notify($"\"{name}\" is public! Find it in Effects > Preset browser", 3f);
+                Notify($"\"{name}\" is public! Find it in Presets > Preset browser", 3f);
             });
         }
 
@@ -311,7 +313,7 @@ namespace QuestShade
             var name = _cfg.NewPresetFrom(source);
             if (name == null) { Notify("Couldn't make the copy"); return; }
             AfterPresetChange();
-            Notify($"\"{name}\" is yours: edit, rename and share it in Effects > Edit preset", 3f);
+            Notify($"\"{name}\" is yours: edit, rename and share it in Presets > Edit preset", 3f);
         }
 
         internal void ResetBuiltInPreset()
@@ -374,7 +376,7 @@ namespace QuestShade
 
         internal void ToggleCamera()
         {
-            if (_cam.Blocked && !_cam.Open) { Notify("Camera's off in Fusion lobbies (Camera > Settings to change)", 2f); return; }
+            if (_cam.Blocked && !_cam.Open) { Notify("Camera's off in Fusion lobbies (NoCameraInFusion in QuestShade.ini changes this)", 2f); return; }
             _cam.Toggle(_cfg, _fx.BoundCamera);
             if (_cam.Open && _cfg.RecordMic) AudioCapture.AskMicPermission();
             Notify(_cam.Open ? $"Camera: {Pretty(_cam.Mode)}" : "Camera closed", 1f);

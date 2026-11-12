@@ -19,25 +19,46 @@ namespace QuestShade
             var root = Page.Root.CreatePage("QuestShade", Accent, 8, true);
 
 
+            var info = new Color(1f, 0.75f, 0.35f);
+
             var cam = root.CreatePage("Camera", Color.white, 8, true);
             cam.CreateFunction("Open / close camera", Color.green, () => mod.ToggleCamera());
-            cam.CreateBool("Mic in videos", new Color(1f, 0.6f, 0.6f), cfg.RecordMic, v => mod.SetMic(v));
             var shoot = cam.CreatePage("Shoot", Color.cyan, 8, true);
             shoot.CreateFunction("Take photo", Color.cyan, () => mod.TakePhoto());
             shoot.CreateFunction("Record / stop", Color.red, () => mod.ToggleRecording());
             shoot.CreateInt("Photo timer (s)", Color.white, cfg.PhotoTimer, 1, 0, 10, v => cfg.PhotoTimer = v);
-            var view = cam.CreatePage("Mode + view", Color.white, 8, true);
+            var view = cam.CreatePage("View", Color.white, 8, true);
             view.CreateEnum("Mode", Color.white, cfg.DefaultMode, v => mod.SetCameraMode((CamMode)v));
             view.CreateFunction("Flip camera", Color.white, () => mod.FlipCamera());
             view.CreateFloat("Field of view", Color.white, cfg.Fov, 5f, 10f, 150f, v => cfg.Fov = v);
             view.CreateFloat("Fisheye", Color.white, cfg.Fisheye, 0.1f, 0f, 1f, v => { cfg.Fisheye = v; cfg.SaveMenuSettings(); });
             view.CreateEnum("Timestamp", Color.white, cfg.Timestamp, v => { cfg.Timestamp = (StampMode)v; cfg.SaveMenuSettings(); });
+            view.CreateFunction("Hide / show camera", Color.white, () => mod.ToggleHidden());
             var audio = cam.CreatePage("Audio", Color.white, 8, true);
             audio.CreateBool("Game audio", Color.white, cfg.RecordGameAudio, v => { cfg.RecordGameAudio = v; cfg.SaveMenuSettings(); });
             audio.CreateBool("Microphone", Color.white, cfg.RecordMic, v => mod.SetMic(v));
-            var settingsHurt = cam.CreatePage("Hurt effect", Color.white, 8, true);
-            settingsHurt.CreateBool("Blurry + red when hurt", new Color(1f, 0.5f, 0.5f), cfg.HurtEffect, v => { cfg.HurtEffect = v; cfg.SaveMenuSettings(); });
-
+            var pv = cam.CreatePage("Preview screen", Color.white, 8, true);
+            pv.CreateBool("Preview on", Color.white, cfg.PreviewEnabled, v => mod.SetPreview(v));
+            pv.CreateBool("Hover preview", Color.white, cfg.HoverPreview, v => mod.SetHoverPreview(v));
+            pv.CreateInt("Preview FPS", Color.white, cfg.PreviewFps, 6, 6, 72, v => cfg.PreviewFps = v);
+            pv.CreateBool("Preview shadows", Color.white, cfg.PreviewShadows, v => { cfg.PreviewShadows = v; mod.RefreshCamera(); });
+            var hold = cam.CreatePage("Holding + placement", Color.white, 8, true);
+            hold.CreateFloat("Grip angle (tilt in hand)", Color.white, cfg.GripAngle, 5f, -90f, 90f, v => cfg.GripAngle = v);
+            hold.CreateFloat("Smoothing", Color.white, cfg.Smoothing, 0.05f, 0f, 0.9f, v => cfg.Smoothing = v);
+            hold.CreateBool("Controls text on camera", Color.white, cfg.CameraLabel, v => mod.SetCameraLabel(v));
+            var tp = hold.CreatePage("Third person", Color.white, 8, true);
+            tp.CreateFloat("Distance", Color.white, cfg.ThirdPersonDistance, 0.1f, 0.3f, 6f, v => cfg.ThirdPersonDistance = v);
+            tp.CreateFloat("Height", Color.white, cfg.ThirdPersonHeight, 0.05f, -1f, 3f, v => cfg.ThirdPersonHeight = v);
+            tp.CreateFloat("Shoulder offset", Color.white, cfg.ThirdPersonSide, 0.05f, -2f, 2f, v => cfg.ThirdPersonSide = v);
+            var ch = hold.CreatePage("Chest (bodycam)", Color.white, 8, true);
+            ch.CreateFloat("Field of view", Color.white, cfg.ChestFov, 5f, 10f, 150f, v => cfg.ChestFov = v);
+            ch.CreateFloat("Forward", Color.white, cfg.ChestForward, 0.02f, -0.5f, 1f, v => cfg.ChestForward = v);
+            ch.CreateFloat("Height", Color.white, cfg.ChestHeight, 0.02f, -1f, 1f, v => cfg.ChestHeight = v);
+            ch.CreateFloat("Side", Color.white, cfg.ChestSide, 0.02f, -1f, 1f, v => cfg.ChestSide = v);
+            ch.CreateFloat("Pitch", Color.white, cfg.ChestPitch, 5f, -60f, 60f, v => cfg.ChestPitch = v);
+            var recLook = cam.CreatePage("Recording look", Color.white, 8, true);
+            recLook.CreateBool("Videos match the preview", Color.white, cfg.MatchPreview, v => cfg.MatchPreview = v);
+            recLook.CreateBool("Blurry + red when hurt", new Color(1f, 0.5f, 0.5f), cfg.HurtEffect, v => { cfg.HurtEffect = v; cfg.SaveMenuSettings(); });
             var help = cam.CreatePage("How to use", Color.yellow, 8, true);
             void Tip(string line, string more) => help.CreateFunction(line, Color.white, () => Notify(more, 4f));
             Tip("Grab a handle (grip)", "Squeeze grip on either handle, like any item.");
@@ -46,60 +67,49 @@ namespace QuestShade
             Tip("Let go = it floats", "Let go and it stays in the air where you left it.");
             Tip("Saved to the Quest gallery", "Straight into the gallery, no file manager or permissions needed.");
 
-            var more = cam.CreatePage("Settings", Color.gray, 8, true);
-            more.CreateFloat("Grip angle (tilt in hand)", Color.white, cfg.GripAngle, 5f, -90f, 90f, v => cfg.GripAngle = v);
-            more.CreateFloat("Smoothing", Color.white, cfg.Smoothing, 0.05f, 0f, 0.9f, v => cfg.Smoothing = v);
-            more.CreateBool("Hover preview", Color.white, cfg.HoverPreview, v => mod.SetHoverPreview(v));
-            more.CreateBool("Controls text on camera", Color.white, cfg.CameraLabel, v => mod.SetCameraLabel(v));
-            more.CreateFunction("Hide / show camera", Color.white, () => mod.ToggleHidden());
-            var pv = more.CreatePage("Preview screen", Color.white, 8, true);
-            pv.CreateBool("Preview on", Color.white, cfg.PreviewEnabled, v => mod.SetPreview(v));
-            pv.CreateInt("Preview FPS", Color.white, cfg.PreviewFps, 6, 6, 72, v => cfg.PreviewFps = v);
-            pv.CreateBool("Preview shadows", Color.white, cfg.PreviewShadows, v => { cfg.PreviewShadows = v; mod.RefreshCamera(); });
-            var tp = more.CreatePage("Third person", Color.white, 8, true);
-            tp.CreateFloat("Distance", Color.white, cfg.ThirdPersonDistance, 0.1f, 0.3f, 6f, v => cfg.ThirdPersonDistance = v);
-            tp.CreateFloat("Height", Color.white, cfg.ThirdPersonHeight, 0.05f, -1f, 3f, v => cfg.ThirdPersonHeight = v);
-            tp.CreateFloat("Shoulder offset", Color.white, cfg.ThirdPersonSide, 0.05f, -2f, 2f, v => cfg.ThirdPersonSide = v);
-            var ch = more.CreatePage("Chest (bodycam)", Color.white, 8, true);
-            ch.CreateFloat("Field of view", Color.white, cfg.ChestFov, 5f, 10f, 150f, v => cfg.ChestFov = v);
-            ch.CreateFloat("Forward", Color.white, cfg.ChestForward, 0.02f, -0.5f, 1f, v => cfg.ChestForward = v);
-            ch.CreateFloat("Height", Color.white, cfg.ChestHeight, 0.02f, -1f, 1f, v => cfg.ChestHeight = v);
-            ch.CreateFloat("Side", Color.white, cfg.ChestSide, 0.02f, -1f, 1f, v => cfg.ChestSide = v);
-            ch.CreateFloat("Pitch", Color.white, cfg.ChestPitch, 5f, -60f, 60f, v => cfg.ChestPitch = v);
-
-            var fx = root.CreatePage("Effects", Color.white, 8, true);
-            fx.CreateBool("Effects on", Color.green, cfg.Enabled, v => mod.SetEffectsEnabled(v));
-            var choose = fx.CreatePage("Choose preset", Color.white, 8, true);
+            var presets = root.CreatePage("Presets", Color.cyan, 8, true);
+            presets.CreateBool("Effects on", Color.green, cfg.Enabled, v => mod.SetEffectsEnabled(v));
+            presets.CreateFunction("Next preset", Color.white, () => mod.StepPreset(1));
+            var choose = presets.CreatePage("Choose preset", Color.white, 8, true);
             _builtinPage = choose.CreatePage("Built-in", Color.white, 8, true);
             _presetPage = choose.CreatePage("Yours + downloaded", Color.cyan, 8, true);
-            PresetEditorUi.Build(fx, mod, cfg);
-            fx.CreateFunction("Next preset", Color.white, () => mod.StepPreset(1));
-            fx.CreateBool("Videos match the preview", Color.white, cfg.MatchPreview, v => cfg.MatchPreview = v);
-            var fxMore = fx.CreatePage("Bloom + depth of field", Color.white, 8, true);
-            fxMore.CreateBool("On every preset", Color.green, cfg.BloomDofAll, v => { cfg.BloomDofAll = v; mod.ReapplyEffects(); });
-            fxMore.CreateFloat("Bloom strength", Color.white, cfg.BloomStrength, 0.25f, 0f, 4f, v => { cfg.BloomStrength = v; mod.ReapplyEffects(); });
-            fxMore.CreateFloat("Blur strength", Color.white, cfg.BlurStrength, 0.25f, 0f, 3f, v => { cfg.BlurStrength = v; mod.ReapplyEffects(); });
-            var lit = fx.CreatePage("Lighting", new Color(1f, 0.85f, 0.5f), 8, true);
-            lit.CreateFunction("What is this?", new Color(1f, 0.75f, 0.35f), () => Notify("Flashlight beams, flashlights that light up what they hit, and less plastic-looking shine.", 5f));
-            lit.CreateBool("Flashlight beams (light rays)", Color.white, cfg.FlashlightBeams, v => { cfg.FlashlightBeams = v; cfg.SaveMenuSettings(); });
-            lit.CreateBool("Real lights (flashlights light things up)", Color.white, cfg.RealLights, v => { cfg.RealLights = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
-            lit.CreateFloat("Less shine", Color.white, cfg.LessShine, 0.1f, 0f, 1f, v => { cfg.LessShine = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
-            lit.CreateBool("Bloom in your headset", Color.white, cfg.HeadsetBloom, v => { cfg.HeadsetBloom = v; cfg.SaveMenuSettings(); mod.ReapplyEffects(); });
-            lit.CreateBool("Body shadow", Color.white, cfg.Shadows, v => { cfg.Shadows = v; cfg.SaveMenuSettings(); if (v) Shadows.Retry(); });
-            lit.CreateFloat("Shadow darkness", Color.white, cfg.ShadowDarkness, 0.05f, 0.1f, 1f, v => { cfg.ShadowDarkness = v; cfg.SaveMenuSettings(); });
-            var eye = fx.CreatePage("Eye adaptation, dark maps, flashlights", Color.white, 8, true);
-            eye.CreateFunction("What's this?", new Color(1f, 0.75f, 0.35f), () => Notify("Walk into a dark room: it starts dark, then your eyes adjust and it brightens. Walk back out: it's blinding for a moment, then settles.", 5f));
+            PresetEditorUi.Build(presets, mod, cfg);
+            _importPage = presets.CreatePage("ReShade imports", Color.cyan, 8, true);
+
+            var look = root.CreatePage("Look", Color.white, 8, true);
+            look.CreateFunction("These apply on top of every preset", info, () => Notify("Presets set the colours. These are your own extras on top, whatever preset is on.", 4f));
+            var bloom = look.CreatePage("Bloom + blur", Color.white, 8, true);
+            bloom.CreateBool("On every preset", Color.green, cfg.BloomDofAll, v => { cfg.BloomDofAll = v; mod.ReapplyEffects(); });
+            bloom.CreateFloat("Bloom strength", Color.white, cfg.BloomStrength, 0.25f, 0f, 4f, v => { cfg.BloomStrength = v; mod.ReapplyEffects(); });
+            bloom.CreateFloat("Blur strength", Color.white, cfg.BlurStrength, 0.25f, 0f, 3f, v => { cfg.BlurStrength = v; mod.ReapplyEffects(); });
+            bloom.CreateBool("Bloom in your headset", Color.white, cfg.HeadsetBloom, v => { cfg.HeadsetBloom = v; cfg.SaveMenuSettings(); mod.ReapplyEffects(); });
+            bloom.CreateBool("On photos + video", Color.white, cfg.BloomDofCapture, v => { cfg.BloomDofCapture = v; mod.ReapplyEffects(); });
+            bloom.CreateBool("On the camera preview", Color.white, cfg.BloomDofPreview, v => { cfg.BloomDofPreview = v; mod.ReapplyEffects(); });
+            var eye = look.CreatePage("Eye adaptation", Color.white, 8, true);
+            eye.CreateFunction("What's this?", info, () => Notify("Walk into a dark room: it starts dark, then your eyes adjust and it brightens. Walk back out: it's blinding for a moment, then settles.", 5f));
             eye.CreateBool("Eye adaptation", Color.green, cfg.EyeAdapt, v => { cfg.EyeAdapt = v; mod.ReapplyEffects(); });
             eye.CreateFloat("How much", Color.white, cfg.EyeAdaptStrength, 0.1f, 0f, 1.5f, v => { cfg.EyeAdaptStrength = v; mod.ReapplyEffects(); });
             eye.CreateFloat("How fast", Color.white, cfg.EyeAdaptSpeed, 0.25f, 0.25f, 3f, v => cfg.EyeAdaptSpeed = v);
-            eye.CreateFloat("Dark maps: lift shadows", Color.white, cfg.DarkMaps, 0.1f, 0f, 1f, v => { cfg.DarkMaps = v; cfg.SaveMenuSettings(); mod.ReapplyEffects(); });
-            eye.CreateFloat("Flashlight boost", Color.white, cfg.FlashlightBoost, 0.25f, 0f, 2f, v => { cfg.FlashlightBoost = v; cfg.SaveMenuSettings(); });
-            fxMore.CreateBool("Photos + video", Color.white, cfg.BloomDofCapture, v => { cfg.BloomDofCapture = v; mod.ReapplyEffects(); });
-            fxMore.CreateBool("Camera preview", Color.white, cfg.BloomDofPreview, v => { cfg.BloomDofPreview = v; mod.ReapplyEffects(); });
-            _importPage = fx.CreatePage("ReShade presets", Color.cyan, 8, true);
+            var dark = look.CreatePage("Dark maps", Color.white, 8, true);
+            dark.CreateFunction("What's this?", info, () => Notify("On very dark maps, lifts the shadows a bit so you can still see.", 4f));
+            dark.CreateFloat("Lift shadows", Color.white, cfg.DarkMaps, 0.1f, 0f, 1f, v => { cfg.DarkMaps = v; cfg.SaveMenuSettings(); mod.ReapplyEffects(); });
+
+            var lit = root.CreatePage("Lighting", new Color(1f, 0.85f, 0.5f), 8, true);
+            var shadow = lit.CreatePage("Body shadow", Color.white, 8, true);
+            shadow.CreateBool("Body shadow", Color.white, cfg.Shadows, v => { cfg.Shadows = v; cfg.SaveMenuSettings(); if (v) Shadows.Retry(); });
+            shadow.CreateFloat("Shadow darkness", Color.white, cfg.ShadowDarkness, 0.05f, 0.1f, 1f, v => { cfg.ShadowDarkness = v; cfg.SaveMenuSettings(); });
+            var torch = lit.CreatePage("Flashlights", Color.white, 8, true);
+            torch.CreateBool("Flashlight beams (light rays)", Color.white, cfg.FlashlightBeams, v => { cfg.FlashlightBeams = v; cfg.SaveMenuSettings(); });
+            torch.CreateBool("Real lights (light up what they hit)", Color.white, cfg.RealLights, v => { cfg.RealLights = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
+            torch.CreateFloat("Flashlight boost", Color.white, cfg.FlashlightBoost, 0.25f, 0f, 2f, v => { cfg.FlashlightBoost = v; cfg.SaveMenuSettings(); });
+            var surf = lit.CreatePage("Surfaces", Color.white, 8, true);
+            surf.CreateFunction("What's this?", info, () => Notify("Takes the plastic-looking shine off surfaces.", 4f));
+            surf.CreateFloat("Less shine", Color.white, cfg.LessShine, 0.1f, 0f, 1f, v => { cfg.LessShine = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
+
+            var extra = root.CreatePage("More", Color.gray, 8, true);
+            extra.CreateFunction("Join the QuestShade Discord", new Color(0.35f, 0.4f, 0.95f), () => mod.OpenDiscord());
+            extra.CreateFunction("Save settings to ini", Color.yellow, () => { cfg.SaveMenuSettings(); Notify("Settings saved to QuestShade.ini"); });
             RefreshPresets(cfg);
-            root.CreateFunction("Join the QuestShade Discord", new Color(0.35f, 0.4f, 0.95f), () => mod.OpenDiscord());
-            root.CreateFunction("Save settings to ini", Color.yellow, () => { cfg.SaveMenuSettings(); Notify("Settings saved to QuestShade.ini"); });
             _root = root;
         }
 
@@ -674,10 +684,10 @@ namespace QuestShade
                 q.CreateFunction("No - keep everything that runs", Color.white, () => { ReShadeImport.Answer(name, false); _mod.SelectPreset(name); _mod.ReloadAll(); Notify($"{shown}: kept (heavy parts skipped)"); });
             }
             int n = 0; foreach (var p in cfg.Presets) if (p.EndsWith(ReShadeImport.Suffix)) n++;
-            _importPage.CreateFunction($"{n} imported - pick them in Choose preset", Color.white, () => Notify("Imported ReShade presets end in (ReShade) in Choose preset.", 3f));
+            _importPage.CreateFunction($"{n} imported - pick them in Presets > Choose preset", Color.white, () => Notify("Imported ReShade presets end in (ReShade) in Presets > Choose preset.", 3f));
             _importPage.CreateFunction("How to add: UserData/QuestShade/ReShade", Color.gray, () => Notify("Copy a ReShade .ini into UserData/QuestShade/ReShade, then Reload. No .fx files needed.", 6f));
             _importPage.CreateFunction("Reload", Color.yellow, () => _mod.ReloadAll());
-            if (pending.Count > 0 && _asked.Add(pending[0])) Notify($"[{pending[0].Replace(ReShadeImport.Suffix, "")}] Was Too Heavy To Run. Would You Like To Compress It? (Effects > ReShade presets)", 6f);
+            if (pending.Count > 0 && _asked.Add(pending[0])) Notify($"[{pending[0].Replace(ReShadeImport.Suffix, "")}] Was Too Heavy To Run. Would You Like To Compress It? (Presets > ReShade imports)", 6f);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

@@ -63,7 +63,7 @@ namespace QuestShade
                 var last = System.IO.File.ReadAllText(StepFile).Trim();
                 if (last == "ok" || last.Length == 0) return false;
                 _failed = true;
-                Mod.Log.Warning($"Shadows: last time the game died at shadow step \"{last}\". Body shadow is OFF now so you can play. Please send this log. (Turn Body shadow off and on in Effects > Lighting to try again.)");
+                Mod.Log.Warning($"Shadows: last time the game died at shadow step \"{last}\". Body shadow is OFF now so you can play. Please send this log. (Turn Body shadow off and on in Lighting > Body shadow to try again.)");
             }
             catch { }
             return _failed;
