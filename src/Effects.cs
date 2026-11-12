@@ -95,8 +95,8 @@ namespace QuestShade
             if (!live) { _mat.SetVector(ID.Live, Vector4.zero); return; }
             int eyeH = XRSettings.enabled && XRSettings.eyeTextureHeight > 0 ? XRSettings.eyeTextureHeight : (_cam != null ? _cam.pixelHeight : 1080);
             float blur = Mathf.Min(_dofMaxBlur, 14f) * eyeH / 1080f;
-            _mat.SetVector(ID.Live, new Vector4(_bloomIntensity * 0.6f, 0, blur, _dofBokeh));
-            float thr = Mathf.Clamp(p.Float("Bloom", "Threshold", 0.85f), 0f, 4f);
+            _mat.SetVector(ID.Live, new Vector4(_bloomIntensity * 0.6f * _calInt, 0, blur, _dofBokeh));
+            float thr = Mathf.Max(Mathf.Clamp(p.Float("Bloom", "Threshold", 0.85f), 0f, 4f), _calThr);
             _mat.SetVector(ID.LiveBloom, new Vector4(thr, thr * Mathf.Clamp01(p.Float("Bloom", "SoftKnee", 0.5f)), 0.006f + 0.01f * Mathf.Clamp01(p.Float("Bloom", "Scatter", 0.7f)), 0));
             var tint = p.Color("Bloom", "Tint", Color.white);
             _mat.SetVector(ID.LiveTint, new Vector4(tint.r, tint.g, tint.b, 1));
@@ -264,6 +264,7 @@ namespace QuestShade
                 _calThr = Mathf.Clamp(Mathf.Lerp(p90 * 0.85f, p95 * 0.97f, bright), 0f, Mathf.Lerp(0.85f, 0.95f, bright));
                 _calInt = Mathf.Clamp(0.3f / Mathf.Max(mean, 0.01f), 0.4f, 1f);
                 _calDone = true;
+                MarkDirty();
                 Mod.Log.Msg($"Bloom calibrated for this level: brightness {mean:0.00} (top 10% {p90:0.00}) -> threshold {_calThr:0.00}, strength x{_calInt:0.00}");
             }
             catch (Exception e) { _calDone = true; Mod.Log.Warning("Bloom calibration failed: " + e.Message); }

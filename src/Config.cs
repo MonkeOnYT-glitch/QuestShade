@@ -176,7 +176,7 @@ namespace QuestShade
             RealLights = ini.Bool("Lighting", "RealLights", true);
             LessShine = Mathf.Clamp01(ini.Float("Lighting", "LessShine", 0.6f));
             FlashlightBeams = ini.Bool("Lighting", "FlashlightBeams", true);
-            Shadows = ini.Bool("Lighting", "BodyShadow2", true);
+            Shadows = ini.Bool("Lighting", "BodyShadow3", true);
             ShadowDarkness = Mathf.Clamp01(ini.Float("Lighting", "ShadowDarkness", 0.55f));
             Fisheye = Mathf.Clamp01(ini.Float("Camera", "Fisheye", 0f));
             Timestamp = Enum.TryParse<StampMode>(ini.Str("Camera", "Timestamp", "PoliceBodycam"), true, out var stm) ? stm : StampMode.PoliceBodycam;
@@ -514,7 +514,7 @@ namespace QuestShade
             SetKey("Camera", "HurtEffect", HurtEffect ? "true" : "false");
             SetKey("Lighting", "RealLights", RealLights ? "true" : "false");
             SetKey("Lighting", "FlashlightBeams", FlashlightBeams ? "true" : "false");
-            SetKey("Lighting", "BodyShadow2", Shadows ? "true" : "false");
+            SetKey("Lighting", "BodyShadow3", Shadows ? "true" : "false");
             SetKey("Lighting", "ShadowDarkness", ShadowDarkness.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Lighting", "LessShine", LessShine.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Camera", "Timestamp", Timestamp.ToString());

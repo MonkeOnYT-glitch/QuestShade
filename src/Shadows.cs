@@ -20,7 +20,11 @@ namespace QuestShade
 
         private static GameObject _root, _sheet;
         private static Transform _outer, _inner, _anchor;
-        private static Material _shade, _none, _clear;
+        private static Material _shade, _none, _clear, _shadeLens, _clearLens;
+        private static GameObject _sheetLens;
+        private static readonly List<GameObject> _skinsLens = new List<GameObject>(), _partLens = new List<GameObject>();
+        private static int _lensLayer = -2;
+        private static readonly Vector3 Slant = new Vector3(0.42f, -1f, 0.3f).normalized;
         private static Mesh _quad;
         private static readonly List<Transform> _boneSrc = new List<Transform>(), _boneDst = new List<Transform>();
         private static readonly List<Transform> _partSrc = new List<Transform>(), _partDst = new List<Transform>();
@@ -28,13 +32,13 @@ namespace QuestShade
         private static int _avatarId, _itemsKey, _mask, _maskAll, _layer = -1, _frame;
         private static float _nextItems, _sunAt, _fade, _k = 0.6f;
         private static Light _sun;
-        private static Vector3 _dir = Vector3.down, _planeP, _planeN = Vector3.up;
+        private static Vector3 _dir = new Vector3(0.42f, -1f, 0.3f).normalized, _planeP, _planeN = Vector3.up;
         private static bool _plane, _perfOff, _failed, _logged, _checked, _fresh;
 
         private static float _wait;
         private static int _seenAvatar;
 
-        private static string StepFile => System.IO.Path.Combine(Config.Root, "shadow3-step.txt");
+        private static string StepFile => System.IO.Path.Combine(Config.Root, "shadow4-step.txt");
 
         public static void OnLevel()
         {
@@ -92,11 +96,11 @@ namespace QuestShade
             if (_root != null && _root.activeSelf != on) _root.SetActive(on);
         }
 
-        private static Material Mat(string name, int queue, float mask, float comp, float pass, float ztest)
+        private static Material Mat(string name, int queue, float mask, float comp, float pass, float ztest, bool stereo = true)
         {
             var m = new Material(ShaderPack.Shadow) { name = "QuestShade_" + name, hideFlags = HideFlags.HideAndDontSave, renderQueue = queue };
             m.SetFloat(MaskId, mask); m.SetFloat(CompId, comp); m.SetFloat(PassId, pass); m.SetFloat(ZTestId, ztest);
-            ShaderPack.SetStereo(m, true);
+            ShaderPack.SetStereo(m, stereo);
             return m;
         }
 
@@ -105,6 +109,8 @@ namespace QuestShade
             if (_shade == null) _shade = Mat("Shadow", 2510, 15f, 6f, 2f, 4f);
             if (_none == null) _none = Mat("ShadowNone", 2510, 0f, 1f, 0f, 4f);
             if (_clear == null) _clear = Mat("ShadowClear", 2511, 0f, 8f, 1f, 8f);
+            if (_shadeLens == null) _shadeLens = Mat("ShadowLens", 2510, 15f, 6f, 2f, 4f, false);
+            if (_clearLens == null) _clearLens = Mat("ShadowClearLens", 2511, 0f, 8f, 1f, 8f, false);
             if (_quad == null)
             {
                 _quad = new Mesh { name = "QuestShade_ShadowSheet", hideFlags = HideFlags.HideAndDontSave };
@@ -113,6 +119,7 @@ namespace QuestShade
             }
             if (_root != null) return;
             _boneSrc.Clear(); _boneDst.Clear(); _partSrc.Clear(); _partDst.Clear(); _skins.Clear(); _partGo.Clear();
+            _skinsLens.Clear(); _partLens.Clear(); _lensLayer = -2;
             _avatarId = 0; _itemsKey = 0; _layer = -1;
             _root = new GameObject("QuestShade_Shadow");
             _root.SetActive(false);
@@ -123,6 +130,11 @@ namespace QuestShade
             _sheet.transform.SetParent(_root.transform, false);
             _sheet.AddComponent<MeshFilter>().sharedMesh = _quad;
             Plain(_sheet.AddComponent<MeshRenderer>()).sharedMaterial = _clear;
+            _sheetLens = new GameObject("SheetLens");
+            _sheetLens.transform.SetParent(_sheet.transform, false);
+            _sheetLens.AddComponent<MeshFilter>().sharedMesh = _quad;
+            Plain(_sheetLens.AddComponent<MeshRenderer>()).sharedMaterial = _clearLens;
+            _sheetLens.SetActive(false);
         }
 
         private static Renderer Plain(Renderer r)
@@ -134,14 +146,14 @@ namespace QuestShade
             return r;
         }
 
-        private static void Shade(Renderer r, int subs)
+        private static void Shade(Renderer r, int subs, Material mat)
         {
             subs = Math.Clamp(subs, 1, 16);
-            if (subs == 1) { S("shade: one material"); r.sharedMaterial = _shade; return; }
+            if (subs == 1) { S("shade: one material"); r.sharedMaterial = mat; return; }
             S($"shade: make list of {subs}");
             var a = new Material[subs];
             S("shade: fill list");
-            for (int i = 0; i < subs; i++) a[i] = _shade;
+            for (int i = 0; i < subs; i++) a[i] = mat;
             S("shade: assign list");
             r.sharedMaterials = a;
         }
@@ -149,6 +161,8 @@ namespace QuestShade
         private static void Build(Transform av)
         {
             foreach (var g in _skins) if (g != null) UnityEngine.Object.Destroy(g);
+            foreach (var g in _skinsLens) if (g != null) UnityEngine.Object.Destroy(g);
+            _skinsLens.Clear(); _lensLayer = -2;
             foreach (var t in _boneDst) if (t != null) UnityEngine.Object.Destroy(t.gameObject);
             _skins.Clear(); _boneSrc.Clear(); _boneDst.Clear();
             _avatarId = av.GetInstanceID();
@@ -215,9 +229,22 @@ namespace QuestShade
                 copy.updateWhenOffscreen = false;
                 S("copy body: set bounds");
                 copy.localBounds = new Bounds(Vector3.zero, Vector3.one * 30f);
-                Shade(copy, subs);
+                Shade(copy, subs, _shade);
                 Plain(copy);
                 _skins.Add(go);
+                var lensGo = new GameObject("SkinLens");
+                lensGo.transform.SetParent(_root.transform, false);
+                var lens = lensGo.AddComponent<SkinnedMeshRenderer>();
+                lens.sharedMesh = mesh;
+                lens.bones = mapped;
+                lens.rootBone = _anchor;
+                lens.quality = SkinQuality.Bone2;
+                lens.updateWhenOffscreen = false;
+                lens.localBounds = new Bounds(Vector3.zero, Vector3.one * 30f);
+                Shade(lens, subs, _shadeLens);
+                Plain(lens);
+                lensGo.SetActive(false);
+                _skinsLens.Add(lensGo);
                 meshes++;
             }
             Mod.Log.Msg($"Shadows: body copied ({meshes} meshes, {_boneSrc.Count} bones)");
@@ -244,7 +271,7 @@ namespace QuestShade
             if (key == _itemsKey) return;
             _itemsKey = key;
             foreach (var g in _partGo) if (g != null) UnityEngine.Object.Destroy(g);
-            _partGo.Clear(); _partSrc.Clear(); _partDst.Clear(); _found.Clear();
+            _partGo.Clear(); _partSrc.Clear(); _partDst.Clear(); _found.Clear(); _partLens.Clear(); _lensLayer = -2;
             _fresh = true; _layer = -1;
             foreach (var root in _roots)
                 foreach (var mr in root.GetComponentsInChildren<MeshRenderer>(false))
@@ -266,8 +293,16 @@ namespace QuestShade
                 go.transform.localScale = mr.transform.lossyScale;
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
                 var copy = go.AddComponent<MeshRenderer>();
-                Shade(copy, subs);
+                Shade(copy, subs, _shade);
                 Plain(copy);
+                var lensGo = new GameObject("PartLens");
+                lensGo.transform.SetParent(go.transform, false);
+                lensGo.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var lens = lensGo.AddComponent<MeshRenderer>();
+                Shade(lens, subs, _shadeLens);
+                Plain(lens);
+                lensGo.SetActive(false);
+                _partLens.Add(lensGo);
                 _partSrc.Add(mr.transform); _partDst.Add(go.transform); _partGo.Add(go);
             }
             _found.Clear();
@@ -303,7 +338,7 @@ namespace QuestShade
             S("sun");
             if (now >= _sunAt) { _sunAt = now + 6f; if (_sun == null || !_sun.isActiveAndEnabled) FindSun(); }
             Vector3 headAt = head.transform.position;
-            Vector3 want = Vector3.down; float wantK = 0.6f;
+            Vector3 want = Slant; float wantK = 0.7f;
             if (_sun != null && _sun.isActiveAndEnabled && _sun.intensity > 0.05f)
             {
                 var sd = _sun.transform.forward;
@@ -354,7 +389,7 @@ namespace QuestShade
             _anchor.position = at2;
             _sheet.transform.SetPositionAndRotation(at2, Quaternion.LookRotation(n, a));
             _sheet.transform.localScale = new Vector3(60f, 60f, 1f);
-            _shade.SetFloat(KId, dark);
+            _shade.SetFloat(KId, dark); _shadeLens.SetFloat(KId, dark);
 
             int layer = FlashBeams.HeadsetLayer != null ? FlashBeams.HeadsetLayer() : -1;
             if (layer < 0) layer = 0;
@@ -364,6 +399,15 @@ namespace QuestShade
                 _sheet.layer = layer;
                 foreach (var g in _skins) if (g != null) g.layer = layer;
                 foreach (var g in _partGo) if (g != null) g.layer = layer;
+            }
+            int lensLayer = FlashBeams.LensLayer != null ? FlashBeams.LensLayer() : -1;
+            if (lensLayer != _lensLayer)
+            {
+                _lensLayer = lensLayer;
+                bool on = lensLayer >= 0;
+                if (_sheetLens != null) { if (on) _sheetLens.layer = lensLayer; _sheetLens.SetActive(on); }
+                foreach (var g in _skinsLens) if (g != null) { if (on) g.layer = lensLayer; g.SetActive(on); }
+                foreach (var g in _partLens) if (g != null) { if (on) g.layer = lensLayer; g.SetActive(on); }
             }
 
             S("follow");
