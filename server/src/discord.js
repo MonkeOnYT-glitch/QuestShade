@@ -17,6 +17,7 @@ const LOCK_MS = 2 * 3600_000;
 export async function discordTick(env) {
   if (!env.DISCORD_TOKEN) return;
   try { await raidGuard(env); } catch (e) { console.log("raid guard: " + e); }
+  try { await testPings(env); } catch (e) { console.log("test pings: " + e); }
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS answered (thread TEXT PRIMARY KEY, at INTEGER)").run();
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS bug_reports (thread TEXT PRIMARY KEY, title TEXT, author TEXT, body TEXT, url TEXT, at INTEGER)").run();
   const active = await call(env, "GET", `/guilds/${GUILD}/threads/active`);
@@ -121,3 +122,58 @@ async function call(env, method, path, body) {
 }
 
 function snowflakeTime(id) { return Number(BigInt(id) >> 22n) + 1420070400000; }
+
+const TEST_CHANNEL = "public-testing", TEST_ROLE = "Testing Pings", CHECK = "✅";
+
+async function testPings(env) {
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS bot_state (k TEXT PRIMARY KEY, v TEXT)").run();
+  const get = async k => (await env.DB.prepare("SELECT v FROM bot_state WHERE k = ?1").bind(k).first())?.v;
+  const set = (k, v) => env.DB.prepare("INSERT OR REPLACE INTO bot_state (k, v) VALUES (?1, ?2)").bind(k, v).run();
+
+  let ch = await get("test_channel");
+  if (!ch) {
+    const chans = await call(env, "GET", `/guilds/${GUILD}/channels`);
+    ch = (chans || []).find(c => c.type === 0 && (c.name || "").includes(TEST_CHANNEL))?.id;
+    if (!ch) { console.log("test pings: no #" + TEST_CHANNEL + " channel"); return; }
+    await set("test_channel", ch);
+  }
+  let role = await get("test_role");
+  if (!role) {
+    const roles = await call(env, "GET", `/guilds/${GUILD}/roles`);
+    if (!Array.isArray(roles)) return;
+    role = roles.find(r => r.name === TEST_ROLE)?.id;
+    if (!role) role = (await call(env, "POST", `/guilds/${GUILD}/roles`, { name: TEST_ROLE, permissions: "0", mentionable: false }))?.id;
+    if (!role) return;
+    await set("test_role", role);
+  }
+  let msg = await get("test_message");
+  if (!msg) {
+    const sent = await call(env, "POST", `/channels/${ch}/messages`, {
+      content: `@everyone react with ${CHECK} if you want public testing pings`, allowed_mentions: { parse: ["everyone"] } });
+    if (!sent?.id) return;
+    msg = sent.id;
+    await set("test_message", msg);
+  }
+  const emoji = encodeURIComponent(CHECK);
+  if (!(await get("test_reacted"))) {
+    if (await call(env, "PUT", `/channels/${ch}/messages/${msg}/reactions/${emoji}/@me`)) await set("test_reacted", "1");
+  }
+
+  const reacted = new Set();
+  for (let after = "0", page = 0; page < 20; page++) {
+    const users = await call(env, "GET", `/channels/${ch}/messages/${msg}/reactions/${emoji}?limit=100&after=${after}`);
+    if (!Array.isArray(users)) return;
+    for (const u of users) if (!u.bot) reacted.add(u.id);
+    if (users.length < 100) break;
+    after = users[users.length - 1].id;
+  }
+  const members = await call(env, "GET", `/guilds/${GUILD}/members?limit=1000`);
+  if (!Array.isArray(members)) return;
+  let changes = 0;
+  for (const m of members) {
+    if (m.user.bot || changes >= 20) continue;
+    const has = (m.roles || []).includes(role), wants = reacted.has(m.user.id);
+    if (wants && !has) { await call(env, "PUT", `/guilds/${GUILD}/members/${m.user.id}/roles/${role}`); changes++; }
+    else if (!wants && has) { await call(env, "DELETE", `/guilds/${GUILD}/members/${m.user.id}/roles/${role}`); changes++; }
+  }
+}
