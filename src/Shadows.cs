@@ -134,19 +134,16 @@ namespace QuestShade
             return r;
         }
 
-        private static Il2CppReferenceArray<Material> Mats(Il2CppReferenceArray<Material> original, int subs)
+        private static void Shade(Renderer r, int subs)
         {
-            subs = Mathf.Clamp(subs, 1, 16);
+            subs = Math.Clamp(subs, 1, 16);
+            if (subs == 1) { S("shade: one material"); r.sharedMaterial = _shade; return; }
+            S($"shade: make list of {subs}");
             var a = new Il2CppReferenceArray<Material>(subs);
-            bool any = false;
-            for (int i = 0; i < subs; i++)
-            {
-                var m = original != null && i < original.Length ? original[i] : null;
-                bool solid = m == null || m.renderQueue < 2450;
-                a[i] = solid ? _shade : _none;
-                any |= solid;
-            }
-            return any ? a : null;
+            S("shade: fill list");
+            for (int i = 0; i < subs; i++) a[i] = _shade;
+            S("shade: assign list");
+            r.sharedMaterials = a;
         }
 
         private static void Build(Transform av)
@@ -175,12 +172,14 @@ namespace QuestShade
                 S("copy body: read bones");
                 var bones = smr.bones;
                 if (mesh == null || bones == null || bones.Length == 0) continue;
-                S("copy body: read materials");
-                var mats = Mats(smr.sharedMaterials, mesh.subMeshCount);
-                S("copy body: materials ok");
-                if (mats == null) continue;
-                S($"copy mesh \"{smr.name}\": {bones.Length} bones, {mesh.subMeshCount} submesh");
+                S("copy body: count submeshes");
+                int subs = mesh.subMeshCount;
+                S("copy body: count bones");
+                int boneCount = bones.Length;
+                S($"copy mesh: {boneCount} bones, {subs} submesh");
+                S("copy body: make bone list");
                 var mapped = new Il2CppReferenceArray<Transform>(bones.Length);
+                S("copy body: map bones");
                 for (int i = 0; i < bones.Length; i++)
                 {
                     var b = bones[i];
@@ -200,15 +199,18 @@ namespace QuestShade
                 var go = new GameObject("Skin");
                 go.transform.SetParent(_root.transform, false);
                 var copy = go.AddComponent<SkinnedMeshRenderer>();
+                S("copy body: set mesh");
                 copy.sharedMesh = mesh;
                 S("copy body: set bones");
                 copy.bones = mapped;
-                S("copy body: set materials");
+                S("copy body: set root bone");
                 copy.rootBone = _anchor;
+                S("copy body: set quality");
                 copy.quality = SkinQuality.Bone2;
                 copy.updateWhenOffscreen = false;
+                S("copy body: set bounds");
                 copy.localBounds = new Bounds(Vector3.zero, Vector3.one * 30f);
-                copy.sharedMaterials = mats;
+                Shade(copy, subs);
                 Plain(copy);
                 _skins.Add(go);
                 meshes++;
@@ -253,15 +255,13 @@ namespace QuestShade
             for (int i = 0; i < _found.Count && _partSrc.Count < MaxParts; i++)
             {
                 var (mr, mesh, _) = _found[i];
-                var mats = Mats(mr.sharedMaterials, mesh.subMeshCount);
-                S("copy body: materials ok");
-                if (mats == null) continue;
+                int subs = mesh.subMeshCount;
                 var go = new GameObject("Part");
                 go.transform.SetParent(_inner, false);
                 go.transform.localScale = mr.transform.lossyScale;
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
                 var copy = go.AddComponent<MeshRenderer>();
-                copy.sharedMaterials = mats;
+                Shade(copy, subs);
                 Plain(copy);
                 _partSrc.Add(mr.transform); _partDst.Add(go.transform); _partGo.Add(go);
             }
