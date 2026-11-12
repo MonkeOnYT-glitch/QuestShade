@@ -20,7 +20,7 @@ namespace QuestShade
 
         private static GameObject _root, _sheet;
         private static Transform _outer, _inner, _anchor;
-        private static Material _shade, _none, _clear, _shadeLens, _clearLens;
+        private static Material _shade, _none, _clear, _shadeLens, _noneLens, _clearLens;
         private static GameObject _sheetLens;
         private static readonly List<GameObject> _skinsLens = new List<GameObject>(), _partLens = new List<GameObject>();
         private static int _lensLayer = -2;
@@ -111,6 +111,7 @@ namespace QuestShade
             if (_clear == null) _clear = Mat("ShadowClear", 2511, 0f, 8f, 1f, 8f);
             if (_shadeLens == null) _shadeLens = Mat("ShadowLens", 2510, 15f, 6f, 2f, 4f, false);
             if (_clearLens == null) _clearLens = Mat("ShadowClearLens", 2511, 0f, 8f, 1f, 8f, false);
+            if (_noneLens == null) _noneLens = Mat("ShadowNoneLens", 2510, 0f, 1f, 0f, 4f, false);
             if (_quad == null)
             {
                 _quad = new Mesh { name = "QuestShade_ShadowSheet", hideFlags = HideFlags.HideAndDontSave };
@@ -146,15 +147,28 @@ namespace QuestShade
             return r;
         }
 
-        private static void Shade(Renderer r, int subs, Material mat)
+        private static readonly bool[] _solid = new bool[16];
+
+        private static bool ReadSolid(Renderer src, int subs)
         {
             subs = Math.Clamp(subs, 1, 16);
-            if (subs == 1) { S("shade: one material"); r.sharedMaterial = mat; return; }
-            S($"shade: make list of {subs}");
+            for (int i = 0; i < 16; i++) _solid[i] = true;
+            int k = 0;
+            foreach (var m in src.sharedMaterials)
+            {
+                if (k >= 16) break;
+                _solid[k++] = m == null || m.renderQueue < 2450;
+            }
+            for (int i = 0; i < subs; i++) if (_solid[i]) return true;
+            return false;
+        }
+
+        private static void Shade(Renderer r, int subs, Material mat, Material none)
+        {
+            subs = Math.Clamp(subs, 1, 16);
+            if (subs == 1) { r.sharedMaterial = _solid[0] ? mat : none; return; }
             var a = new Material[subs];
-            S("shade: fill list");
-            for (int i = 0; i < subs; i++) a[i] = mat;
-            S("shade: assign list");
+            for (int i = 0; i < subs; i++) a[i] = _solid[i] ? mat : none;
             r.sharedMaterials = a;
         }
 
@@ -188,6 +202,8 @@ namespace QuestShade
                 if (mesh == null || bones == null || bones.Length == 0) continue;
                 S("copy body: count submeshes");
                 int subs = mesh.subMeshCount;
+                S("copy body: check see-through parts");
+                if (!ReadSolid(smr, subs)) continue;
                 S("copy body: count bones");
                 int boneCount = bones.Length;
                 S($"copy mesh: {boneCount} bones, {subs} submesh");
@@ -229,7 +245,7 @@ namespace QuestShade
                 copy.updateWhenOffscreen = false;
                 S("copy body: set bounds");
                 copy.localBounds = new Bounds(Vector3.zero, Vector3.one * 30f);
-                Shade(copy, subs, _shade);
+                Shade(copy, subs, _shade, _none);
                 Plain(copy);
                 _skins.Add(go);
                 var lensGo = new GameObject("SkinLens");
@@ -241,7 +257,7 @@ namespace QuestShade
                 lens.quality = SkinQuality.Bone2;
                 lens.updateWhenOffscreen = false;
                 lens.localBounds = new Bounds(Vector3.zero, Vector3.one * 30f);
-                Shade(lens, subs, _shadeLens);
+                Shade(lens, subs, _shadeLens, _noneLens);
                 Plain(lens);
                 lensGo.SetActive(false);
                 _skinsLens.Add(lensGo);
@@ -281,6 +297,7 @@ namespace QuestShade
                     var mesh = mf != null ? mf.sharedMesh : null;
                     if (mesh == null) continue;
                     var e = mr.bounds.extents;
+                    if (Math.Min(e.x, Math.Min(e.y, e.z)) < 0.0015f) continue;
                     _found.Add((mr, mesh, e.x * e.y * e.z));
                 }
             _found.Sort((x, y) => y.size.CompareTo(x.size));
@@ -288,18 +305,19 @@ namespace QuestShade
             {
                 var (mr, mesh, _) = _found[i];
                 int subs = mesh.subMeshCount;
+                if (!ReadSolid(mr, subs)) continue;
                 var go = new GameObject("Part");
                 go.transform.SetParent(_inner, false);
                 go.transform.localScale = mr.transform.lossyScale;
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
                 var copy = go.AddComponent<MeshRenderer>();
-                Shade(copy, subs, _shade);
+                Shade(copy, subs, _shade, _none);
                 Plain(copy);
                 var lensGo = new GameObject("PartLens");
                 lensGo.transform.SetParent(go.transform, false);
                 lensGo.AddComponent<MeshFilter>().sharedMesh = mesh;
                 var lens = lensGo.AddComponent<MeshRenderer>();
-                Shade(lens, subs, _shadeLens);
+                Shade(lens, subs, _shadeLens, _noneLens);
                 Plain(lens);
                 lensGo.SetActive(false);
                 _partLens.Add(lensGo);
