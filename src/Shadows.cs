@@ -139,7 +139,7 @@ namespace QuestShade
             subs = Math.Clamp(subs, 1, 16);
             if (subs == 1) { S("shade: one material"); r.sharedMaterial = _shade; return; }
             S($"shade: make list of {subs}");
-            var a = new Il2CppReferenceArray<Material>(subs);
+            var a = new Material[subs];
             S("shade: fill list");
             for (int i = 0; i < subs; i++) a[i] = _shade;
             S("shade: assign list");
@@ -177,24 +177,29 @@ namespace QuestShade
                 S("copy body: count bones");
                 int boneCount = bones.Length;
                 S($"copy mesh: {boneCount} bones, {subs} submesh");
-                S("copy body: make bone list");
-                var mapped = new Il2CppReferenceArray<Transform>(bones.Length);
                 S("copy body: map bones");
-                for (int i = 0; i < bones.Length; i++)
+                var mapped = new Transform[boneCount];
+                int bi = 0;
+                foreach (var b in bones)
                 {
-                    var b = bones[i];
-                    if (b == null) { mapped[i] = _anchor; continue; }
+                    if (bi >= boneCount) break;
+                    if (bi == 0) S("copy body: first bone");
+                    if (b == null) { mapped[bi++] = _anchor; continue; }
                     int id = b.GetInstanceID();
                     if (!index.TryGetValue(id, out int at))
                     {
                         at = _boneSrc.Count; index[id] = at;
+                        if (bi == 0) S("copy body: first bone copy");
                         var p = new GameObject("Bone").transform;
                         p.SetParent(_inner, false);
+                        if (bi == 0) S("copy body: first bone scale");
                         p.localScale = b.lossyScale;
                         _boneSrc.Add(b); _boneDst.Add(p);
                     }
-                    mapped[i] = _boneDst[at];
+                    mapped[bi++] = _boneDst[at];
                 }
+                while (bi < boneCount) mapped[bi++] = _anchor;
+                S("copy body: bones mapped");
                 S("copy body: make copy");
                 var go = new GameObject("Skin");
                 go.transform.SetParent(_root.transform, false);
