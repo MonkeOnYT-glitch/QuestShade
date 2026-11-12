@@ -3,7 +3,11 @@ using System.Linq;
 using MelonLoader;
 using UnityEngine;
 
+#if QS_SHADOW_DEBUG
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.10-debug", "QuestShade")]
+#else
 [assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.9", "QuestShade")]
+#endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
 [assembly: MelonOptionalDependencies("BoneLib")]

@@ -41,6 +41,7 @@ namespace QuestShade
         public static void Tick(Config cfg, Camera head)
         {
             bool want = cfg.Shadows && cfg.Enabled && !_perfOff && !_failed && ShaderPack.Shadow != null && head != null && Collect != null;
+            if (want && DiedLastTime()) want = false;
             if (want && Perf.Level >= 2) { _perfOff = true; want = false; Mod.Log.Msg("Shadows: game too slow, body shadow off for this level"); }
             if (!want) { Show(false); return; }
             try { Run(cfg, head); }
@@ -143,6 +144,31 @@ namespace QuestShade
             return go;
         }
 
+        private static string StepFile => System.IO.Path.Combine(Config.Root, "shadow-step.txt");
+        private static bool _checked;
+        private static void S(string s)
+        {
+            if (_logged) return;
+            Mod.Log.Msg("Shadows step: " + s);
+            try { System.IO.File.WriteAllText(StepFile, s); } catch { }
+        }
+
+        private static bool DiedLastTime()
+        {
+            if (_checked) return _failed;
+            _checked = true;
+            try
+            {
+                if (!System.IO.File.Exists(StepFile)) return false;
+                var last = System.IO.File.ReadAllText(StepFile).Trim();
+                if (last == "ok" || last.Length == 0) return false;
+                _failed = true;
+                Mod.Log.Warning($"Shadows: last time the game died at shadow step \"{last}\". Body shadow is OFF now so you can play. Please send this log. (Delete UserData/QuestShade/shadow-step.txt to try again.)");
+            }
+            catch { }
+            return _failed;
+        }
+
         private static bool Flat(int a, int b)
         {
             var e = _p[b] - _p[a];
@@ -157,8 +183,9 @@ namespace QuestShade
             float now = Time.unscaledTime, dt = Mathf.Min(Time.unscaledDeltaTime, 0.1f);
             if (now >= _scanAt) { _scanAt = now + 3f; Scan(); }
             if (_casters.Count == 0) { Show(false); return; }
-            Ensure();
+            S("ensure"); Ensure();
 
+            S("bounds");
             bool any = false; Bounds b = default;
             for (int i = 0; i < _casters.Count; i++)
             {
@@ -171,6 +198,7 @@ namespace QuestShade
             Vector3 center = b.center;
             float half = Mathf.Clamp(b.extents.magnitude + 0.15f, 0.6f, 2.2f);
 
+            S("sun");
             if (now >= _sunAt) { _sunAt = now + 6f; if (_sun == null || !_sun.isActiveAndEnabled) FindSun(); }
             Vector3 want = Vector3.down; float wantK = 0.6f;
             if (_sun != null && _sun.isActiveAndEnabled && _sun.intensity > 0.05f)
@@ -191,6 +219,7 @@ namespace QuestShade
 
             var view = Matrix4x4.Scale(new Vector3(1f, 1f, -1f)) * Matrix4x4.TRS(center - _dir * 5f, rot, Vector3.one).inverse;
             var proj = Matrix4x4.Ortho(-half, half, -half, half, 0.1f, 10f);
+            S($"silhouette build: {_casters.Count} parts, half {half:0.00} m, dir {_dir}, mask {_mask}, {SystemInfo.graphicsDeviceType}, threaded {SystemInfo.graphicsMultiThreaded}, sun {(_sun != null ? _sun.name : "none")}");
             var prev = RenderTexture.active;
             _cb.Clear();
             _cb.SetRenderTarget(new RenderTargetIdentifier(_rt));
@@ -200,11 +229,23 @@ namespace QuestShade
             {
                 var c = _casters[i];
                 if (c.R == null || !c.R.enabled || !c.R.gameObject.activeInHierarchy) continue;
-                for (int s = 0; s < c.Subs; s++) _cb.DrawRenderer(c.R, _castMat, s, 1);
+                if (!_logged)
+                {
+                    S($"draw part {i}: \"{c.R.name}\" {c.R.GetIl2CppType().Name}, {c.Subs} submesh, layer {c.R.gameObject.layer}");
+                    for (int s = 0; s < c.Subs; s++) _cb.DrawRenderer(c.R, _castMat, s, 1);
+                    Graphics.ExecuteCommandBuffer(_cb);
+                    _cb.Clear();
+                    _cb.SetRenderTarget(new RenderTargetIdentifier(_rt));
+                    _cb.SetViewProjectionMatrices(view, proj);
+                }
+                else for (int s = 0; s < c.Subs; s++) _cb.DrawRenderer(c.R, _castMat, s, 1);
             }
+            S("silhouette draw");
             Graphics.ExecuteCommandBuffer(_cb);
+            S("silhouette done");
             RenderTexture.active = prev;
 
+            S("rays");
             float step = 2f * half / Q;
             var o = center - _dir * Ahead;
             for (int j = 0; j < N; j++)
@@ -219,6 +260,7 @@ namespace QuestShade
                     }
                     else _ok[k] = false;
                 }
+            S("mesh");
             int vi = 0;
             for (int j = 0; j < Q; j++)
                 for (int i = 0; i < Q; i++)
@@ -229,9 +271,11 @@ namespace QuestShade
                     else { _verts[vi] = Vector3.zero; _verts[vi + 1] = Vector3.zero; _verts[vi + 2] = Vector3.zero; _verts[vi + 3] = Vector3.zero; }
                     vi += 4;
                 }
+            S("mesh upload");
             _mesh.vertices = _verts;
             _mesh.bounds = new Bounds(Vector3.zero, new Vector3(40f, 40f, 40f));
 
+            S("place");
             _headMat.SetFloat(KId, dark); _lensMat.SetFloat(KId, dark);
             int hl = FlashBeams.HeadsetLayer != null ? FlashBeams.HeadsetLayer() : -1;
             int ll = FlashBeams.LensLayer != null ? FlashBeams.LensLayer() : -1;
@@ -239,6 +283,7 @@ namespace QuestShade
             _lensGo.layer = ll >= 0 ? ll : 0;
             _headGo.transform.position = center; _lensGo.transform.position = center;
             Show(true);
+            if (!_logged) { S("first frame finished"); try { System.IO.File.WriteAllText(StepFile, "ok"); } catch { } }
             if (!_logged) { _logged = true; Mod.Log.Msg($"Shadows: body shadow on ({_casters.Count} parts, {(_sun != null ? "sun '" + _sun.name + "'" : "no sun on this map, shadow falls straight down")})"); }
         }
     }

@@ -29,7 +29,12 @@ namespace QuestShade
         public float DarkMaps = 0.8f, FlashlightBoost = 1f;
         public bool LeftHanded;
         public bool HurtEffect = true;
-        public bool RealLights = true, FlashlightBeams = true, Shadows = false;
+#if QS_SHADOW_DEBUG
+        public const bool ShadowDebug = true;
+#else
+        public const bool ShadowDebug = false;
+#endif
+        public bool RealLights = true, FlashlightBeams = true, Shadows = ShadowDebug;
         public float ShadowDarkness = 0.55f;
         public StampMode Timestamp = StampMode.PoliceBodycam;
         public float LessShine = 0.6f, Fisheye = 0f;
@@ -171,7 +176,7 @@ namespace QuestShade
             RealLights = ini.Bool("Lighting", "RealLights", true);
             LessShine = Mathf.Clamp01(ini.Float("Lighting", "LessShine", 0.6f));
             FlashlightBeams = ini.Bool("Lighting", "FlashlightBeams", true);
-            Shadows = ini.Bool("Lighting", "BodyShadowExperimental", false);
+            Shadows = ini.Bool("Lighting", "BodyShadowExperimental", ShadowDebug);
             ShadowDarkness = Mathf.Clamp01(ini.Float("Lighting", "ShadowDarkness", 0.55f));
             Fisheye = Mathf.Clamp01(ini.Float("Camera", "Fisheye", 0f));
             Timestamp = Enum.TryParse<StampMode>(ini.Str("Camera", "Timestamp", "PoliceBodycam"), true, out var stm) ? stm : StampMode.PoliceBodycam;
