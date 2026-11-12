@@ -46,6 +46,10 @@ Shader "Hidden/QuestShade/Shadow"
             half _QS_ZTest;
             CBUFFER_END
 
+            float4 _QS_ShPoint;
+            float4 _QS_ShNormal;
+            float4 _QS_ShDir;
+
             struct Attributes { float4 positionOS : POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID };
             struct Varyings { float4 positionCS : SV_POSITION; UNITY_VERTEX_OUTPUT_STEREO };
 
@@ -54,7 +58,14 @@ Shader "Hidden/QuestShade/Shadow"
                 Varyings o;
                 UNITY_SETUP_INSTANCE_ID(i);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
-                o.positionCS = TransformObjectToHClip(i.positionOS.xyz);
+                float3 w = TransformObjectToWorld(i.positionOS.xyz);
+                float dn = dot(_QS_ShDir.xyz, _QS_ShNormal.xyz);
+                if (abs(dn) > 1e-4)
+                {
+                    float s = -dot(w - _QS_ShPoint.xyz, _QS_ShNormal.xyz) / dn;
+                    w += _QS_ShDir.xyz * clamp(s, -0.5, 12.0) + _QS_ShNormal.xyz * _QS_ShNormal.w;
+                }
+                o.positionCS = TransformWorldToHClip(w);
                 return o;
             }
 

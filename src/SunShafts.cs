@@ -1,4 +1,5 @@
 using System;
+using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -7,6 +8,7 @@ namespace QuestShade
     internal static class SunShafts
     {
         public static Func<int> PlayerLayers;
+        public static bool CameraOpen;
 
         private const int Grid = 16, Cells = Grid * Grid, MaxBeams = 56, ProbesPerFrame = 12;
         private const float CellSize = 1.1f, Top = 5f, MaxFloor = 9f, HalfWidth = 0.55f, Refresh = 2f;
@@ -18,6 +20,8 @@ namespace QuestShade
         private static readonly Vector3[] _n = new Vector3[MaxBeams * 8];
         private static readonly Color32[] _c = new Color32[MaxBeams * 8];
         private static Mesh _mesh;
+        private static Il2CppStructArray<Vector3> _nv, _nn;
+        private static Il2CppStructArray<Color32> _nc;
         private static Material _matHead, _matLens;
         private static GameObject _head, _lens;
         private static Light _sun;
@@ -115,9 +119,10 @@ namespace QuestShade
             _drawn = beams;
             if (!any) { Show(false, false); return; }
 
-            _mesh.vertices = _v;
-            _mesh.normals = _n;
-            _mesh.colors32 = _c;
+            Push(_v, _nv); Push(_n, _nn); Push(_c, _nc);
+            _mesh.vertices = _nv;
+            _mesh.normals = _nn;
+            _mesh.colors32 = _nc;
 
             var sc = _sun.color;
             float amount = Mathf.Clamp(strength, 0f, 3f) * 0.11f * Mathf.Clamp(_sun.intensity, 0.4f, 1.5f);
@@ -126,7 +131,7 @@ namespace QuestShade
             _matLens.SetColor(ColorId, col);
             if (hl >= 0 && _head.layer != hl) _head.layer = hl;
             if (ll >= 0 && _lens.layer != ll) _lens.layer = ll;
-            Show(beams > 0, beams > 0 && ll >= 0);
+            Show(beams > 0, beams > 0 && ll >= 0 && CameraOpen);
             if (!_logged && beams > 0) { _logged = true; Mod.Log.Msg($"Sun shafts: {beams} beams through gaps ({shaded}/{known} spots in shade, sun '{_sun.name}')"); }
         }
 
@@ -173,13 +178,21 @@ namespace QuestShade
                 }
                 _mesh = new Mesh { name = "QuestShade_SunShafts", hideFlags = HideFlags.HideAndDontSave };
                 _mesh.MarkDynamic();
-                _mesh.vertices = _v; _mesh.normals = _n; _mesh.colors32 = _c; _mesh.uv = uv; _mesh.triangles = tri;
+                _nv = new Il2CppStructArray<Vector3>(_v.Length); _nn = new Il2CppStructArray<Vector3>(_n.Length); _nc = new Il2CppStructArray<Color32>(_c.Length);
+                Push(_v, _nv); Push(_n, _nn); Push(_c, _nc);
+                _mesh.vertices = _nv; _mesh.normals = _nn; _mesh.colors32 = _nc; _mesh.uv = uv; _mesh.triangles = tri;
                 _mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 100000f);
             }
             if (_matHead == null) { _matHead = new Material(ShaderPack.Shaft) { hideFlags = HideFlags.HideAndDontSave }; ShaderPack.SetStereo(_matHead, true); }
             if (_matLens == null) { _matLens = new Material(ShaderPack.Shaft) { hideFlags = HideFlags.HideAndDontSave }; ShaderPack.SetStereo(_matLens, false); }
             if (_head == null) _head = Make("QuestShade_SunShafts", _matHead);
             if (_lens == null) _lens = Make("QuestShade_SunShaftsLens", _matLens);
+        }
+
+        private static unsafe void Push<T>(T[] src, Il2CppStructArray<T> dst) where T : unmanaged
+        {
+            long bytes = (long)src.Length * sizeof(T);
+            fixed (T* p = src) Buffer.MemoryCopy(p, (void*)IntPtr.Add(dst.Pointer, 4 * IntPtr.Size), bytes, bytes);
         }
 
         private static GameObject Make(string name, Material mat)

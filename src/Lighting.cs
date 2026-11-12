@@ -32,7 +32,7 @@ namespace QuestShade
         public static void Tick(Config cfg)
         {
             if (!_perfOff && _want && Perf.Level >= 2) { _perfOff = true; Mod.Log.Msg("Lighting: game too slow, real lights off for this level"); }
-            bool want = cfg.RealLights && cfg.Enabled && !_perfOff;
+            bool want = cfg.RealLights && cfg.Enabled && !_perfOff && Flashlights.AnyOn;
             if (want != _want) { _want = want; if (_applyAt < 0f) _applyAt = Time.unscaledTime; }
             if (_applyAt < 0f || Time.unscaledTime < _applyAt) return;
             _applyAt = -1f;

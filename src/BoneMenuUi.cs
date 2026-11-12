@@ -338,6 +338,8 @@ namespace QuestShade
             return true;
         }
         private static readonly System.Collections.Generic.List<(GameObject go, int layer)> _layered = new System.Collections.Generic.List<(GameObject, int)>();
+        private static readonly System.Collections.Generic.HashSet<IntPtr> _headKnown = new System.Collections.Generic.HashSet<IntPtr>();
+        private static int _headKnownFor;
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void HeadToLayer(bool actor, int layer)
@@ -361,22 +363,29 @@ namespace QuestShade
                 if ((b.center - wl).sqrMagnitude < 0.18f * 0.18f || (b.center - wr).sqrMagnitude < 0.18f * 0.18f) continue;
                 Move(r);
             }
-            float neckY = neck.position.y - 0.06f;
+            int avKey = av.GetInstanceID();
+            if (_headKnownFor != avKey) { _headKnownFor = avKey; _headKnown.Clear(); }
+            Vector3 np = neck.position, up = Vector3.up;
+            var headBone = HeadBone(av);
+            if (headBone != null) { var toHead = headBone.position - np; if (toHead.sqrMagnitude > 1e-4f) up = toHead.normalized; }
             bool log = !actor && _headLogFor != _avId;
             if (log) _headLogFor = _avId;
             var sb = log ? new System.Text.StringBuilder() : null;
             foreach (var r in _allRenderers)
             {
                 if (r == null) continue;
+                if (_headKnown.Contains(r.Pointer)) { Move(r); continue; }
                 var b = r.bounds;
+                float size = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z));
+                float along = Vector3.Dot(b.center - np, up);
                 bool near = (b.center - hc).sqrMagnitude < 0.6f * 0.6f;
                 bool hands = (b.center - wl).sqrMagnitude < 0.15f * 0.15f || (b.center - wr).sqrMagnitude < 0.15f * 0.15f;
-                bool above = b.center.y > neckY && b.size.y < 0.9f;
-                bool toNeck = b.max.y > neckY + 0.02f && b.size.y < 0.7f && b.size.x < 0.7f;
+                bool above = along > -0.06f && size < 0.9f;
+                bool toNeck = along + size * 0.5f > -0.04f && size < 0.7f;
                 above |= toNeck;
-                if (above && near && !hands) { Move(r); if (sb != null) sb.Append($" +{r.name}"); }
-                else if (sb != null && b.max.y > neckY && near)
-                    sb.Append($" -{r.name}(centre {(b.center.y - neck.position.y):+0.00;-0.00} m, height {b.size.y:0.00} m)");
+                if (above && near && !hands) { _headKnown.Add(r.Pointer); Move(r); if (sb != null) sb.Append($" +{r.name}"); }
+                else if (sb != null && along + size * 0.5f > -0.06f && near)
+                    sb.Append($" -{r.name}(centre {along:+0.00;-0.00} m along the neck, size {size:0.00} m)");
             }
             if (sb != null) Mod.Log.Msg($"Chest cam: hiding from the lens on '{av.name}':{sb} (+ hidden, - left visible)");
         }
