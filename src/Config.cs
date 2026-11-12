@@ -269,6 +269,7 @@ namespace QuestShade
         public void ScanPresets()
         {
             ReShadeImport.Run();
+            RemoveSharedCopies();
             Presets.Clear();
             Presets.AddRange(Directory.GetFiles(PresetDir, "*.ini")
                 .Select(Path.GetFileNameWithoutExtension)
@@ -422,13 +423,49 @@ namespace QuestShade
         {
             var baseName = CleanName(name) ?? "Shared preset";
             var n = baseName;
-            for (int i = 2; File.Exists(Path.Combine(PresetDir, n + ".ini")); i++) n = $"{baseName} ({i})";
+            if (IsBuiltIn(n) || (File.Exists(Path.Combine(PresetDir, n + ".ini")) && !IsShared(Path.Combine(PresetDir, n + ".ini")))) n = baseName + " (shared)";
             author = CleanName(author) ?? "Anonymous";
             id = CleanName(id) ?? "";
             var text = $"; {n} by {author} - from the QuestShade preset browser\n[Shared]\nId = {id}\nAuthor = {author}\n" + Sharing.CleanIni(ini);
             File.WriteAllText(Path.Combine(PresetDir, n + ".ini"), text);
             SelectPreset(n);
             return n;
+        }
+
+        private static bool IsShared(string path)
+        {
+            try { return Ini.Parse(File.ReadAllText(path)).Has("Shared"); } catch { return false; }
+        }
+
+        private static void RemoveSharedCopies()
+        {
+            try
+            {
+                var copy = new System.Text.RegularExpressions.Regex(@"^(.*) \((\d+)\)$");
+                foreach (var file in Directory.GetFiles(PresetDir, "*.ini"))
+                {
+                    var m = copy.Match(Path.GetFileNameWithoutExtension(file));
+                    if (!m.Success) continue;
+                    var original = Path.Combine(PresetDir, m.Groups[1].Value + ".ini");
+                    if (!File.Exists(original)) continue;
+                    string a = File.ReadAllText(file), b = File.ReadAllText(original);
+                    var ia = Ini.Parse(a); var ib = Ini.Parse(b);
+                    if (!ia.Has("Shared") || !ib.Has("Shared")) continue;
+                    string idA = ia.Str("Shared", "Id", ""), idB = ib.Str("Shared", "Id", "");
+                    bool same = (idA.Length > 0 && idA == idB) || Body(a) == Body(b);
+                    if (!same) continue;
+                    File.Delete(file);
+                    Mod.Log.Msg($"Presets: removed duplicate \"{Path.GetFileNameWithoutExtension(file)}\" (same as \"{m.Groups[1].Value}\")");
+                }
+            }
+            catch (Exception e) { Mod.Log.Warning("Duplicate preset cleanup: " + e.Message); }
+
+            static string Body(string t)
+            {
+                var sb = new System.Text.StringBuilder();
+                foreach (var l in t.Split('\n')) { var s = l.Trim(); if (s.Length > 0 && !s.StartsWith(";")) sb.Append(s).Append('\n'); }
+                return sb.ToString();
+            }
         }
 
         public string CurrentPresetText()

@@ -110,6 +110,13 @@ async function share(req, env, given) {
   if (same) return json({ id: same.id, existing: true });
 
   const who = await whoHash(req);
+  const mine = await env.DB.prepare("SELECT id FROM presets WHERE who = ?1 AND name = ?2 COLLATE NOCASE AND author = ?3 COLLATE NOCASE AND hidden = 0 ORDER BY created DESC LIMIT 1")
+    .bind(who, name, author).first();
+  if (mine) {
+    await env.DB.prepare("UPDATE presets SET ini = ?1, hash = ?2 WHERE id = ?3").bind(ini, hash, mine.id).run();
+    await notify(env, `✏️ Updated public preset **${esc(name)}** by **${esc(author)}** (\`${mine.id}\`)`);
+    return json({ id: mine.id, updated: true });
+  }
   const recent = await env.DB.prepare("SELECT COUNT(*) AS n FROM presets WHERE who = ?1 AND created > ?2")
     .bind(who, Date.now() - 3600_000).first();
   if (recent && recent.n >= SHARES_PER_HOUR) return err(429, "That's a lot of sharing. Try again in an hour");
