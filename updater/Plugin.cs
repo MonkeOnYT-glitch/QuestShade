@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using MelonLoader;
 using MelonLoader.Utils;
 
-[assembly: MelonInfo(typeof(QuestShadeUpdater.Plugin), "QuestShade Updater", "1.0.1", "MonkeOnYT")]
+[assembly: MelonInfo(typeof(QuestShadeUpdater.Plugin), "QuestShade Updater", "1.0.2", "MonkeOnYT")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 
 namespace QuestShadeUpdater
@@ -25,7 +25,6 @@ namespace QuestShadeUpdater
         public override void OnPreInitialization()
         {
             Log = LoggerInstance;
-            if (!OperatingSystem.IsAndroid()) return;
             try
             {
                 if (!AutoUpdateOn()) { Log.Msg("Auto-update is off ([General] AutoUpdate in QuestShade.ini)"); return; }

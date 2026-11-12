@@ -93,8 +93,13 @@ namespace QuestShade
         private static string PluginPath => Path.Combine(MelonLoader.Utils.MelonEnvironment.PluginsDirectory, "QuestShadeUpdater.dll");
         private static bool StartPlugin()
         {
-            if (_pluginUrl == null || File.Exists(PluginPath)) return false;
-            Mod.Log.Msg("Updates: adding the boot-time updater (Plugins/QuestShadeUpdater.dll)");
+            if (_pluginUrl == null) return false;
+            if (File.Exists(PluginPath))
+            {
+                try { var pv = AssemblyName.GetAssemblyName(PluginPath).Version; if (pv != null && pv >= new Version(1, 0, 2)) return false; }
+                catch { }
+            }
+            Mod.Log.Msg("Updates: adding or fixing the boot-time updater (Plugins/QuestShadeUpdater.dll)");
             _req = Get(_pluginUrl);
             _req.SendWebRequest();
             _stage = 4;
@@ -114,7 +119,7 @@ namespace QuestShade
                 File.WriteAllBytes(tmp, bytes);
                 try { if (AssemblyName.GetAssemblyName(tmp).Name != "QuestShadeUpdater") throw new Exception("not the QuestShade updater"); }
                 catch { TryDelete(tmp); throw; }
-                File.Move(tmp, PluginPath);
+                File.Move(tmp, PluginPath, true);
                 Mod.Log.Msg("Updates: boot-time updater added, new versions now load the same launch");
             }
             catch (Exception e) { Mod.Log.Warning("Updates: couldn't add the boot-time updater: " + e.Message); }

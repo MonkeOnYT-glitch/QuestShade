@@ -59,10 +59,17 @@ namespace QuestShade
                 var last = System.IO.File.ReadAllText(StepFile).Trim();
                 if (last == "ok" || last.Length == 0) return false;
                 _failed = true;
-                Mod.Log.Warning($"Shadows: last time the game died at shadow step \"{last}\". Body shadow is OFF now so you can play. Please send this log. (Delete UserData/QuestShade/shadow3-step.txt to try again.)");
+                Mod.Log.Warning($"Shadows: last time the game died at shadow step \"{last}\". Body shadow is OFF now so you can play. Please send this log. (Turn Body shadow off and on in Effects > Lighting to try again.)");
             }
             catch { }
             return _failed;
+        }
+
+        public static void Retry()
+        {
+            _checked = true; _failed = false; _logged = false;
+            try { if (System.IO.File.Exists(StepFile)) System.IO.File.Delete(StepFile); } catch { }
+            Mod.Log.Msg("Shadows: trying the body shadow again");
         }
 
         public static void Tick(Config cfg, Camera head)
@@ -170,8 +177,9 @@ namespace QuestShade
                 if (mesh == null || bones == null || bones.Length == 0) continue;
                 S("copy body: read materials");
                 var mats = Mats(smr.sharedMaterials, mesh.subMeshCount);
+                S("copy body: materials ok");
                 if (mats == null) continue;
-                S($"copy mesh \"{smr.name}\": {bones.Length} bones, {mesh.subMeshCount} submesh, {mesh.vertexCount} verts");
+                S($"copy mesh \"{smr.name}\": {bones.Length} bones, {mesh.subMeshCount} submesh");
                 var mapped = new Il2CppReferenceArray<Transform>(bones.Length);
                 for (int i = 0; i < bones.Length; i++)
                 {
@@ -237,7 +245,7 @@ namespace QuestShade
                     if (mr == null || !mr.enabled) continue;
                     var mf = mr.GetComponent<MeshFilter>();
                     var mesh = mf != null ? mf.sharedMesh : null;
-                    if (mesh == null || mesh.vertexCount <= 8) continue;
+                    if (mesh == null) continue;
                     var e = mr.bounds.extents;
                     _found.Add((mr, mesh, e.x * e.y * e.z));
                 }
@@ -246,6 +254,7 @@ namespace QuestShade
             {
                 var (mr, mesh, _) = _found[i];
                 var mats = Mats(mr.sharedMaterials, mesh.subMeshCount);
+                S("copy body: materials ok");
                 if (mats == null) continue;
                 var go = new GameObject("Part");
                 go.transform.SetParent(_inner, false);
