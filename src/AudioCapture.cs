@@ -297,7 +297,12 @@ namespace QuestShade
                         float a = _micRing[_micR], b = _micRing[(_micR + 1) % _micRing.Length];
                         float x = a + (b - a) * (float)_micFrac;
                         float hp = 0.988f * (_hpY + x - _hpX); _hpX = x; _hpY = hp;
-                        float m = hp * _micVol;
+                        // voiceover: auto-gain the mic up to a close-talk level (fast attack, slow release)
+                        float ax = Math.Abs(hp);
+                        _env += (ax > _env ? 0.01f : 0.00005f) * (ax - _env);
+                        float want = _env > 0.0005f ? Math.Min(12f, Math.Max(1f, 0.18f / _env)) : _agc;
+                        _agc += (want < _agc ? 0.002f : 0.00002f) * (want - _agc);
+                        float m = hp * _agc * _micVol;
                         l += m; r += m;
                         _micFrac += step;
                         while (_micFrac >= 1.0 && _micCount > 1) { _micFrac -= 1.0; _micR = (_micR + 1) % _micRing.Length; _micCount--; }
@@ -311,7 +316,7 @@ namespace QuestShade
             _framesOut += frames;
         }
 
-        private bool _micPrimed; private float _hpX, _hpY;
+        private bool _micPrimed; private float _hpX, _hpY, _env, _agc = 4f;
 
         private static float Soft(float x)
         {
