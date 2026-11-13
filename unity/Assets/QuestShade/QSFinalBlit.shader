@@ -134,11 +134,16 @@ Shader "Hidden/QuestShade/FinalBlit"
             float4 _QS_LiveBloom;
             float4 _QS_LiveTint;
             float4 _QS_LiveFlare;
-            TEXTURE2D(_QS_LiveDirt); SAMPLER(sampler_QS_LiveDirt);
             float4 _QS_God;
             float4 _QS_SunL;
             float4 _QS_SunR;
+            TEXTURE2D_X(_CameraOpaqueTexture); SAMPLER(sampler_CameraOpaqueTexture);
             half3 FetchRaw(float2 uv) { return SAMPLE_TEXTURE2D_X_LOD(_SourceTex, sampler_SourceTex, uv, 0).rgb; }
+            half3 FetchGlow(float2 uv)
+            {
+                UNITY_BRANCH if (_QS_LiveBloom.w > 0.5) return SAMPLE_TEXTURE2D_X_LOD(_CameraOpaqueTexture, sampler_CameraOpaqueTexture, uv, 0).rgb;
+                return FetchRaw(uv);
+            }
 
             half3 FetchMainFrom(half3 c, float2 uv)
             {
@@ -168,26 +173,18 @@ Shader "Hidden/QuestShade/FinalBlit"
                     half3 b = 0;
                     float2 rad = _QS_LiveBloom.z * float2(_QS_SrcTexel.w * _QS_SrcTexel.x, 1);
                     half knee = max(_QS_LiveBloom.y, 1e-4);
-                    float2 cell = floor(frac(uv * _QS_SrcTexel.zw * 0.5) * 2.0);
-                    float phase = cell.x + cell.y * 2.0;
-                    float sp, cp;
-                    sincos(phase * 2.3999632, sp, cp);
-                    float2 rx = float2(cp, -sp) * rad.x, ry = float2(sp, cp) * rad.y;
                     UNITY_UNROLL for (int k = 0; k < 16; k++)
                     {
-                        float a = k * 9.5998528;
-                        float2 dir = float2(cos(a), sin(a));
-                        float2 o = float2(dot(dir, rx), dot(dir, ry)) * sqrt((k * 4.0 + phase + 0.5) / 64.0);
-                        half3 s = FetchRaw(uv + o);
+                        float x = (k + 0.5) / 16.0;
+                        float a = k * 2.3999632;
+                        float2 o = float2(cos(a), sin(a)) * rad * sqrt(x);
+                        half3 s = FetchGlow(uv + o);
                         half br = max(s.r, max(s.g, s.b));
                         half soft = clamp(br - _QS_LiveBloom.x + knee, 0, 2 * knee);
                         soft = soft * soft / (4 * knee + 1e-4);
-                        b += s * (max(soft, br - _QS_LiveBloom.x) / max(br, 1e-4)) * exp(-2.5 * (k * 4.0 + 0.5) / 64.0);
+                        b += s * (max(soft, br - _QS_LiveBloom.x) / max(br, 1e-4)) * exp(-2.5 * x);
                     }
-                    half3 glow = b * (2.72 / 16.0 * exp(-0.0390625 * phase)) * _QS_Live.x * _QS_LiveTint.rgb;
-                    half dirt = 0;
-                    UNITY_BRANCH if (_QS_LiveFlare.w > 0) dirt = SAMPLE_TEXTURE2D_LOD(_QS_LiveDirt, sampler_QS_LiveDirt, uv, 0).r * _QS_LiveFlare.w;
-                    c += glow * (1 + dirt * 4);
+                    c += b * (2.72 / 16.0) * _QS_Live.x * _QS_LiveTint.rgb;
                     UNITY_BRANCH if (_QS_LiveFlare.x > 0)
                     {
                         float2 g = (0.5 - uv) * _QS_LiveFlare.y;
@@ -197,7 +194,7 @@ Shader "Hidden/QuestShade/FinalBlit"
                         {
                             float2 p = uv + g * k;
                             half edge = all(p == saturate(p)) ? 1 : 0;
-                            half3 s = FetchRaw(saturate(p));
+                            half3 s = FetchGlow(saturate(p));
                             half br = max(s.r, max(s.g, s.b));
                             half w = pow(saturate(1 - length(0.5 - p) * 1.414), 4) * edge;
                             half3 tint = k == 1 ? half3(1.0, 0.75, 0.5) : k == 2 ? half3(0.55, 0.8, 1.0) : k == 3 ? half3(1.0, 0.6, 0.85) : half3(0.7, 1.0, 0.75);
@@ -206,11 +203,11 @@ Shader "Hidden/QuestShade/FinalBlit"
                         float gl = length(g);
                         float2 hp = uv + (gl > 1e-5 ? g / gl : float2(0, 0)) * _QS_LiveFlare.z;
                         half hedge = all(hp == saturate(hp)) ? 1 : 0;
-                        half3 hs = FetchRaw(saturate(hp));
+                        half3 hs = FetchGlow(saturate(hp));
                         half hb = max(hs.r, max(hs.g, hs.b));
                         half hw = pow(saturate(1 - length(0.5 - hp) * 1.6), 6) * hedge;
                         f += hs * (saturate(hb - thr) / max(hb, 1e-4)) * hw * half3(1.0, 0.9, 0.8);
-                        c += f * _QS_LiveFlare.x * (1 + dirt * 4);
+                        c += f * _QS_LiveFlare.x;
                     }
                 }
                 UNITY_BRANCH if (_QS_God.x > 0)
