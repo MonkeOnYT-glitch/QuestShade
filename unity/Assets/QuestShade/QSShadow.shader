@@ -7,6 +7,8 @@ Shader "Hidden/QuestShade/Shadow"
         _QS_Comp ("Stencil compare", Float) = 6
         _QS_Pass ("Stencil pass", Float) = 2
         _QS_ZTest ("Depth test", Float) = 4
+        _MainTex ("Cutout texture", 2D) = "white" {}
+        _QS_Clip ("Cutout", Float) = 0
     }
     SubShader
     {
@@ -44,14 +46,17 @@ Shader "Hidden/QuestShade/Shadow"
             half _QS_Comp;
             half _QS_Pass;
             half _QS_ZTest;
+            float4 _MainTex_ST;
+            half _QS_Clip;
             CBUFFER_END
+            TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
 
             float4 _QS_ShPoint;
             float4 _QS_ShNormal;
             float4 _QS_ShDir;
 
-            struct Attributes { float4 positionOS : POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct Varyings { float4 positionCS : SV_POSITION; UNITY_VERTEX_OUTPUT_STEREO };
+            struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; UNITY_VERTEX_OUTPUT_STEREO };
 
             Varyings Vert(Attributes i)
             {
@@ -66,11 +71,13 @@ Shader "Hidden/QuestShade/Shadow"
                     w += _QS_ShDir.xyz * clamp(s, -0.5, 12.0) + _QS_ShNormal.xyz * _QS_ShNormal.w;
                 }
                 o.positionCS = TransformWorldToHClip(w);
+                o.uv = i.uv * _MainTex_ST.xy + _MainTex_ST.zw;
                 return o;
             }
 
             half4 Frag(Varyings i) : SV_Target
             {
+                UNITY_BRANCH if (_QS_Clip > 0) clip(SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv).a - _QS_Clip);
                 return half4(0, 0, 0, _QS_ShadowK);
             }
             ENDHLSL

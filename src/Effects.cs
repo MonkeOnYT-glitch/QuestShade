@@ -88,52 +88,13 @@ namespace QuestShade
             _depthForced = want;
         }
 
-        private UniversalRenderPipelineAsset _urpAsset;
-        private bool _softOn, _softSaved, _oRequireOpaque, _oCamOpaque;
-        private IntPtr _softCam;
-        private Downsampling _oDown;
-
-        private bool SoftCopy(bool on)
-        {
-            try
-            {
-                if (_urpAsset == null)
-                {
-                    var rp = QualitySettings.renderPipeline ?? GraphicsSettings.currentRenderPipeline;
-                    _urpAsset = rp != null ? rp.TryCast<UniversalRenderPipelineAsset>() : null;
-                }
-                if (_urpAsset == null || _data == null) return false;
-                if (on && _softOn && _softCam != _data.Pointer) { _softOn = false; }
-                if (on == _softOn) return on;
-                if (on)
-                {
-                    if (!_softSaved) { _softSaved = true; _oRequireOpaque = _urpAsset.m_RequireOpaqueTexture; _oDown = _urpAsset.m_OpaqueDownsampling; }
-                    if (_softCam != _data.Pointer) { _softCam = _data.Pointer; _oCamOpaque = _data.requiresColorTexture; }
-                    _urpAsset.m_RequireOpaqueTexture = true;
-                    _urpAsset.m_OpaqueDownsampling = Downsampling._4xBox;
-                    _data.requiresColorTexture = true;
-                    Mod.Log.Msg($"Headset bloom: using the renderer's 4x smaller copy (was opaque {_oRequireOpaque}, {_oDown})");
-                }
-                else if (_softSaved)
-                {
-                    _urpAsset.m_RequireOpaqueTexture = _oRequireOpaque;
-                    _urpAsset.m_OpaqueDownsampling = _oDown;
-                    _data.requiresColorTexture = _oCamOpaque;
-                }
-                _softOn = on;
-                return on;
-            }
-            catch (Exception e) { Mod.Log.Warning("Headset bloom soft copy unavailable: " + e.Message); return false; }
-        }
-
         private void SetLive(Config cfg, Ini p)
         {
             bool live = cfg.HeadsetBloom && _bloomIntensity > 0f;
             _liveDof = false;
             _matMono.SetVector(ID.Live, Vector4.zero);
             _matMono.SetVector(ID.LiveFlare, Vector4.zero);
-            bool soft = live && SoftCopy(true);
-            if (!live) { SoftCopy(false); _mat.SetVector(ID.Live, Vector4.zero); _mat.SetVector(ID.LiveFlare, Vector4.zero); return; }
+            if (!live) { _mat.SetVector(ID.Live, Vector4.zero); _mat.SetVector(ID.LiveFlare, Vector4.zero); return; }
             int eyeH = XRSettings.enabled && XRSettings.eyeTextureHeight > 0 ? XRSettings.eyeTextureHeight : (_cam != null ? _cam.pixelHeight : 1080);
             float blur = Mathf.Min(_dofMaxBlur, 14f) * eyeH / 1080f;
             _mat.SetVector(ID.Live, new Vector4(Level(_bloomIntensity) * 0.85f * _calInt, 0, blur, _dofBokeh));
@@ -141,7 +102,7 @@ namespace QuestShade
             _mat.SetVector(ID.LiveFlare, new Vector4(flare * 0.45f * _calInt, Mathf.Clamp(p.Float("LensFlare", "Spacing", 0.35f), 0.1f, 0.8f),
                 Mathf.Clamp(p.Float("LensFlare", "Halo", 0.4f), 0.05f, 0.7f) * 0.6f, 0f));
             float thr = Mathf.Max(Mathf.Clamp(p.Float("Bloom", "Threshold", 0.85f), 0f, 4f), _calThr);
-            _mat.SetVector(ID.LiveBloom, new Vector4(thr, thr * Mathf.Clamp01(p.Float("Bloom", "SoftKnee", 0.5f)), 0.006f + 0.01f * Mathf.Clamp01(p.Float("Bloom", "Scatter", 0.7f)), soft ? 1f : 0f));
+            _mat.SetVector(ID.LiveBloom, new Vector4(thr, thr * Mathf.Clamp01(p.Float("Bloom", "SoftKnee", 0.5f)), 0.006f + 0.01f * Mathf.Clamp01(p.Float("Bloom", "Scatter", 0.7f)), 0));
             var tint = p.Color("Bloom", "Tint", Color.white);
             _mat.SetVector(ID.LiveTint, new Vector4(tint.r, tint.g, tint.b, 1));
             Mod.Log.Msg($"Headset bloom {(_bloomIntensity > 0 ? "on" : "off")}, depth of field {(_liveDof ? "on" : "off")} (light version)");
@@ -431,10 +392,17 @@ namespace QuestShade
             Status = "active";
         }
 
+        public static Action<bool> LensHide;
+
         private void OnBeginCamera(ScriptableRenderContext ctx, Camera cam)
         {
             try
             {
+                if (cam != null && LensHide != null)
+                {
+                    if (PhotoCamera != null && cam.Pointer == PhotoCamera.Pointer) LensHide(true);
+                    else if (_cam != null && cam.Pointer == _cam.Pointer) LensHide(false);
+                }
                 if (!_hooked || _renderer == null || cam == null) return;
                 var fbp = _renderer.m_FinalBlitPass;
                 if (fbp == null) return;

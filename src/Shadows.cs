@@ -140,27 +140,63 @@ namespace QuestShade
         }
 
         private static readonly bool[] _solid = new bool[16];
+        private static readonly Texture[] _cutTex = new Texture[16];
+        private static readonly float[] _cutAt = new float[16];
+        private static readonly Dictionary<long, Material> _cutMats = new Dictionary<long, Material>();
+        private static readonly int MainTexId = Shader.PropertyToID("_MainTex"), ClipId = Shader.PropertyToID("_QS_Clip");
 
-        private static bool ReadSolid(Renderer src, int subs)
+        private static bool ReadSolid(Renderer src, int subs, bool cutouts = false)
         {
             subs = Math.Clamp(subs, 1, 16);
-            for (int i = 0; i < 16; i++) _solid[i] = true;
+            for (int i = 0; i < 16; i++) { _solid[i] = true; _cutTex[i] = null; }
             int k = 0;
             foreach (var m in src.sharedMaterials)
             {
                 if (k >= 16) break;
-                _solid[k++] = m == null || m.renderQueue < 2450;
+                int i = k++;
+                if (m == null || m.renderQueue < 2450) continue;
+                _solid[i] = false;
+                if (!cutouts || m.renderQueue >= 3500) continue;
+                var tex = AlphaTexture(m);
+                if (tex == null) continue;
+                _cutTex[i] = tex;
+                _cutAt[i] = m.HasProperty("_Cutoff") ? Mathf.Clamp(m.GetFloat("_Cutoff"), 0.1f, 0.9f) : 0.5f;
+                _solid[i] = true;
             }
             for (int i = 0; i < subs; i++) if (_solid[i]) return true;
             return false;
         }
 
+        private static Texture AlphaTexture(Material m)
+        {
+            try
+            {
+                foreach (var name in new[] { "_MainTex", "_BaseMap", "_AlbedoMap", "_Albedo" })
+                    if (m.HasProperty(name)) { var t = m.GetTexture(name); if (t != null) return t; }
+            }
+            catch { }
+            return null;
+        }
+
+        private static Material Cut(Material baseMat, Texture tex, float at, bool lens)
+        {
+            long key = ((long)tex.GetInstanceID() << 2) ^ (lens ? 1 : 0) ^ ((long)Mathf.RoundToInt(at * 100f) << 40);
+            if (_cutMats.TryGetValue(key, out var m) && m != null) return m;
+            m = new Material(baseMat) { name = baseMat.name + "_Cut", hideFlags = HideFlags.HideAndDontSave };
+            m.SetTexture(MainTexId, tex);
+            m.SetFloat(ClipId, at);
+            _cutMats[key] = m;
+            return m;
+        }
+
         private static void Shade(Renderer r, int subs, Material mat, Material none)
         {
             subs = Math.Clamp(subs, 1, 16);
-            if (subs == 1) { r.sharedMaterial = _solid[0] ? mat : none; return; }
+            bool lens = mat == _shadeLens;
+            Material Pick(int i) => !_solid[i] ? none : _cutTex[i] != null ? Cut(mat, _cutTex[i], _cutAt[i], lens) : mat;
+            if (subs == 1) { r.sharedMaterial = Pick(0); return; }
             var a = new Material[subs];
-            for (int i = 0; i < subs; i++) a[i] = _solid[i] ? mat : none;
+            for (int i = 0; i < subs; i++) a[i] = Pick(i);
             r.sharedMaterials = a;
         }
 
@@ -208,7 +244,9 @@ namespace QuestShade
                 if (mesh == null) continue;
                 int subs = mesh.subMeshCount;
                 S("copy body: check see-through parts");
-                if (!ReadSolid(smr, subs)) continue;
+                if (!ReadSolid(smr, subs, true)) continue;
+                int cut = 0; for (int i = 0; i < Math.Min(subs, 16); i++) if (_cutTex[i] != null) cut++;
+                if (cut > 0) Mod.Log.Msg($"Shadows: {smr.name} has {cut} see-through part(s) (hair, lashes...): shadow cut to their shape");
                 S("copy body: make copy");
                 _skins.Add(Skin("Skin", smr, mesh, subs, _shade, _none).gameObject);
                 var lens = Skin("SkinLens", smr, mesh, subs, _shadeLens, _noneLens).gameObject;
@@ -357,6 +395,7 @@ namespace QuestShade
             _sheet.transform.SetPositionAndRotation(at, Quaternion.LookRotation(n, a));
             _sheet.transform.localScale = new Vector3(60f, 60f, 1f);
             _shade.SetFloat(KId, dark); _shadeLens.SetFloat(KId, dark);
+            foreach (var cm in _cutMats.Values) if (cm != null) cm.SetFloat(KId, dark);
 
             int layer = FlashBeams.HeadsetLayer != null ? FlashBeams.HeadsetLayer() : -1;
             if (layer < 0) layer = 0;

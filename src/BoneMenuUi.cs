@@ -352,7 +352,7 @@ namespace QuestShade
             var av = actor ? _actor : BoneLib.Player.Avatar;
             if (av == null) return;
             if (av.GetInstanceID() != _avId || Time.unscaledTime > _avScanAt) ScanAvatar(av);
-            void Move(Renderer r) { if (r == null) return; var go = r.gameObject; if (go.layer == layer) return; _layered.Add((go, go.layer)); go.layer = layer; }
+            void Move(Renderer r) { if (r == null) return; if (!_lensHidden.Contains(r)) _lensHidden.Add(r); var go = r.gameObject; if (go.layer == layer) return; _layered.Add((go, go.layer)); go.layer = layer; }
             foreach (var r in _headAttached) Move(r);
             var neck = av.neck2;
             if (neck == null) return;
@@ -399,6 +399,19 @@ namespace QuestShade
         {
             foreach (var (go, layer) in _layered) if (go != null) go.layer = layer;
             _layered.Clear();
+            LensHide(false);
+            _lensHidden.Clear();
+        }
+
+        private static readonly System.Collections.Generic.List<Renderer> _lensHidden = new System.Collections.Generic.List<Renderer>();
+        private static bool _lensOff;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void LensHide(bool off)
+        {
+            if (off == _lensOff) return;
+            _lensOff = off;
+            foreach (var r in _lensHidden) { try { if (r != null) r.forceRenderingOff = off; } catch { } }
         }
 
         private static readonly System.Collections.Generic.List<(GameObject go, int layer)> _bodyLayered = new System.Collections.Generic.List<(GameObject, int)>();
