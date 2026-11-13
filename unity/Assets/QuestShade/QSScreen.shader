@@ -31,6 +31,7 @@ Shader "Hidden/QuestShade/Screen"
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST;
                 half4 _Color;
+                float4 _QS_Portrait;
             CBUFFER_END
 
             struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
@@ -49,7 +50,17 @@ Shader "Hidden/QuestShade/Screen"
             half4 Frag(Varyings i) : SV_Target
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
-                half3 c = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv).rgb * _Color.rgb;
+                float2 uv = i.uv;
+                UNITY_BRANCH if (_QS_Portrait.x > 0.5)
+                {
+                    bool fx = _MainTex_ST.x < 0, fy = _MainTex_ST.y < 0;
+                    float2 s = float2(fx ? 1 - uv.x : uv.x, fy ? 1 - uv.y : uv.y);
+                    float qx = (s.x - 0.5) / max(_QS_Portrait.y, 1e-3) + 0.5;
+                    if (qx < 0 || qx > 1) return half4(0, 0, 0, 1);
+                    float2 t = float2(s.y, 1 - qx);
+                    uv = float2(fy ? 1 - t.x : t.x, fx ? 1 - t.y : t.y);
+                }
+                half3 c = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv).rgb * _Color.rgb;
                 return half4(c, 1);
             }
             ENDHLSL

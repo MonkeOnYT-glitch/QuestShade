@@ -12,6 +12,7 @@ namespace QuestShade
         public bool Recording { get; private set; }
         public int Width { get; private set; }
         public int Height { get; private set; }
+        public int Rotation;
         public string FilePath { get; private set; }
         public float Seconds => Recording ? Time.realtimeSinceStartup - _t0 : 0f;
 
@@ -140,6 +141,7 @@ namespace QuestShade
                 int fd = (int)_file.SafeFileHandle.DangerousGetHandle();
                 _muxer = Ndk.AMediaMuxer_new(fd, 0 );
                 if (_muxer == IntPtr.Zero) throw new Exception("muxer create failed");
+                if (Rotation != 0) { int hint = Ndk.AMediaMuxer_setOrientationHint(_muxer, Rotation); Mod.Log.Msg($"Recording: portrait video (rotation {Rotation}, status {hint})"); }
 
                 _yuv = new RenderTexture(stride, slice * 3 / 2, 0, RenderTextureFormat.R8, RenderTextureReadWrite.Linear)
                 { name = "QuestShade_NV12", useMipMap = false, filterMode = FilterMode.Point, hideFlags = HideFlags.HideAndDontSave };
@@ -455,6 +457,7 @@ namespace QuestShade
             [DllImport(Lib)] public static extern int AMediaMuxer_delete(IntPtr muxer);
             [DllImport(Lib)] public static extern IntPtr AMediaMuxer_addTrack(IntPtr muxer, IntPtr format);
             [DllImport(Lib)] public static extern int AMediaMuxer_start(IntPtr muxer);
+            [DllImport(Lib)] public static extern int AMediaMuxer_setOrientationHint(IntPtr muxer, int degrees);
             [DllImport(Lib)] public static extern int AMediaMuxer_stop(IntPtr muxer);
             [DllImport(Lib)] public static extern int AMediaMuxer_writeSampleData(IntPtr muxer, UIntPtr trackIdx, IntPtr data, ref BufferInfo info);
         }

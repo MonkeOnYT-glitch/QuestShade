@@ -169,6 +169,25 @@ namespace QuestShade
         private int _cupAt;
 
         public Func<int, GameObject, bool> AttachToHand;
+
+        public bool BringToHand(int hand)
+        {
+            if (!PropActive || AttachToHand == null) return false;
+            try
+            {
+                var root = _prop.Root;
+                var ht = HandTransform != null ? HandTransform(hand) : null;
+                if (ht != null)
+                {
+                    var rb = root.GetComponentInChildren<Rigidbody>();
+                    var p = ht.position + ht.forward * 0.08f;
+                    if (rb != null) { rb.velocity = Vector3.zero; rb.angularVelocity = Vector3.zero; rb.position = p; rb.rotation = ht.rotation; }
+                    root.transform.SetPositionAndRotation(p, ht.rotation);
+                }
+                return AttachToHand(hand, root);
+            }
+            catch (Exception e) { Mod.Log.Warning("Camera to hand: " + e.Message); return false; }
+        }
         private bool _gL, _gR, _gLWas, _gRWas;
         private int _assistHand, _assistFrames; private float _assistHoldUntil;
 

@@ -133,6 +133,8 @@ Shader "Hidden/QuestShade/FinalBlit"
             float4 _QS_Live;
             float4 _QS_LiveBloom;
             float4 _QS_LiveTint;
+            float4 _QS_LiveFlare;
+            TEXTURE2D(_QS_LiveDirt); SAMPLER(sampler_QS_LiveDirt);
             float4 _QS_God;
             float4 _QS_SunL;
             float4 _QS_SunR;
@@ -182,7 +184,34 @@ Shader "Hidden/QuestShade/FinalBlit"
                         soft = soft * soft / (4 * knee + 1e-4);
                         b += s * (max(soft, br - _QS_LiveBloom.x) / max(br, 1e-4)) * exp(-2.5 * (k * 4.0 + 0.5) / 64.0);
                     }
-                    c += b * (2.72 / 16.0 * exp(-0.0390625 * phase)) * _QS_Live.x * _QS_LiveTint.rgb;
+                    half3 glow = b * (2.72 / 16.0 * exp(-0.0390625 * phase)) * _QS_Live.x * _QS_LiveTint.rgb;
+                    half dirt = 0;
+                    UNITY_BRANCH if (_QS_LiveFlare.w > 0) dirt = SAMPLE_TEXTURE2D_LOD(_QS_LiveDirt, sampler_QS_LiveDirt, uv, 0).r * _QS_LiveFlare.w;
+                    c += glow * (1 + dirt * 4);
+                    UNITY_BRANCH if (_QS_LiveFlare.x > 0)
+                    {
+                        float2 g = (0.5 - uv) * _QS_LiveFlare.y;
+                        half thr = max(_QS_LiveBloom.x, 0.85);
+                        half3 f = 0;
+                        UNITY_UNROLL for (int k = 1; k <= 4; k++)
+                        {
+                            float2 p = uv + g * k;
+                            half edge = all(p == saturate(p)) ? 1 : 0;
+                            half3 s = FetchRaw(saturate(p));
+                            half br = max(s.r, max(s.g, s.b));
+                            half w = pow(saturate(1 - length(0.5 - p) * 1.414), 4) * edge;
+                            half3 tint = k == 1 ? half3(1.0, 0.75, 0.5) : k == 2 ? half3(0.55, 0.8, 1.0) : k == 3 ? half3(1.0, 0.6, 0.85) : half3(0.7, 1.0, 0.75);
+                            f += s * (saturate(br - thr) / max(br, 1e-4)) * w * tint;
+                        }
+                        float gl = length(g);
+                        float2 hp = uv + (gl > 1e-5 ? g / gl : float2(0, 0)) * _QS_LiveFlare.z;
+                        half hedge = all(hp == saturate(hp)) ? 1 : 0;
+                        half3 hs = FetchRaw(saturate(hp));
+                        half hb = max(hs.r, max(hs.g, hs.b));
+                        half hw = pow(saturate(1 - length(0.5 - hp) * 1.6), 6) * hedge;
+                        f += hs * (saturate(hb - thr) / max(hb, 1e-4)) * hw * half3(1.0, 0.9, 0.8);
+                        c += f * _QS_LiveFlare.x * (1 + dirt * 4);
+                    }
                 }
                 UNITY_BRANCH if (_QS_God.x > 0)
                 {

@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.27-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.28-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.26", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.27", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -92,6 +92,12 @@ namespace QuestShade
             try
             {
                 if (_cfg.PollChanges(now)) { _fx.MarkDirty(); _cam.Refresh(_cfg, _fx.BoundCamera); RefreshPresetMenu(); }
+                if (_cfg.PresetName != _leveledFor)
+                {
+                    bool first = _leveledFor == null;
+                    _leveledFor = _cfg.PresetName;
+                    if (!first) { _fx.ResetCalibration(); _fx.MarkDirty(); _calibTries = 0; _nextCalibAt = now + 0.5f; }
+                }
                 if (now >= _nextCamCheck) { _nextCamCheck = now + 1f; _fx.EnsureCamera(_cfg); }
                 _fx.Tick(_cfg);
                 Flashlights.Tick(_cfg.FlashlightBoost, _cfg.FlashlightBeams);
@@ -147,6 +153,7 @@ namespace QuestShade
 
         private readonly System.Diagnostics.Stopwatch _sw = new System.Diagnostics.Stopwatch();
         private float _nextCalibAt; private int _calibTries; private float _uiDumpAt = -1f;
+        private string _leveledFor;
         private double _ownMs, _ownMax;
 
         public override void OnLateUpdate()
@@ -729,9 +736,30 @@ namespace QuestShade
         private void HandleInput()
         {
             _cam.MicOn = _cfg.RecordMic;
-            _cam.ControlsHint = null;
+            _cam.ControlsHint = _cfg.ControllerShortcuts ? "Menu: QuestShade > Camera  (mode, flip, timer, vertical)" : "Trigger is off: take photos from QuestShade > Camera > Shoot";
+            if (_handWanted != 0) TickCameraToHand(Time.unscaledTime);
             if (!_cam.Open) return;
+            if (!_cfg.ControllerShortcuts) { _cam.LabelExtra = null; return; }
             CameraTrigger(Time.unscaledTime);
+        }
+
+        private int _handWanted;
+        private float _handUntil;
+
+        internal void CameraToHand(int hand)
+        {
+            if (!_cam.Open) ToggleCamera();
+            if (!_cam.Open) return;
+            _handWanted = hand; _handUntil = Time.unscaledTime + 6f;
+            TickCameraToHand(Time.unscaledTime);
+        }
+
+        private void TickCameraToHand(float now)
+        {
+            if (now > _handUntil || !_cam.Open) { if (_handWanted != 0 && _cam.Open) Notify("Couldn't put the camera in your hand (is that hand holding something?)", 2.5f); _handWanted = 0; return; }
+            if (!_cam.BringToHand(_handWanted)) return;
+            Notify($"Camera in your {(_handWanted == 1 ? "left" : "right")} hand", 1.2f);
+            _handWanted = 0;
         }
     }
 }

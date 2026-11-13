@@ -23,6 +23,8 @@ namespace QuestShade
 
             var cam = root.CreatePage("Camera", Color.white, 8, true);
             cam.CreateFunction("Open / close camera", Color.green, () => mod.ToggleCamera());
+            cam.CreateFunction("Put camera in left hand", Color.cyan, () => mod.CameraToHand(1));
+            cam.CreateFunction("Put camera in right hand", Color.cyan, () => mod.CameraToHand(2));
             var shoot = cam.CreatePage("Shoot", Color.cyan, 8, true);
             shoot.CreateFunction("Take photo", Color.cyan, () => mod.TakePhoto());
             shoot.CreateFunction("Record / stop", Color.red, () => mod.ToggleRecording());
@@ -33,6 +35,7 @@ namespace QuestShade
             view.CreateFloat("Field of view", Color.white, cfg.Fov, 5f, 10f, 150f, v => cfg.Fov = v);
             view.CreateFloat("Fisheye", Color.white, cfg.Fisheye, 0.1f, 0f, 1f, v => { cfg.Fisheye = v; cfg.SaveMenuSettings(); });
             view.CreateEnum("Timestamp", Color.white, cfg.Timestamp, v => { cfg.Timestamp = (StampMode)v; cfg.SaveMenuSettings(); });
+            view.CreateBool("Vertical (9:16) photos + video", Color.white, cfg.Vertical, v => { cfg.Vertical = v; cfg.SaveMenuSettings(); });
             view.CreateFunction("Hide / show camera", Color.white, () => mod.ToggleHidden());
             var audio = cam.CreatePage("Audio", Color.white, 8, true);
             audio.CreateBool("Game audio", Color.white, cfg.RecordGameAudio, v => { cfg.RecordGameAudio = v; cfg.SaveMenuSettings(); });
@@ -46,6 +49,7 @@ namespace QuestShade
             hold.CreateFloat("Grip angle (tilt in hand)", Color.white, cfg.GripAngle, 5f, -90f, 90f, v => cfg.GripAngle = v);
             hold.CreateFloat("Smoothing", Color.white, cfg.Smoothing, 0.05f, 0f, 0.9f, v => cfg.Smoothing = v);
             hold.CreateBool("Controls text on camera", Color.white, cfg.CameraLabel, v => mod.SetCameraLabel(v));
+            hold.CreateBool("Trigger = photo / record", Color.white, cfg.ControllerShortcuts, v => { cfg.ControllerShortcuts = v; cfg.SaveMenuSettings(); });
             var tp = hold.CreatePage("Third person", Color.white, 8, true);
             tp.CreateFloat("Distance", Color.white, cfg.ThirdPersonDistance, 0.1f, 0.3f, 6f, v => cfg.ThirdPersonDistance = v);
             tp.CreateFloat("Height", Color.white, cfg.ThirdPersonHeight, 0.05f, -1f, 3f, v => cfg.ThirdPersonHeight = v);

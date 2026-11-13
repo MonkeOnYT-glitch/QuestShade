@@ -70,10 +70,20 @@ namespace QuestShade
             float d = Mathf.Max(_cam.nearClipPlane * 2f, 0.1f);
             float hh = d * Mathf.Tan(_cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
             float hw = hh * Mathf.Max(0.5f, _cam.aspect);
-            _stamp.transform.localPosition = new Vector3(hw * 0.94f, hh * 0.9f, d);
-            _stamp.transform.localRotation = Quaternion.identity;
-            _stampTmp.fontSize = hh * 2f * 0.38f;
-            _stampTmp.rectTransform.sizeDelta = new Vector2(hw * 2f, hh);
+            if (_vertical)
+            {
+                _stamp.transform.localPosition = new Vector3(hw * 0.9f, -hh * 0.94f, d);
+                _stamp.transform.localRotation = Quaternion.Euler(0f, 0f, -90f);
+                _stampTmp.fontSize = hh * 2f * 0.24f;
+                _stampTmp.rectTransform.sizeDelta = new Vector2(hh * 2f, hw);
+            }
+            else
+            {
+                _stamp.transform.localPosition = new Vector3(hw * 0.94f, hh * 0.9f, d);
+                _stamp.transform.localRotation = Quaternion.identity;
+                _stampTmp.fontSize = hh * 2f * 0.38f;
+                _stampTmp.rectTransform.sizeDelta = new Vector2(hw * 2f, hh);
+            }
             if (Time.unscaledTime >= _stampNext)
             {
                 _stampNext = Time.unscaledTime + 0.25f;

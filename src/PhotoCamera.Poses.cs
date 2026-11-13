@@ -14,6 +14,9 @@ namespace QuestShade
 
         private float _handBack;
         private bool _handNear;
+        private bool _vertical, _photoVertical;
+        private Vector4 _portraitSet = new Vector4(-1f, 0f, 0f, 0f);
+        private static readonly int PortraitId = Shader.PropertyToID("_QS_Portrait");
 
         private float BackOffForHands(Vector3 pivot, Vector3 fwd, float want, float minDist, float dt)
         {
@@ -151,6 +154,8 @@ namespace QuestShade
                     }
                     break;
             }
+            _vertical = cfg.Vertical;
+            if (_vertical) lr *= Quaternion.Euler(0f, 0f, 90f);
             bool onDevice = Mode == CamMode.Hand || Mode == CamMode.Selfie;
             float lk = onDevice && _held < 0 ? 1f : SmoothK(cfg, dt);
             bool bodyLocked = BodyMode;
@@ -164,6 +169,14 @@ namespace QuestShade
                 bool sm = Mode == CamMode.Selfie;
                 _hoverMat.mainTextureScale = new Vector2(sm ? -1f : 1f, 1f);
                 _hoverMat.mainTextureOffset = new Vector2(sm ? 1f : 0f, 0f);
+            }
+            float ratio = cfg.PreviewWidth > 0 ? cfg.PreviewHeight / (float)cfg.PreviewWidth : 0.5625f;
+            var portrait = new Vector4(_vertical ? 1f : 0f, ratio * ratio, 0f, 0f);
+            if (portrait != _portraitSet && _screenMat != null)
+            {
+                _portraitSet = portrait;
+                _screenMat.SetVector(PortraitId, portrait);
+                if (_hoverMat != null) _hoverMat.SetVector(PortraitId, portrait);
             }
             float fov = Mode == CamMode.PoliceCam ? Mathf.Max(cfg.ChestFov, 115f) : BodyMode ? cfg.ChestFov : cfg.Fov;
             if (fov != _appliedFov) { _appliedFov = fov; _cam.fieldOfView = fov; }

@@ -21,6 +21,7 @@ namespace QuestShade
             _recRT = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
             { name = "QuestShade_Record", antiAliasing = 1, useMipMap = false, hideFlags = HideFlags.HideAndDontSave };
             _recRT.Create();
+            _rec.Rotation = _vertical ? 270 : 0;
             if (!_rec.Start(w, h, cfg.RecordFps, cfg.RecordBitrateKbps * 1000, PhotoSaver.RecordFolder, cfg))
             {
                 _recRT.Release(); UnityEngine.Object.Destroy(_recRT); _recRT = null;
@@ -111,7 +112,7 @@ namespace QuestShade
                     if (Fx.GradeAgain(_photoRT, _photoGraded)) shot = _photoGraded; else { RenderTexture.ReleaseTemporary(_photoGraded); _photoGraded = null; }
                 }
                 _photoReq = AsyncGPUReadback.Request(shot, 0, (Il2CppSystem.Action<AsyncGPUReadbackRequest>)null);
-                _photoW = w; _photoH = h; _photoReqTag = PhotoTag; _photoReading = true;
+                _photoW = w; _photoH = h; _photoVertical = _vertical; _photoReqTag = PhotoTag; _photoReading = true;
                 PhotoTag = null;
             }
             catch (Exception e) { Mod.Log.Error("Photo capture failed: " + e); _photoReading = false; }
@@ -143,7 +144,8 @@ namespace QuestShade
                 var rgba = new byte[n];
                 Marshal.Copy(_photoReq.GetDataRaw(0), rgba, 0, n);
                 Mod.Log.Msg("Photo: encoding PNG");
-                PhotoSaver.SaveAsync(rgba, _photoW, _photoH, _photoReqTag);
+                if (_photoVertical) { rgba = TurnLeft(rgba, _photoW, _photoH); PhotoSaver.SaveAsync(rgba, _photoH, _photoW, _photoReqTag); }
+                else PhotoSaver.SaveAsync(rgba, _photoW, _photoH, _photoReqTag);
             }
             catch (Exception e) { Mod.Log.Error("Photo readback failed: " + e.Message); }
             finally
@@ -160,6 +162,19 @@ namespace QuestShade
             LeavePreviewHQ();
             if (_previewRT != null) { _previewRT.Release(); UnityEngine.Object.Destroy(_previewRT); _previewRT = null; }
             if (_photoRT != null) { _photoRT.Release(); UnityEngine.Object.Destroy(_photoRT); _photoRT = null; }
+        }
+
+        private static byte[] TurnLeft(byte[] src, int w, int h)
+        {
+            var a = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(src);
+            var dst = new byte[src.Length];
+            var b = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(dst);
+            for (int y = 0; y < h; y++)
+            {
+                int row = y * w, nx = h - 1 - y;
+                for (int x = 0; x < w; x++) b[x * h + nx] = a[row + x];
+            }
+            return dst;
         }
     }
 }

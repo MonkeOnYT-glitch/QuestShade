@@ -93,10 +93,16 @@ namespace QuestShade
             bool live = cfg.HeadsetBloom && _bloomIntensity > 0f;
             _liveDof = false;
             _matMono.SetVector(ID.Live, Vector4.zero);
-            if (!live) { _mat.SetVector(ID.Live, Vector4.zero); return; }
+            _matMono.SetVector(ID.LiveFlare, Vector4.zero);
+            if (!live) { _mat.SetVector(ID.Live, Vector4.zero); _mat.SetVector(ID.LiveFlare, Vector4.zero); return; }
             int eyeH = XRSettings.enabled && XRSettings.eyeTextureHeight > 0 ? XRSettings.eyeTextureHeight : (_cam != null ? _cam.pixelHeight : 1080);
             float blur = Mathf.Min(_dofMaxBlur, 14f) * eyeH / 1080f;
-            _mat.SetVector(ID.Live, new Vector4(_bloomIntensity * 0.6f * _calInt, 0, blur, _dofBokeh));
+            _mat.SetVector(ID.Live, new Vector4(Level(_bloomIntensity) * 0.85f * _calInt, 0, blur, _dofBokeh));
+            float flare = p.Enabled("LensFlare") ? Mathf.Clamp(p.Float("LensFlare", "Intensity", 0f), 0f, 2f) : 0f;
+            float dirt = p.Enabled("LensDirt") ? Mathf.Clamp(p.Float("LensDirt", "Intensity", 0f), 0f, 2f) : 0f;
+            _mat.SetVector(ID.LiveFlare, new Vector4(flare * 0.45f * _calInt, Mathf.Clamp(p.Float("LensFlare", "Spacing", 0.35f), 0.1f, 0.8f),
+                Mathf.Clamp(p.Float("LensFlare", "Halo", 0.4f), 0.05f, 0.7f) * 0.6f, dirt * 0.35f));
+            if (dirt > 0f) _mat.SetTexture(ID.LiveDirt, DirtTexture());
             float thr = Mathf.Max(Mathf.Clamp(p.Float("Bloom", "Threshold", 0.85f), 0f, 4f), _calThr);
             _mat.SetVector(ID.LiveBloom, new Vector4(thr, thr * Mathf.Clamp01(p.Float("Bloom", "SoftKnee", 0.5f)), 0.006f + 0.01f * Mathf.Clamp01(p.Float("Bloom", "Scatter", 0.7f)), 0));
             var tint = p.Color("Bloom", "Tint", Color.white);
@@ -255,7 +261,7 @@ namespace QuestShade
                 if (mean < 0.02f && p90 < 0.05f) return;
                 float bright = Mathf.InverseLerp(0.3f, 0.7f, mean);
                 _calThr = Mathf.Clamp(Mathf.Lerp(p90 * 0.85f, p95 * 0.97f, bright), 0f, Mathf.Lerp(0.85f, 0.95f, bright));
-                _calInt = Mathf.Clamp(0.3f / Mathf.Max(mean, 0.01f), 0.4f, 1f);
+                _calInt = Mathf.Clamp(0.3f / Mathf.Max(mean, 0.01f), 0.55f, 1f);
                 _calDone = true;
                 MarkDirty();
                 Mod.Log.Msg($"Bloom calibrated for this level: brightness {mean:0.00} (top 10% {p90:0.00}) -> threshold {_calThr:0.00}, strength x{_calInt:0.00}");
@@ -266,7 +272,14 @@ namespace QuestShade
         private Vector4 BloomEff()
         {
             float thr = Mathf.Max(_bloomVec.y, _calThr);
-            return new Vector4(_bloomVec.x * _calInt, thr, thr * 0.8f, _bloomVec.w);
+            return new Vector4(Level(_bloomVec.x) * _calInt, thr, thr * 0.8f, _bloomVec.w);
+        }
+
+        private static float Level(float intensity)
+        {
+            if (intensity <= 0f) return 0f;
+            const float target = 0.8f;
+            return intensity * Mathf.Clamp(Mathf.Sqrt(target / intensity), 0.6f, 1.4f);
         }
 
         public float MotionScale = 1f;
@@ -757,7 +770,7 @@ BokehIntensity = 0.3
                 SunL = Shader.PropertyToID("_QS_SunL"), SunR = Shader.PropertyToID("_QS_SunR"),
                 Dirt = Shader.PropertyToID("_QS_Dirt"), DirtTex = Shader.PropertyToID("_QS_DirtTex"),
                 SS = Shader.PropertyToID("_QS_SS"), Hurt = Shader.PropertyToID("_QS_Hurt"),
-                Live = Shader.PropertyToID("_QS_Live"), LiveBloom = Shader.PropertyToID("_QS_LiveBloom"), LiveTint = Shader.PropertyToID("_QS_LiveTint");
+                Live = Shader.PropertyToID("_QS_Live"), LiveBloom = Shader.PropertyToID("_QS_LiveBloom"), LiveTint = Shader.PropertyToID("_QS_LiveTint"), LiveFlare = Shader.PropertyToID("_QS_LiveFlare"), LiveDirt = Shader.PropertyToID("_QS_LiveDirt");
             public static readonly int[] Stack = { LutParams, Tone, Vignette, VignetteColor, VignetteCenter, Sharpen, CA, Distort,
                 Grain, Scan, Glitch, Noise, Posterize, Time, Curve, Hurt };
         }
