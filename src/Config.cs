@@ -168,7 +168,7 @@ namespace QuestShade
             MatchPreview = ini.Bool("General", "MatchPreview", true);
             BloomDofAll = ini.Bool("General", "BloomDofEveryPreset", true);
             BloomStrength = Mathf.Clamp(ini.Float("General", "BloomStrength", 1f), 0f, 4f);
-            HeadsetBloom = ini.Bool("General", "HeadsetBloomOn", false);
+            HeadsetBloom = false; // parked for later; was: ini.Bool("General", "HeadsetBloomOn", false)
             ControllerShortcuts = ini.Bool("Controls", "Shortcuts", true);
             LeftHanded = ini.Bool("Controls", "LeftHanded", false);
             DarkMaps = Mathf.Clamp(ini.Float("General", "DarkMaps", 0.8f), 0f, 1f);

@@ -86,7 +86,8 @@ namespace QuestShade
             bloom.CreateBool("On every preset", Color.green, cfg.BloomDofAll, v => { cfg.BloomDofAll = v; mod.ReapplyEffects(); });
             bloom.CreateFloat("Bloom strength", Color.white, cfg.BloomStrength, 0.25f, 0f, 4f, v => { cfg.BloomStrength = v; mod.ReapplyEffects(); });
             bloom.CreateFloat("Blur strength", Color.white, cfg.BlurStrength, 0.25f, 0f, 3f, v => { cfg.BlurStrength = v; mod.ReapplyEffects(); });
-            bloom.CreateBool("Bloom in your headset", Color.white, cfg.HeadsetBloom, v => { cfg.HeadsetBloom = v; cfg.SaveMenuSettings(); mod.ReapplyEffects(); });
+            // Parked for later (1.7.32): headset bloom hidden from the menu and forced off in Config. Re-enable by restoring this line and the HeadsetBloom load in Config.cs.
+            // bloom.CreateBool("Bloom in your headset", Color.white, cfg.HeadsetBloom, v => { cfg.HeadsetBloom = v; cfg.SaveMenuSettings(); mod.ReapplyEffects(); });
             bloom.CreateBool("On photos + video", Color.white, cfg.BloomDofCapture, v => { cfg.BloomDofCapture = v; mod.ReapplyEffects(); });
             bloom.CreateBool("On the camera preview", Color.white, cfg.BloomDofPreview, v => { cfg.BloomDofPreview = v; mod.ReapplyEffects(); });
             var eye = look.CreatePage("Eye adaptation", Color.white, 8, true);
