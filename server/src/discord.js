@@ -20,6 +20,7 @@ export async function discordTick(env) {
   try { await raidGuard(env); } catch (e) { console.log("raid guard: " + e); }
   try { await liftOldTimeouts(env); } catch (e) { console.log("lift timeouts: " + e); }
   try { await testPings(env); } catch (e) { console.log("test pings: " + e); }
+  try { await announcePings(env); } catch (e) { console.log("announcement pings: " + e); }
   try { await roadmap(env); } catch (e) { console.log("roadmap: " + e); }
   try { await collectSuggestions(env); } catch (e) { console.log("suggestions: " + e); }
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS answered (thread TEXT PRIMARY KEY, at INTEGER)").run();
@@ -251,38 +252,41 @@ function snowflakeTime(id) { return Number(BigInt(id) >> 22n) + 1420070400000; }
 
 const TEST_CHANNEL = "public-testing", TEST_ROLE = "Testing Pings", CHECK = "✅";
 
-async function testPings(env) {
+const testPings = env => reactRole(env, { key: "test", channel: TEST_CHANNEL, role: TEST_ROLE, text: `@everyone react with ${CHECK} if you want public testing pings` });
+const announcePings = env => reactRole(env, { key: "ann", channel: "announcements", role: "Announcement Pings", text: `@everyone want a ping whenever there's a new announcement? React with ${CHECK} below and you'll get the Announcement Pings role. Remove your reaction any time to stop.` });
+
+async function reactRole(env, o) {
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS bot_state (k TEXT PRIMARY KEY, v TEXT)").run();
   const get = async k => (await env.DB.prepare("SELECT v FROM bot_state WHERE k = ?1").bind(k).first())?.v;
   const set = (k, v) => env.DB.prepare("INSERT OR REPLACE INTO bot_state (k, v) VALUES (?1, ?2)").bind(k, v).run();
 
-  let ch = await get("test_channel");
+  let ch = await get(o.key + "_channel");
   if (!ch) {
     const chans = await call(env, "GET", `/guilds/${GUILD}/channels`);
-    ch = (chans || []).find(c => c.type === 0 && (c.name || "").includes(TEST_CHANNEL))?.id;
-    if (!ch) { console.log("test pings: no #" + TEST_CHANNEL + " channel"); return; }
-    await set("test_channel", ch);
+    ch = (chans || []).find(c => (c.type === 0 || c.type === 5) && (c.name || "").includes(o.channel))?.id;
+    if (!ch) { console.log(o.key + " pings: no #" + o.channel + " channel"); return; }
+    await set(o.key + "_channel", ch);
   }
-  let role = await get("test_role");
+  let role = await get(o.key + "_role");
   if (!role) {
     const roles = await call(env, "GET", `/guilds/${GUILD}/roles`);
     if (!Array.isArray(roles)) return;
-    role = roles.find(r => r.name === TEST_ROLE)?.id;
-    if (!role) role = (await call(env, "POST", `/guilds/${GUILD}/roles`, { name: TEST_ROLE, permissions: "0", mentionable: false }))?.id;
+    role = roles.find(r => r.name === o.role)?.id;
+    if (!role) role = (await call(env, "POST", `/guilds/${GUILD}/roles`, { name: o.role, permissions: "0", mentionable: false }))?.id;
     if (!role) return;
-    await set("test_role", role);
+    await set(o.key + "_role", role);
   }
-  let msg = await get("test_message");
+  let msg = await get(o.key + "_message");
   if (!msg) {
     const sent = await call(env, "POST", `/channels/${ch}/messages`, {
-      content: `@everyone react with ${CHECK} if you want public testing pings`, allowed_mentions: { parse: ["everyone"] } });
+      content: o.text, allowed_mentions: { parse: ["everyone"] } });
     if (!sent?.id) return;
     msg = sent.id;
-    await set("test_message", msg);
+    await set(o.key + "_message", msg);
   }
   const emoji = encodeURIComponent(CHECK);
-  if (!(await get("test_reacted"))) {
-    if (await call(env, "PUT", `/channels/${ch}/messages/${msg}/reactions/${emoji}/@me`)) await set("test_reacted", "1");
+  if (!(await get(o.key + "_reacted"))) {
+    if (await call(env, "PUT", `/channels/${ch}/messages/${msg}/reactions/${emoji}/@me`)) await set(o.key + "_reacted", "1");
   }
 
   const reacted = new Set();
