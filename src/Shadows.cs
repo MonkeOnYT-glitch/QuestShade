@@ -87,6 +87,7 @@ namespace QuestShade
         private static void Show(bool on)
         {
             if (_root != null && _root.activeSelf != on) _root.SetActive(on);
+            if (_othersOn != on) { _othersOn = on; foreach (var g in _others) if (g != null && g.activeSelf != on) g.SetActive(on); }
             if (_partsOn == on) return;
             _partsOn = on;
             foreach (var g in _parts) if (g != null && g.activeSelf != on) g.SetActive(on);
@@ -316,6 +317,81 @@ namespace QuestShade
             _found.Clear();
         }
 
+
+        // NPCs and spawned props (vanilla + modded spawnables) near the player
+        private const int MaxOthers = 10, MaxOtherMeshes = 40;
+        private const float OthersReach = 14f;
+        private static readonly List<GameObject> _others = new List<GameObject>(), _othersLens = new List<GameObject>();
+        private static readonly List<(Transform t, float d)> _near = new List<(Transform, float)>();
+        private static int _othersKey;
+        private static float _nextOthers;
+        private static bool _othersOn;
+
+        private static void ClearOthers()
+        {
+            foreach (var g in _others) if (g != null) UnityEngine.Object.Destroy(g);
+            _others.Clear(); _othersLens.Clear(); _othersKey = 0;
+        }
+
+        private static void Others(Transform av, Vector3 at)
+        {
+            _near.Clear();
+            Transform rig = av; for (int i = 0; i < 6 && rig.parent != null; i++) rig = rig.parent;
+            float floorY = _plane ? _planeP.y : at.y - 1.5f;
+            foreach (var p in UnityEngine.Object.FindObjectsOfType<Il2CppSLZ.Marrow.Pool.Poolee>())
+            {
+                if (p == null) continue;
+                var go = p.gameObject;
+                if (!go.activeInHierarchy || go.name.StartsWith("QuestShade", StringComparison.Ordinal)) continue;
+                var t = go.transform;
+                if (t.IsChildOf(rig) || _roots.Contains(t)) continue;
+                float d = (t.position - at).sqrMagnitude;
+                if (d > OthersReach * OthersReach) continue;
+                if (Mathf.Abs(t.position.y - floorY) > 2.5f) continue;
+                _near.Add((t, d));
+            }
+            _near.Sort((x, y) => x.d.CompareTo(y.d));
+            if (_near.Count > MaxOthers) _near.RemoveRange(MaxOthers, _near.Count - MaxOthers);
+            int key = 17;
+            foreach (var n in _near) key = key * 31 + n.t.GetInstanceID();
+            if (key == _othersKey) return;
+            ClearOthers();
+            _othersKey = key;
+            _lensLayer = -2; _layer = -1;
+            int meshes = 0;
+            foreach (var (root, _) in _near)
+            {
+                foreach (var smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+                {
+                    if (meshes >= MaxOtherMeshes) break;
+                    if (smr == null || !smr.enabled || smr.sharedMesh == null) continue;
+                    var mesh = smr.sharedMesh; int subs = mesh.subMeshCount;
+                    if (!ReadSolid(smr, subs, true)) continue;
+                    var go = Skin("NpcSkin", smr, mesh, subs, _shade, _none).gameObject;
+                    var lens = Skin("NpcSkinLens", smr, mesh, subs, _shadeLens, _noneLens).gameObject;
+                    lens.SetActive(false);
+                    _others.Add(go); _othersLens.Add(lens); meshes++;
+                }
+                foreach (var mr in root.GetComponentsInChildren<MeshRenderer>(false))
+                {
+                    if (meshes >= MaxOtherMeshes) break;
+                    if (mr == null || !mr.enabled || mr.gameObject.name.StartsWith("QuestShade", StringComparison.Ordinal)) continue;
+                    var mf = mr.GetComponent<MeshFilter>();
+                    var mesh = mf != null ? mf.sharedMesh : null;
+                    if (mesh == null) continue;
+                    var e = mr.bounds.extents;
+                    if (Math.Min(e.x, Math.Min(e.y, e.z)) < 0.0015f || Math.Max(e.x, Math.Max(e.y, e.z)) > 6f) continue;
+                    int subs = mesh.subMeshCount;
+                    if (!ReadSolid(mr, subs)) continue;
+                    var go = Part(PartName, mr.transform, mesh, subs, _shade, _none);
+                    var lens = Part(PartName + "Lens", go.transform, mesh, subs, _shadeLens, _noneLens);
+                    lens.SetActive(false);
+                    go.SetActive(_othersOn);
+                    _others.Add(go); _othersLens.Add(lens); meshes++;
+                }
+            }
+        }
+
         private static void FindSun()
         {
             Light best = null;
@@ -341,6 +417,7 @@ namespace QuestShade
             S("setup"); Ensure();
             if (avId != _avatarId) { S("copy body"); Build(av); }
             if (now >= _nextItems) { _nextItems = now + 0.25f; S("held items"); Items(); }
+            if (now >= _nextOthers) { _nextOthers = now + 1f; S("npcs and props"); Others(av, head.transform.position); }
             if (_skins.Count == 0) { Show(false); return; }
 
             S("sun");
@@ -405,6 +482,7 @@ namespace QuestShade
                 _sheet.layer = layer;
                 foreach (var g in _skins) if (g != null) g.layer = layer;
                 foreach (var g in _parts) if (g != null) g.layer = layer;
+                foreach (var g in _others) if (g != null) g.layer = layer;
             }
             int lensLayer = CameraOpen && FlashBeams.LensLayer != null ? FlashBeams.LensLayer() : -1;
             if (lensLayer != _lensLayer)
@@ -414,6 +492,7 @@ namespace QuestShade
                 if (_sheetLens != null) { if (on) _sheetLens.layer = lensLayer; _sheetLens.SetActive(on); }
                 foreach (var g in _skinsLens) if (g != null) { if (on) g.layer = lensLayer; g.SetActive(on); }
                 foreach (var g in _partsLens) if (g != null) { if (on) g.layer = lensLayer; g.SetActive(on); }
+                foreach (var g in _othersLens) if (g != null) { if (on) g.layer = lensLayer; g.SetActive(on); }
             }
 
             Show(true);
@@ -422,7 +501,7 @@ namespace QuestShade
                 S("first frame finished");
                 try { System.IO.File.WriteAllText(StepFile, "ok"); } catch { }
                 _logged = true;
-                Mod.Log.Msg($"Shadows: body shadow on ({_skins.Count} meshes, {_parts.Count} held parts, {(_sun != null ? "sun '" + _sun.name + "'" : "no sun on this map, shadow falls straight down")}, {SystemInfo.graphicsDeviceType})");
+                Mod.Log.Msg($"Shadows: body shadow on ({_skins.Count} meshes, {_parts.Count} held parts, {_others.Count} NPC/prop meshes, {(_sun != null ? "sun '" + _sun.name + "'" : "no sun on this map, shadow falls straight down")}, {SystemInfo.graphicsDeviceType})");
             }
         }
     }
