@@ -98,7 +98,7 @@ namespace QuestShade
             int eyeH = XRSettings.enabled && XRSettings.eyeTextureHeight > 0 ? XRSettings.eyeTextureHeight : (_cam != null ? _cam.pixelHeight : 1080);
             float blur = Mathf.Min(_dofMaxBlur, 14f) * eyeH / 1080f;
             _mat.SetVector(ID.Live, new Vector4(Level(_bloomIntensity) * 0.85f * _calInt, 0, blur, _dofBokeh));
-            float flare = p.Enabled("LensFlare") ? Mathf.Clamp(p.Float("LensFlare", "Intensity", 0f), 0f, 2f) : 0f;
+            float flare = 0f; // headset lens flare off (stacked ghost reflections on the bloom); photos/video keep theirs
             _mat.SetVector(ID.LiveFlare, new Vector4(flare * 0.45f * _calInt, Mathf.Clamp(p.Float("LensFlare", "Spacing", 0.35f), 0.1f, 0.8f),
                 Mathf.Clamp(p.Float("LensFlare", "Halo", 0.4f), 0.05f, 0.7f) * 0.6f, 0f));
             float thr = Mathf.Max(Mathf.Clamp(p.Float("Bloom", "Threshold", 0.85f), 0f, 4f), _calThr);
