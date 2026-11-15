@@ -653,6 +653,10 @@ namespace QuestShadeInstaller
                 Status("Putting your saves back...");
                 Adb($"shell mkdir -p /sdcard/Android/data/{Pkg}/files");
                 Adb($"push \"{backup}{Path.DirectorySeparatorChar}.\" /sdcard/Android/data/{Pkg}/files/", 600000);
+                // Files pushed over adb belong to the shell user, not the freshly reinstalled game, and the game
+                // can't open them (it hangs after the shader precache). Open them up so BONELAB can read and write them.
+                var restored = string.Join(" ", Directory.EnumerateFileSystemEntries(backup).Select(p => "'" + Path.GetFileName(p) + "'"));
+                Adb($"shell \"cd /sdcard/Android/data/{Pkg}/files && chmod -R 777 {restored}\"", 120000);
                 Log("Saves restored.");
             }
             if (hadMods && Adb($"shell ls /sdcard/Android/data/{Pkg}/files/Mods").Contains("No such file"))
