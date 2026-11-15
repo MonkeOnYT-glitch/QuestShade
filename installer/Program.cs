@@ -255,6 +255,7 @@ namespace QuestShadeInstaller
                 throw new Exception("BONELAB isn't installed on this Quest. Install it from the Meta store first.");
             Status("Checking BONELAB...");
             if (!Patched()) Patch();
+            else RestoreObb();
             Step(2);
             Status("Installing QuestShade...");
             InstallMods();
@@ -575,10 +576,38 @@ namespace QuestShadeInstaller
 
         private bool Patched()
         {
-            var inst = Regex.Match(Adb($"shell pm list packages -i {Pkg}").ToLowerInvariant(), "installer=(\\S+)").Groups[1].Value;
-            if (inst.Contains("melonloader") || inst.Contains("lemonloader")) return true;
-            if (inst.Contains("oculus") || inst.Contains("meta") || inst.Contains("vending")) return false;
-            return !Adb($"shell ls {MlDir}").Contains("No such file");
+            // A patched BONELAB carries LemonLoader inside its APK. The installer name can't be trusted:
+            // patched installs can still say com.oculus.ocms, which made every update re-patch.
+            var path = Regex.Match(Adb($"shell pm path {Pkg}"), @"package:(\S+)").Groups[1].Value.Trim();
+            if (path.Length == 0) return false;
+            var hits = Adb($"shell \"grep -c -a -i -m1 melonloader '{path}' 2>/dev/null\"").Trim();
+            return int.TryParse(hits.Split('\n').LastOrDefault()?.Trim(), out int n) && n > 0;
+        }
+
+        private const string ObbDir = "/sdcard/Android/obb/" + Pkg;
+        private const string ObbSafe = "/sdcard/QuestShade-obb-backup";
+
+        private bool HasObb(string dir) => Adb($"shell \"ls {dir}/*.obb 2>/dev/null\"").Contains(".obb");
+
+        // Patching reinstalls BONELAB, and the uninstall deletes its OBB (the game's 6 GB of data).
+        // Moving it aside on the Quest is instant (same storage), so nothing goes through USB.
+        private void SaveObb()
+        {
+            if (!HasObb(ObbDir)) { Log("No BONELAB OBB found to keep safe."); return; }
+            if (HasObb(ObbSafe)) { Log("An OBB from a previous run is already kept safe on your Quest, keeping that one."); return; }
+            Status("Keeping BONELAB's game data (OBB) safe while patching...");
+            Adb($"shell \"rm -rf {ObbSafe} && mv {ObbDir} {ObbSafe}\"", 600000);
+            if (!HasObb(ObbSafe)) throw new Exception("Couldn't move BONELAB's OBB aside before patching, so patching was stopped to keep it safe.");
+            Log("BONELAB's OBB moved aside on your Quest.");
+        }
+
+        private void RestoreObb()
+        {
+            if (!HasObb(ObbSafe)) return;
+            Status("Putting BONELAB's game data (OBB) back...");
+            Adb($"shell \"mkdir -p /sdcard/Android/obb && rm -rf {ObbDir} && mv {ObbSafe} {ObbDir}\"", 600000);
+            if (!HasObb(ObbDir)) throw new Exception("Couldn't put BONELAB's OBB back. It's still safe on your Quest at " + ObbSafe + ". Run the installer again to retry.");
+            Log("BONELAB's OBB is back.");
         }
 
         private void Patch()
@@ -592,6 +621,8 @@ namespace QuestShadeInstaller
             if (!haveBackup) Directory.Delete(backup, true);
             bool hadMods = !Adb($"shell ls {files}/Mods").Contains("No such file");
             Log(haveBackup ? "Saves and settings backed up to " + backup : "No saves found to back up.");
+
+            SaveObb();
 
             Status("Getting LemonLoader (it patches BONELAB so mods can load)...");
             var lemonDir = Path.Combine(_home, "lemonloader");
@@ -615,6 +646,7 @@ namespace QuestShadeInstaller
             _waitingPatch = false;
             Detail("");
             Log("BONELAB is patched.");
+            RestoreObb();
 
             if (haveBackup)
             {
