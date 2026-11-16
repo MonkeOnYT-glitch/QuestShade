@@ -20,23 +20,25 @@ namespace QuestShade
             CompId = Shader.PropertyToID("_QS_Comp"), PassId = Shader.PropertyToID("_QS_Pass"), ZTestId = Shader.PropertyToID("_QS_ZTest"),
             PointId = Shader.PropertyToID("_QS_ShPoint"), NormalId = Shader.PropertyToID("_QS_ShNormal"), DirId = Shader.PropertyToID("_QS_ShDir");
 
-        private static GameObject _root, _sheet, _sheetLens;
+        private static GameObject _root, _sheet, _sheetLens, _sheetWall, _sheetWallLens;
         private static Material _shade, _none, _clear, _shadeLens, _noneLens, _clearLens;
         private static readonly List<GameObject> _skins = new List<GameObject>(), _skinsLens = new List<GameObject>();
+        private static readonly List<GameObject> _skinsWall = new List<GameObject>(), _skinsWallLens = new List<GameObject>();
         private static readonly List<GameObject> _parts = new List<GameObject>(), _partsLens = new List<GameObject>();
+        private static readonly List<GameObject> _partsWall = new List<GameObject>(), _partsWallLens = new List<GameObject>();
         private static readonly Vector3 Slant = new Vector3(0.42f, -1f, 0.3f).normalized;
         private static Mesh _quad;
         private static int _avatarId, _itemsKey, _mask, _maskAll, _layer = -1, _lensLayer = -2, _seenAvatar;
         private static float _nextItems, _sunAt, _sunSeenAt, _fade, _k = 0.6f, _wait;
         private static Light _sun;
-        private static Vector3 _dir = new Vector3(0.42f, -1f, 0.3f).normalized, _planeP, _planeN = Vector3.up;
-        private static bool _plane, _failed, _logged, _checked, _sunSeen, _partsOn;
+        private static Vector3 _dir = new Vector3(0.42f, -1f, 0.3f).normalized, _planeP, _planeN = Vector3.up, _wallP, _wallN = Vector3.up;
+        private static bool _plane, _wall, _failed, _logged, _checked, _sunSeen, _partsOn;
 
         private static string StepFile => System.IO.Path.Combine(Config.Root, "shadow5-step.txt");
 
         public static void OnLevel()
         {
-            _sun = null; _sunAt = Time.unscaledTime + 2f; _fade = 0f; _logged = false; _plane = false; _sunSeen = false;
+            _sun = null; _sunAt = Time.unscaledTime + 2f; _fade = 0f; _logged = false; _plane = false; _wall = false; _sunSeen = false;
             _wait = Time.unscaledTime + 4f;
         }
 
@@ -87,7 +89,7 @@ namespace QuestShade
         private static void Show(bool on)
         {
             if (_root != null && _root.activeSelf != on) _root.SetActive(on);
-            if (_othersOn != on) { _othersOn = on; foreach (var g in _others) if (g != null && g.activeSelf != on) g.SetActive(on); }
+            if (_othersOn != on) { _othersOn = on; foreach (var g in _others) if (g != null && g.activeSelf != on) g.SetActive(on); foreach (var g in _othersWall) if (g != null && g.activeSelf != on) g.SetActive(on); }
             if (_partsOn == on) return;
             _partsOn = on;
             foreach (var g in _parts) if (g != null && g.activeSelf != on) g.SetActive(on);
@@ -129,6 +131,16 @@ namespace QuestShade
             _sheetLens.AddComponent<MeshFilter>().sharedMesh = _quad;
             Plain(_sheetLens.AddComponent<MeshRenderer>()).sharedMaterial = _clearLens;
             _sheetLens.SetActive(false);
+            _sheetWall = new GameObject("SheetWall");
+            _sheetWall.transform.SetParent(_root.transform, false);
+            _sheetWall.AddComponent<MeshFilter>().sharedMesh = _quad;
+            Plain(_sheetWall.AddComponent<MeshRenderer>()).sharedMaterial = _clear;
+            _sheetWall.SetActive(false);
+            _sheetWallLens = new GameObject("SheetWallLens");
+            _sheetWallLens.transform.SetParent(_sheetWall.transform, false);
+            _sheetWallLens.AddComponent<MeshFilter>().sharedMesh = _quad;
+            Plain(_sheetWallLens.AddComponent<MeshRenderer>()).sharedMaterial = _clearLens;
+            _sheetWallLens.SetActive(false);
         }
 
         private static Renderer Plain(Renderer r)
@@ -226,7 +238,9 @@ namespace QuestShade
         {
             foreach (var g in _skins) if (g != null) UnityEngine.Object.Destroy(g);
             foreach (var g in _skinsLens) if (g != null) UnityEngine.Object.Destroy(g);
-            _skins.Clear(); _skinsLens.Clear(); _lensLayer = -2; _layer = -1;
+            foreach (var g in _skinsWall) if (g != null) UnityEngine.Object.Destroy(g);
+            foreach (var g in _skinsWallLens) if (g != null) UnityEngine.Object.Destroy(g);
+            _skins.Clear(); _skinsLens.Clear(); _skinsWall.Clear(); _skinsWallLens.Clear(); _lensLayer = -2; _layer = -1;
             _avatarId = av.GetInstanceID();
 
             S("copy body: player layers");
@@ -253,6 +267,12 @@ namespace QuestShade
                 var lens = Skin("SkinLens", smr, mesh, subs, _shadeLens, _noneLens).gameObject;
                 lens.SetActive(false);
                 _skinsLens.Add(lens);
+                var wall = Skin("SkinWall", smr, mesh, subs, _shade, _none).gameObject;
+                wall.SetActive(false);
+                _skinsWall.Add(wall);
+                var wallLens = Skin("SkinWallLens", smr, mesh, subs, _shadeLens, _noneLens).gameObject;
+                wallLens.SetActive(false);
+                _skinsWallLens.Add(wallLens);
             }
             Mod.Log.Msg($"Shadows: body copied ({_skins.Count} meshes, bones shared with the avatar)");
         }
@@ -289,7 +309,8 @@ namespace QuestShade
             if (key == _itemsKey) return;
             _itemsKey = key;
             foreach (var g in _parts) if (g != null) UnityEngine.Object.Destroy(g);
-            _parts.Clear(); _partsLens.Clear(); _found.Clear(); _lensLayer = -2; _layer = -1;
+            foreach (var g in _partsWall) if (g != null) UnityEngine.Object.Destroy(g);
+            _parts.Clear(); _partsLens.Clear(); _partsWall.Clear(); _partsWallLens.Clear(); _found.Clear(); _lensLayer = -2; _layer = -1;
             foreach (var root in _roots)
                 foreach (var mr in root.GetComponentsInChildren<MeshRenderer>(false))
                 {
@@ -313,6 +334,11 @@ namespace QuestShade
                 lens.SetActive(false);
                 go.SetActive(_partsOn);
                 _parts.Add(go); _partsLens.Add(lens);
+                var wallGo = Part(PartName + "Wall", mr.transform, mesh, subs, _shade, _none);
+                var wallLens = Part(PartName + "WallLens", wallGo.transform, mesh, subs, _shadeLens, _noneLens);
+                wallLens.SetActive(false);
+                wallGo.SetActive(false);
+                _partsWall.Add(wallGo); _partsWallLens.Add(wallLens);
             }
             _found.Clear();
         }
@@ -321,11 +347,12 @@ namespace QuestShade
         private const int MaxOthers = 10, MaxOtherMeshes = 40;
         private const float OthersReach = 14f;
         private static readonly List<GameObject> _others = new List<GameObject>(), _othersLens = new List<GameObject>();
+        private static readonly List<GameObject> _othersWall = new List<GameObject>(), _othersWallLens = new List<GameObject>();
         private static readonly List<(Transform t, float d)> _near = new List<(Transform, float)>();
         private static int _othersKey;
         private static float _nextOthers;
         private static bool _othersOn;
-        private sealed class Group { public Transform Root; public Renderer Src; public readonly List<Renderer> Copies = new List<Renderer>(); }
+        private sealed class Group { public Transform Root; public Renderer Src; public readonly List<Renderer> Copies = new List<Renderer>(); public readonly List<Renderer> WallCopies = new List<Renderer>(); }
         private static readonly List<Group> _groups = new List<Group>();
         private static readonly RaycastHit[] _hits = new RaycastHit[12];
         private static MaterialPropertyBlock _mpb;
@@ -333,7 +360,10 @@ namespace QuestShade
         private static void ClearOthers()
         {
             foreach (var g in _others) if (g != null) UnityEngine.Object.Destroy(g);
-            _others.Clear(); _othersLens.Clear(); _othersKey = 0; _groups.Clear();
+            foreach (var g in _othersLens) if (g != null) UnityEngine.Object.Destroy(g);
+            foreach (var g in _othersWall) if (g != null) UnityEngine.Object.Destroy(g);
+            foreach (var g in _othersWallLens) if (g != null) UnityEngine.Object.Destroy(g);
+            _others.Clear(); _othersLens.Clear(); _othersWall.Clear(); _othersWallLens.Clear(); _othersKey = 0; _groups.Clear();
         }
 
         private static void Others(Transform av, Vector3 at)
@@ -378,6 +408,11 @@ namespace QuestShade
                     grp.Src ??= smr; grp.Copies.Add(go.GetComponent<Renderer>()); grp.Copies.Add(lens.GetComponent<Renderer>());
                     lens.SetActive(false);
                     _others.Add(go); _othersLens.Add(lens); meshes++;
+                    var wallGo = Skin("NpcSkinWall", smr, mesh, subs, _shade, _none).gameObject;
+                    var wallLens = Skin("NpcSkinWallLens", smr, mesh, subs, _shadeLens, _noneLens).gameObject;
+                    grp.WallCopies.Add(wallGo.GetComponent<Renderer>()); grp.WallCopies.Add(wallLens.GetComponent<Renderer>());
+                    wallLens.SetActive(false);
+                    _othersWall.Add(wallGo); _othersWallLens.Add(wallLens);
                 }
                 foreach (var mr in root.GetComponentsInChildren<MeshRenderer>(false))
                 {
@@ -397,6 +432,12 @@ namespace QuestShade
                     grp.Src ??= mr; grp.Copies.Add(go.GetComponent<Renderer>()); grp.Copies.Add(lens.GetComponent<Renderer>());
                     go.SetActive(_othersOn);
                     _others.Add(go); _othersLens.Add(lens); meshes++;
+                    var wallGo = Part(PartName + "Wall", mr.transform, mesh, subs, _shade, _none);
+                    var wallLens = Part(PartName + "WallLens", wallGo.transform, mesh, subs, _shadeLens, _noneLens);
+                    wallLens.SetActive(false);
+                    grp.WallCopies.Add(wallGo.GetComponent<Renderer>()); grp.WallCopies.Add(wallLens.GetComponent<Renderer>());
+                    wallGo.SetActive(_othersOn);
+                    _othersWall.Add(wallGo); _othersWallLens.Add(wallLens);
                 }
             }
         }
@@ -431,15 +472,23 @@ namespace QuestShade
                 if (g.Root == null || g.Src == null) continue;
                 Vector3 c = g.Src.bounds.center;
                 int n = Physics.RaycastNonAlloc(c, d, _hits, 20f, _maskAll, QueryTriggerInteraction.Ignore);
-                float best = float.MaxValue; RaycastHit hit = default;
+                float best = float.MaxValue, bestWall = float.MaxValue;
+                RaycastHit hit = default, wallHit = default;
                 for (int i = 0; i < n; i++)
                 {
                     var col = _hits[i].collider;
                     if (col == null || col.transform.IsChildOf(g.Root)) continue;
                     if (BadFloorHit(_hits[i])) continue;
-                    if (_hits[i].distance < best) { best = _hits[i].distance; hit = _hits[i]; }
+                    if (_hits[i].normal.y > 0.5f)
+                    {
+                        if (_hits[i].distance < best) { best = _hits[i].distance; hit = _hits[i]; }
+                    }
+                    else if (Mathf.Abs(_hits[i].normal.y) < 0.5f && Vector3.Dot(d, _hits[i].normal) < -0.1f && _hits[i].distance <= 12f)
+                    {
+                        if (_hits[i].distance < bestWall) { bestWall = _hits[i].distance; wallHit = _hits[i]; }
+                    }
                 }
-                bool ok = best < float.MaxValue && hit.normal.y > 0.5f && Vector3.Dot(d, hit.normal) < -0.1f;
+                bool ok = best < float.MaxValue && Vector3.Dot(d, hit.normal) < -0.1f;
                 if (ok)
                 {
                     _mpb.Clear();
@@ -453,7 +502,47 @@ namespace QuestShade
                     if (r.enabled != ok) r.enabled = ok;
                     if (ok) r.SetPropertyBlock(_mpb);
                 }
+                bool wallOk = bestWall < float.MaxValue;
+                if (wallOk)
+                {
+                    _mpb.Clear();
+                    _mpb.SetVector(PointId, new Vector4(wallHit.point.x, wallHit.point.y, wallHit.point.z, 0f));
+                    _mpb.SetVector(NormalId, new Vector4(wallHit.normal.x, wallHit.normal.y, wallHit.normal.z, Lift));
+                    _mpb.SetVector(DirId, new Vector4(d.x, d.y, d.z, 0f));
+                }
+                foreach (var r in g.WallCopies)
+                {
+                    if (r == null) continue;
+                    if (r.enabled != wallOk) r.enabled = wallOk;
+                    if (wallOk) r.SetPropertyBlock(_mpb);
+                }
             }
+        }
+
+        private static void SetList(List<GameObject> list, bool on)
+        {
+            foreach (var g in list) if (g != null && g.activeSelf != on) g.SetActive(on);
+        }
+
+        private static void SetBlock(List<GameObject> list)
+        {
+            foreach (var g in list)
+            {
+                if (g == null) continue;
+                var r = g.GetComponent<Renderer>();
+                if (r != null) r.SetPropertyBlock(_mpb);
+            }
+        }
+
+        private static void SetWallBlocks(Vector3 d)
+        {
+            if (!_wall) return;
+            _mpb ??= new MaterialPropertyBlock();
+            _mpb.Clear();
+            _mpb.SetVector(PointId, new Vector4(_wallP.x, _wallP.y, _wallP.z, 0f));
+            _mpb.SetVector(NormalId, new Vector4(_wallN.x, _wallN.y, _wallN.z, Lift));
+            _mpb.SetVector(DirId, new Vector4(d.x, d.y, d.z, 0f));
+            SetBlock(_skinsWall); SetBlock(_partsWall); SetBlock(_skinsWallLens); SetBlock(_partsWallLens);
         }
 
         private static void FindSun()
@@ -505,21 +594,36 @@ namespace QuestShade
             S("ground");
             Vector3 origin = headAt - Vector3.up * 0.75f;
             Vector3 d = _dir;
-            bool hitAny = false;
-            RaycastHit hit = default;
-            int n = Physics.RaycastNonAlloc(origin, d, _hits, Reach, _mask, QueryTriggerInteraction.Ignore);
-            for (int i = 0; i < n; i++)
+            bool hitAny = false, wallAny = false;
+            RaycastHit hit = default, wallHit = default;
+            int count = Physics.RaycastNonAlloc(origin, d, _hits, Reach, _mask, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < count; i++)
             {
                 if (BadFloorHit(_hits[i])) continue;
-                if (!hitAny || _hits[i].distance < hit.distance) { hit = _hits[i]; hitAny = true; }
+                if (_hits[i].normal.y > 0.5f)
+                {
+                    if (!hitAny || _hits[i].distance < hit.distance) { hit = _hits[i]; hitAny = true; }
+                }
+                else if (Mathf.Abs(_hits[i].normal.y) < 0.5f && Vector3.Dot(d, _hits[i].normal) < -0.1f && _hits[i].distance <= 12f)
+                {
+                    if (!wallAny || _hits[i].distance < wallHit.distance) { wallHit = _hits[i]; wallAny = true; }
+                }
             }
-            if (!hitAny)
+            bool hadFloor = hitAny, hadWall = wallAny;
+            if (!hitAny || !wallAny)
             {
-                n = Physics.RaycastNonAlloc(origin, d, _hits, Reach, _maskAll, QueryTriggerInteraction.Ignore);
-                for (int i = 0; i < n; i++)
+                count = Physics.RaycastNonAlloc(origin, d, _hits, Reach, _maskAll, QueryTriggerInteraction.Ignore);
+                for (int i = 0; i < count; i++)
                 {
                     if (BadFloorHit(_hits[i])) continue;
-                    if (!hitAny || _hits[i].distance < hit.distance) { hit = _hits[i]; hitAny = true; }
+                    if (!hadFloor && _hits[i].normal.y > 0.5f)
+                    {
+                        if (!hitAny || _hits[i].distance < hit.distance) { hit = _hits[i]; hitAny = true; }
+                    }
+                    else if (!hadWall && Mathf.Abs(_hits[i].normal.y) < 0.5f && Vector3.Dot(d, _hits[i].normal) < -0.1f && _hits[i].distance <= 12f)
+                    {
+                        if (!wallAny || _hits[i].distance < wallHit.distance) { wallHit = _hits[i]; wallAny = true; }
+                    }
                 }
             }
             if (hitAny)
@@ -535,21 +639,47 @@ namespace QuestShade
                 _plane = true;
             }
             else _plane = false;
-            if (!_plane) { Show(false); return; }
+            if (wallAny)
+            {
+                Vector3 hp = wallHit.point, hn = wallHit.normal;
+                if (!_wall || Vector3.Dot(hn, _wallN) < 0.95f) { _wallP = hp; _wallN = hn; }
+                else
+                {
+                    float k = 1f - Mathf.Exp(-dt * 20f);
+                    _wallN = Vector3.Slerp(_wallN, hn, k).normalized;
+                    _wallP = Vector3.Lerp(_wallP, hp, k);
+                }
+                _wall = true;
+            }
+            else _wall = false;
+            if (!_plane && !_wall) { Show(false); return; }
 
-            Vector3 n = _planeN;
+            Vector3 n = _plane ? _planeN : _wallN;
             float dn = Vector3.Dot(d, n);
             float dark = Mathf.Clamp01(cfg.ShadowDarkness) * _k * _fade * Mathf.Clamp01((-dn - 0.1f) / 0.2f);
             if (dark < 0.01f) { Show(false); return; }
 
             S("place");
-            Shader.SetGlobalVector(PointId, new Vector4(_planeP.x, _planeP.y, _planeP.z, 0f));
-            Shader.SetGlobalVector(NormalId, new Vector4(n.x, n.y, n.z, Lift));
-            Shader.SetGlobalVector(DirId, new Vector4(d.x, d.y, d.z, 0f));
-            var a = Vector3.Cross(n, Mathf.Abs(n.x) < 0.9f ? Vector3.right : Vector3.forward).normalized;
-            var at = origin - d * (Vector3.Dot(origin - _planeP, n) / dn);
-            _sheet.transform.SetPositionAndRotation(at, Quaternion.LookRotation(n, a));
-            _sheet.transform.localScale = new Vector3(60f, 60f, 1f);
+            if (_plane)
+            {
+                Shader.SetGlobalVector(PointId, new Vector4(_planeP.x, _planeP.y, _planeP.z, 0f));
+                Shader.SetGlobalVector(NormalId, new Vector4(n.x, n.y, n.z, Lift));
+                Shader.SetGlobalVector(DirId, new Vector4(d.x, d.y, d.z, 0f));
+                var a = Vector3.Cross(n, Mathf.Abs(n.x) < 0.9f ? Vector3.right : Vector3.forward).normalized;
+                var at = origin - d * (Vector3.Dot(origin - _planeP, n) / dn);
+                _sheet.transform.SetPositionAndRotation(at, Quaternion.LookRotation(n, a));
+                _sheet.transform.localScale = new Vector3(60f, 60f, 1f);
+            }
+            if (_sheet != null && _sheet.activeSelf != _plane) _sheet.SetActive(_plane);
+            if (_wall)
+            {
+                var wa = Vector3.Cross(_wallN, Mathf.Abs(_wallN.x) < 0.9f ? Vector3.right : Vector3.forward).normalized;
+                float wdn = Vector3.Dot(d, _wallN);
+                var wat = origin - d * (Vector3.Dot(origin - _wallP, _wallN) / wdn);
+                _sheetWall.transform.SetPositionAndRotation(wat, Quaternion.LookRotation(_wallN, wa));
+                _sheetWall.transform.localScale = new Vector3(60f, 60f, 1f);
+            }
+            if (_sheetWall != null && _sheetWall.activeSelf != _wall) _sheetWall.SetActive(_wall);
             _shade.SetFloat(KId, dark); _shadeLens.SetFloat(KId, dark);
             foreach (var cm in _cutMats.Values) if (cm != null) cm.SetFloat(KId, dark);
             S("place npcs and props"); PlaceOthers(d);
@@ -560,9 +690,13 @@ namespace QuestShade
             {
                 _layer = layer;
                 _sheet.layer = layer;
+                if (_sheetWall != null) _sheetWall.layer = layer;
                 foreach (var g in _skins) if (g != null) g.layer = layer;
+                foreach (var g in _skinsWall) if (g != null) g.layer = layer;
                 foreach (var g in _parts) if (g != null) g.layer = layer;
+                foreach (var g in _partsWall) if (g != null) g.layer = layer;
                 foreach (var g in _others) if (g != null) g.layer = layer;
+                foreach (var g in _othersWall) if (g != null) g.layer = layer;
             }
             int lensLayer = CameraOpen && FlashBeams.LensLayer != null ? FlashBeams.LensLayer() : -1;
             if (lensLayer != _lensLayer)
@@ -570,12 +704,27 @@ namespace QuestShade
                 _lensLayer = lensLayer;
                 bool on = lensLayer >= 0;
                 if (_sheetLens != null) { if (on) _sheetLens.layer = lensLayer; _sheetLens.SetActive(on); }
+                if (_sheetWallLens != null && on) _sheetWallLens.layer = lensLayer;
                 foreach (var g in _skinsLens) if (g != null) { if (on) g.layer = lensLayer; g.SetActive(on); }
+                foreach (var g in _skinsWallLens) if (g != null && on) g.layer = lensLayer;
                 foreach (var g in _partsLens) if (g != null) { if (on) g.layer = lensLayer; g.SetActive(on); }
+                foreach (var g in _partsWallLens) if (g != null && on) g.layer = lensLayer;
                 foreach (var g in _othersLens) if (g != null) { if (on) g.layer = lensLayer; g.SetActive(on); }
+                foreach (var g in _othersWallLens) if (g != null && on) g.layer = lensLayer;
             }
 
             Show(true);
+            SetWallBlocks(d);
+            bool lensOn = _lensLayer >= 0;
+            SetList(_skins, _plane);
+            SetList(_skinsWall, _wall);
+            SetList(_skinsLens, lensOn);
+            SetList(_skinsWallLens, lensOn && _wall);
+            SetList(_parts, _plane && _partsOn);
+            SetList(_partsWall, _wall && _partsOn);
+            SetList(_partsLens, lensOn);
+            SetList(_partsWallLens, lensOn && _wall);
+            if (_sheetWallLens != null && _sheetWallLens.activeSelf != (lensOn && _wall)) _sheetWallLens.SetActive(lensOn && _wall);
             if (!_logged)
             {
                 S("first frame finished");
