@@ -25,6 +25,8 @@ namespace QuestShade
         public bool MatchPreview = true;
         public float BloomStrength = 1f, BlurStrength = 1f, GripAngle = 0f;
         public bool HeadsetBloom = false;
+        public bool MotionBlur = false;
+        public float MotionBlurStrength = 0.5f;
         public bool ControllerShortcuts = true;
         public float DarkMaps = 0.8f, FlashlightBoost = 1f;
         public bool LeftHanded;
@@ -169,6 +171,8 @@ namespace QuestShade
             BloomDofAll = ini.Bool("General", "BloomDofEveryPreset", true);
             BloomStrength = Mathf.Clamp(ini.Float("General", "BloomStrength", 1f), 0f, 4f);
             HeadsetBloom = ini.Bool("General", "HeadsetBloomOn", false);
+            MotionBlur = ini.Bool("General", "MotionBlur", false);
+            MotionBlurStrength = Mathf.Clamp(ini.Float("General", "MotionBlurStrength", 0.5f), 0f, 1f);
             ControllerShortcuts = ini.Bool("Controls", "Shortcuts", true);
             LeftHanded = ini.Bool("Controls", "LeftHanded", false);
             DarkMaps = Mathf.Clamp(ini.Float("General", "DarkMaps", 0.8f), 0f, 1f);
@@ -546,6 +550,8 @@ namespace QuestShade
             SetKey("General", "BloomStrength", BloomStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "BlurStrength", BlurStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "HeadsetBloomOn", HeadsetBloom ? "true" : "false");
+            SetKey("General", "MotionBlur", MotionBlur ? "true" : "false");
+            SetKey("General", "MotionBlurStrength", MotionBlurStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Controls", "Shortcuts", ControllerShortcuts ? "true" : "false");
             SetKey("Controls", "LeftHanded", LeftHanded ? "true" : "false");
             SetKey("General", "DarkMaps", DarkMaps.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));

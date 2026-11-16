@@ -39,6 +39,7 @@ namespace QuestShade
         private AudioClip _micClip;
         private string _micDev;
         private int _micRate, _micLastPos, _micLen;
+        private bool _micOwned;
         private float[] _micRing; private int _micW, _micR, _micCount;
         private double _micFrac;
         private int _micCh = 1;
@@ -150,27 +151,41 @@ namespace QuestShade
                 var devs = Microphone.devices;
                 if (devs == null || devs.Length == 0) { AskMicPermission(); Mod.Log.Msg("Recording: no microphone (asked Android for mic permission)"); return false; }
                 _micDev = null;
+                _micOwned = false;
                 if (Microphone.IsRecording(_micDev))
                 {
                     var live = FindLiveMicClip();
-                    if (live == null) { Mod.Log.Msg("Recording: the microphone is busy and couldn't be shared - recording game audio only"); return false; }
-                    _micClip = live;
-                    Mod.Log.Msg(live == _keptClip ? "Recording: microphone reused" : "Recording: sharing the microphone with voice chat");
+                    if (live != null)
+                    {
+                        _micClip = live;
+                        Mod.Log.Msg("Recording: sharing the microphone with voice chat");
+                    }
+                    else if (_keptClip != null)
+                    {
+                        try { Microphone.End(_micDev); } catch { }
+                        _keptClip = null;
+                    }
+                    else
+                    {
+                        Mod.Log.Msg("Recording: the microphone is busy and couldn't be shared - recording game audio only");
+                        return false;
+                    }
                 }
-                else
+                if (_micClip == null)
                 {
                     Microphone.GetDeviceCaps(_micDev, out int minF, out int maxF);
                     _micRate = (minF == 0 && maxF == 0) ? 48000 : Mathf.Clamp(48000, minF, maxF);
                     _micClip = Microphone.Start(_micDev, true, 1, _micRate);
                     if (_micClip == null) return false;
                     _keptClip = _micClip;
+                    _micOwned = true;
                 }
                 _micRate = _micClip.frequency;
                 _micLen = _micClip.samples;
                 _micCh = Math.Max(1, _micClip.channels);
                 _micAll = new Il2CppStructArray<float>((long)_micLen * _micCh);
                 _micAllManaged = new float[_micLen * _micCh];
-                _micLastPos = Math.Max(0, Microphone.GetPosition(_micDev));
+                _micLastPos = _micOwned ? 0 : Math.Max(0, Microphone.GetPosition(_micDev));
                 _micRing = new float[_micRate * 2]; _micW = _micR = _micCount = 0; _micFrac = 0;
                 VideoRecorder.Diag($"audio: mic started ({_micRate} Hz, {_micCh} ch, {_micLen} samples)");
                 return true;
@@ -183,15 +198,13 @@ namespace QuestShade
         private static AudioClip FindLiveMicClip()
         {
             AudioClip other = null;
-            bool keptAlive = false;
             foreach (var clip in Resources.FindObjectsOfTypeAll<AudioClip>())
             {
                 if (clip == null || clip.samples <= 0 || clip.name != "Microphone") continue;
-                if (_keptClip != null && clip.Pointer == _keptClip.Pointer) keptAlive = true;
-                else other = clip;
+                if (_keptClip != null && clip.Pointer == _keptClip.Pointer) continue;
+                other = clip;
             }
-            if (other != null) return other;
-            return keptAlive ? _keptClip : null;
+            return other;
         }
 
         private static bool HasMicPermission()
@@ -222,11 +235,10 @@ namespace QuestShade
         private void LetGoOfMic(string why)
         {
             if (!MicOn) return;
-            MicOn = false; _micClip = null; _micEnded = true;
+            MicOn = false; _micClip = null;
             Mod.Log.Msg("Recording: microphone handed over (" + why + ") - recording game audio only from here");
             VideoRecorder.Diag("audio: mic released without ending it: " + why);
         }
-        private bool _micEnded;
 
         private void PumpMic()
         {
@@ -335,7 +347,9 @@ namespace QuestShade
             GameOn = false;
             QSAudioTap.Sink = null;
             _tap = null;
-            try { if (MicOn && !_micEnded && MicStillOurs()) Microphone.End(_micDev); } catch { }
+            try { if (_micOwned) Microphone.End(_micDev); } catch { }
+            _micOwned = false;
+            _keptClip = null;
             _micClip = null;
             MicOn = false;
             if (wasOn) ClearGuard();

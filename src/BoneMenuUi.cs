@@ -109,6 +109,10 @@ namespace QuestShade
             var surf = lit.CreatePage("Surfaces", Color.white, 8, true);
             surf.CreateFunction("What's this?", info, () => Notify("Takes the plastic-looking shine off surfaces.", 4f));
             surf.CreateFloat("Less shine", Color.white, cfg.LessShine, 0.1f, 0f, 1f, v => { cfg.LessShine = v; cfg.SaveMenuSettings(); Lighting.Reapply(); });
+            var mb = lit.CreatePage("Motion blur", Color.white, 8, true);
+            mb.CreateFunction("Camera only", info, () => Notify("Only the camera sees this - preview, photos and video. Your headset view is never blurred.", 5f));
+            mb.CreateBool("Motion blur", Color.white, cfg.MotionBlur, v => { cfg.MotionBlur = v; cfg.SaveMenuSettings(); mod.ReapplyEffects(); });
+            mb.CreateFloat("Blur strength", Color.white, cfg.MotionBlurStrength, 0.05f, 0f, 1f, v => { cfg.MotionBlurStrength = v; cfg.SaveMenuSettings(); });
 
             var extra = root.CreatePage("More", Color.gray, 8, true);
             extra.CreateFunction("Join the QuestShade Discord", new Color(0.35f, 0.4f, 0.95f), () => mod.OpenDiscord());

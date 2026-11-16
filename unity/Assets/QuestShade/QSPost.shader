@@ -25,6 +25,8 @@ Shader "Hidden/QuestShade/Post"
         float4 _QS_God;
         float4 _QS_Sun;
         float4 _QS_DofPx;
+        TEXTURE2D(_QS_PrevTex);    SAMPLER(sampler_QS_PrevTex);
+        float _QS_MotionBlur;
 
         struct A { float4 pos : POSITION; float2 uv : TEXCOORD0; };
         struct V { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -250,6 +252,19 @@ Shader "Hidden/QuestShade/Post"
                     w *= 0.93; p += d;
                 }
                 return half4(Safe(acc * (_QS_Sun.z / 24.0) * 2.5), 1);
+            }
+            ENDHLSL
+        }
+        Pass
+        {
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            half4 Frag(V i) : SV_Target
+            {
+                half3 c = SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, i.uv, 0).rgb;
+                half3 p = SAMPLE_TEXTURE2D_LOD(_QS_PrevTex, sampler_QS_PrevTex, i.uv, 0).rgb;
+                return half4(Safe(lerp(c, p, _QS_MotionBlur)), 1);
             }
             ENDHLSL
         }
