@@ -5,7 +5,7 @@ on:
       tag:
         description: "Release tag to upload the DLLs to"
         required: true
-        default: "v1.7.40"
+        default: "v1.7.41"
 jobs:
   build:
     runs-on: windows-latest

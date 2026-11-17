@@ -310,7 +310,8 @@ namespace QuestShade
             _itemsKey = key;
             foreach (var g in _parts) if (g != null) UnityEngine.Object.Destroy(g);
             foreach (var g in _partsWall) if (g != null) UnityEngine.Object.Destroy(g);
-            _parts.Clear(); _partsLens.Clear(); _partsWall.Clear(); _partsWallLens.Clear(); _found.Clear(); _lensLayer = -2; _layer = -1;
+            _parts.Clear(); _partsLens.Clear(); _partsWall.Clear(); _partsWallLens.Clear(); _found.Clear(); _lensLayer = -2; _layer = -1; _heldGroups.Clear();
+            foreach (var root in _roots) _heldGroups.Add(new Group { Root = root });
             foreach (var root in _roots)
                 foreach (var mr in root.GetComponentsInChildren<MeshRenderer>(false))
                 {
@@ -339,6 +340,14 @@ namespace QuestShade
                 wallLens.SetActive(false);
                 wallGo.SetActive(false);
                 _partsWall.Add(wallGo); _partsWallLens.Add(wallLens);
+                Group grp = null;
+                foreach (var hg in _heldGroups) if (mr.transform.IsChildOf(hg.Root)) { grp = hg; break; }
+                if (grp != null)
+                {
+                    grp.Src ??= mr;
+                    grp.Copies.Add(go.GetComponent<Renderer>()); grp.Copies.Add(lens.GetComponent<Renderer>());
+                    grp.WallCopies.Add(wallGo.GetComponent<Renderer>()); grp.WallCopies.Add(wallLens.GetComponent<Renderer>());
+                }
             }
             _found.Clear();
         }
@@ -354,6 +363,7 @@ namespace QuestShade
         private static bool _othersOn;
         private sealed class Group { public Transform Root; public Renderer Src; public readonly List<Renderer> Copies = new List<Renderer>(); public readonly List<Renderer> WallCopies = new List<Renderer>(); }
         private static readonly List<Group> _groups = new List<Group>();
+        private static readonly List<Group> _heldGroups = new List<Group>();
         private static readonly RaycastHit[] _hits = new RaycastHit[12];
         private static MaterialPropertyBlock _mpb;
 
@@ -533,6 +543,62 @@ namespace QuestShade
             }
         }
 
+        private static void PlaceHeld(Vector3 d, Transform av)
+        {
+            _mpb ??= new MaterialPropertyBlock();
+            foreach (var g in _heldGroups)
+            {
+                if (g.Root == null || g.Src == null) continue;
+                Vector3 c = g.Src.bounds.center;
+                int n = Physics.RaycastNonAlloc(c, d, _hits, 20f, _maskAll, QueryTriggerInteraction.Ignore);
+                float best = float.MaxValue, bestWall = float.MaxValue;
+                RaycastHit hit = default, wallHit = default;
+                for (int i = 0; i < n; i++)
+                {
+                    var col = _hits[i].collider;
+                    if (col == null || col.transform.IsChildOf(g.Root)) continue;
+                    if (av != null && col.transform.IsChildOf(av)) continue;
+                    if (BadFloorHit(_hits[i])) continue;
+                    if (_hits[i].normal.y > 0.5f)
+                    {
+                        if (_hits[i].distance < best) { best = _hits[i].distance; hit = _hits[i]; }
+                    }
+                    else if (Mathf.Abs(_hits[i].normal.y) < 0.5f && Vector3.Dot(d, _hits[i].normal) < -0.35f && _hits[i].distance <= 12f)
+                    {
+                        if (_hits[i].distance < bestWall) { bestWall = _hits[i].distance; wallHit = _hits[i]; }
+                    }
+                }
+                bool ok = best < float.MaxValue && Vector3.Dot(d, hit.normal) < -0.1f;
+                if (ok)
+                {
+                    _mpb.Clear();
+                    _mpb.SetVector(PointId, new Vector4(hit.point.x, hit.point.y, hit.point.z, 0f));
+                    _mpb.SetVector(NormalId, new Vector4(hit.normal.x, hit.normal.y, hit.normal.z, Lift));
+                    _mpb.SetVector(DirId, new Vector4(d.x, d.y, d.z, 0f));
+                }
+                foreach (var r in g.Copies)
+                {
+                    if (r == null) continue;
+                    if (r.enabled != ok) r.enabled = ok;
+                    if (ok) r.SetPropertyBlock(_mpb);
+                }
+                bool wallOk = bestWall < float.MaxValue;
+                if (wallOk)
+                {
+                    _mpb.Clear();
+                    _mpb.SetVector(PointId, new Vector4(wallHit.point.x, wallHit.point.y, wallHit.point.z, 0f));
+                    _mpb.SetVector(NormalId, new Vector4(wallHit.normal.x, wallHit.normal.y, wallHit.normal.z, Lift));
+                    _mpb.SetVector(DirId, new Vector4(d.x, d.y, d.z, 0f));
+                }
+                foreach (var r in g.WallCopies)
+                {
+                    if (r == null) continue;
+                    if (r.enabled != wallOk) r.enabled = wallOk;
+                    if (wallOk) r.SetPropertyBlock(_mpb);
+                }
+            }
+        }
+
         private static void SetList(List<GameObject> list, bool on)
         {
             foreach (var g in list) if (g != null && g.activeSelf != on) g.SetActive(on);
@@ -556,7 +622,7 @@ namespace QuestShade
             _mpb.SetVector(PointId, new Vector4(_wallP.x, _wallP.y, _wallP.z, 0f));
             _mpb.SetVector(NormalId, new Vector4(_wallN.x, _wallN.y, _wallN.z, Lift));
             _mpb.SetVector(DirId, new Vector4(d.x, d.y, d.z, 0f));
-            SetBlock(_skinsWall); SetBlock(_partsWall); SetBlock(_skinsWallLens); SetBlock(_partsWallLens);
+            SetBlock(_skinsWall); SetBlock(_skinsWallLens);
         }
 
         private static void FindSun()
@@ -696,7 +762,7 @@ namespace QuestShade
             if (_sheetWall != null && _sheetWall.activeSelf != _wall) _sheetWall.SetActive(_wall);
             _shade.SetFloat(KId, dark); _shadeLens.SetFloat(KId, dark);
             foreach (var cm in _cutMats.Values) if (cm != null) cm.SetFloat(KId, dark);
-            S("place npcs and props"); PlaceOthers(d);
+            S("place npcs and props"); PlaceOthers(d); PlaceHeld(d, av);
 
             int layer = FlashBeams.HeadsetLayer != null ? FlashBeams.HeadsetLayer() : -1;
             if (layer < 0) layer = 0;
@@ -734,10 +800,10 @@ namespace QuestShade
             SetList(_skinsWall, _wall);
             SetList(_skinsLens, lensOn && _plane);
             SetList(_skinsWallLens, lensOn && _wall);
-            SetList(_parts, _plane && _partsOn);
-            SetList(_partsWall, _wall && _partsOn);
-            SetList(_partsLens, lensOn && _plane);
-            SetList(_partsWallLens, lensOn && _wall);
+            SetList(_parts, _partsOn);
+            SetList(_partsWall, _partsOn);
+            SetList(_partsLens, lensOn && _partsOn);
+            SetList(_partsWallLens, lensOn && _partsOn);
             if (_sheetWallLens != null && _sheetWallLens.activeSelf != (lensOn && _wall)) _sheetWallLens.SetActive(lensOn && _wall);
             if (!_logged)
             {
