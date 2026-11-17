@@ -179,12 +179,16 @@ namespace QuestShade
             {
                 IntPtr obj = _arRecord.GetRawObject();
                 jarr = AndroidJNI.NewShortArray(_arBuf.Length);
-                var args = new AndroidJNI.jvalue[3];
-                args[0].l = jarr;
-                args[1].i = 0;
-                args[2].i = _arBuf.Length;
+                var args = new Il2CppStructArray<jvalue>(3);
+                args[0] = new jvalue { l = jarr };
+                args[1] = new jvalue { i = 0 };
+                args[2] = new jvalue { i = _arBuf.Length };
                 n = AndroidJNI.CallIntMethod(obj, _arReadMid, args);
-                if (n > 0) AndroidJNI.GetShortArrayRegion(jarr, 0, n, _arBuf);
+                if (n > 0)
+                {
+                    short[] got = AndroidJNIHelper.ConvertFromJNIArray<short>(jarr);
+                    if (got != null) Array.Copy(got, 0, _arBuf, 0, Math.Min(n, got.Length));
+                }
             }
             catch { LetGoOfMic("AudioRecord read failed"); return; }
             finally { if (jarr != IntPtr.Zero) AndroidJNI.DeleteLocalRef(jarr); }
