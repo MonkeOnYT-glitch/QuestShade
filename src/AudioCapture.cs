@@ -169,7 +169,7 @@ namespace QuestShade
         {
             if (_arRecord == null || _arBuf == null) return;
             int n;
-            try { n = _arRecord.Call<int>("read", _arBuf, 0, _arBuf.Length); }
+            try { n = _arRecord.Call<int>("read", (object)_arBuf, 0, _arBuf.Length); }
             catch { LetGoOfMic("AudioRecord read failed"); return; }
             if (n < 0) { LetGoOfMic("AudioRecord error " + n); return; }
             if (n <= 0) return;
