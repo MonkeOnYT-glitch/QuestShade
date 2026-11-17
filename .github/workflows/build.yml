@@ -1,0 +1,41 @@
+name: Build
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to upload the DLLs to"
+        required: true
+        default: "v1.7.40"
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: MonkeOnYT-glitch/QuestShade-refs
+          token: ${{ secrets.QS_REFS_PAT }}
+          path: refs
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Build mod
+        run: dotnet build QuestShade.csproj -c Release -p:QSTarget=Quest -p:ML=${{ github.workspace }}\refs\ml -p:IA=${{ github.workspace }}\refs\ia -p:GameDir=${{ github.workspace }}\refs\game
+      - name: Build updater
+        run: dotnet build updater/QuestShadeUpdater.csproj -c Release -p:QSTarget=Quest -p:ML=${{ github.workspace }}\refs\ml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QuestShade-dll
+          path: bin/Quest/QuestShade.dll
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QuestShade-updater
+          path: updater/bin/Quest/QuestShadeUpdater.dll
+          if-no-files-found: error
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload ${{ inputs.tag }} bin/Quest/QuestShade.dll updater/bin/Quest/QuestShadeUpdater.dll --clobber --repo MonkeOnYT-glitch/QuestShade
