@@ -41,6 +41,7 @@ namespace QuestShade
         private int _micRate, _micLastPos, _micLen;
         private bool _micOwned;
         private AndroidJavaObject _arRecord;
+        private IntPtr _arReadMid;
         private short[] _arBuf;
         private bool _micNative;
         private float[] _micRing; private int _micW, _micR, _micCount;
@@ -153,6 +154,10 @@ namespace QuestShade
                 if (rec.Call<int>("getState") != 1) { try { rec.Call("release"); } catch { } return false; }
                 rec.Call("startRecording");
                 if (rec.Call<int>("getRecordingState") != 3) { try { rec.Call("stop"); rec.Call("release"); } catch { } return false; }
+                IntPtr cls = rec.GetRawClass();
+                _arReadMid = AndroidJNI.GetMethodID(cls, "read", "([SII)I");
+                AndroidJNI.DeleteLocalRef(cls);
+                if (_arReadMid == IntPtr.Zero) { try { rec.Call("stop"); rec.Call("release"); } catch { } return false; }
                 _arRecord = rec;
                 _arBuf = new short[4096];
                 _micRate = 48000;
@@ -167,10 +172,22 @@ namespace QuestShade
 
         private void PumpNativeMic()
         {
-            if (_arRecord == null || _arBuf == null) return;
-            int n;
-            try { n = _arRecord.Call<int>("read", (object)_arBuf, 0, _arBuf.Length); }
+            if (_arRecord == null || _arBuf == null || _arReadMid == IntPtr.Zero) return;
+            int n = 0;
+            IntPtr jarr = IntPtr.Zero;
+            try
+            {
+                IntPtr obj = _arRecord.GetRawObject();
+                jarr = AndroidJNI.NewShortArray(_arBuf.Length);
+                var args = new AndroidJNI.jvalue[3];
+                args[0].l = jarr;
+                args[1].i = 0;
+                args[2].i = _arBuf.Length;
+                n = AndroidJNI.CallIntMethod(obj, _arReadMid, args);
+                if (n > 0) AndroidJNI.GetShortArrayRegion(jarr, 0, n, _arBuf);
+            }
             catch { LetGoOfMic("AudioRecord read failed"); return; }
+            finally { if (jarr != IntPtr.Zero) AndroidJNI.DeleteLocalRef(jarr); }
             if (n < 0) { LetGoOfMic("AudioRecord error " + n); return; }
             if (n <= 0) return;
             for (int k = 0; k < n; k++)
@@ -400,7 +417,7 @@ namespace QuestShade
             _tap = null;
             try { if (_micOwned) Microphone.End(_micDev); } catch { }
             try { if (_arRecord != null) { _arRecord.Call("stop"); _arRecord.Call("release"); _arRecord.Dispose(); } } catch { }
-            _arRecord = null; _micNative = false;
+            _arRecord = null; _arReadMid = IntPtr.Zero; _micNative = false;
             _micOwned = false;
             _keptClip = null;
             _micClip = null;
