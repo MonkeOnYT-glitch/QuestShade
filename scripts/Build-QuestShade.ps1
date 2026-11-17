@@ -1,6 +1,6 @@
 param([string]$Tag = "v1.7.41")
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
 $RefsRepo = "MonkeOnYT-glitch/QuestShade-refs"
 $MainRepo = "MonkeOnYT-glitch/QuestShade"
@@ -26,8 +26,8 @@ foreach ($p in $BoneLibPaths) { if (Test-Path $p) { $BoneLib = $p; break } }
 if (-not $BoneLib) { Fail "Could not find BoneLib.dll. Looked in: $($BoneLibPaths -join ', ')" }
 
 Write-Host "Setting up private refs repo $RefsRepo ..."
-$null = gh repo view $RefsRepo 2>$null
-if ($LASTEXITCODE -ne 0) {
+$repoNames = gh repo list MonkeOnYT-glitch --limit 100 --json name --jq ".[].name"
+if ($repoNames -notcontains "QuestShade-refs") {
     Write-Host "Creating private repo $RefsRepo ..."
     gh repo create $RefsRepo --private --description "Private build references for QuestShade"
     if ($LASTEXITCODE -ne 0) { Fail "Could not create $RefsRepo" }
@@ -36,11 +36,11 @@ if (Test-Path (Join-Path $WorkDir ".git")) {
     git -C $WorkDir pull --ff-only
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Local refs copy is stale, re-cloning ..."
-        Remove-Item $WorkDir -Recurse -Force
+        Remove-Item $WorkDir -Recurse -Force -ErrorAction Stop
         gh repo clone $RefsRepo $WorkDir
     }
 } else {
-    if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force }
+    if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force -ErrorAction Stop }
     gh repo clone $RefsRepo $WorkDir
 }
 if ($LASTEXITCODE -ne 0) { Fail "Could not clone $RefsRepo" }
@@ -50,14 +50,15 @@ $destMl = Join-Path $WorkDir "ml"
 $destIa = Join-Path $WorkDir "ia"
 $destGame = Join-Path $WorkDir "game\Mods"
 foreach ($d in @($destMl, $destIa, $destGame)) {
-    if (Test-Path $d) { Remove-Item $d -Recurse -Force }
-    New-Item -ItemType Directory -Force -Path $d | Out-Null
+    if (Test-Path $d) { Remove-Item $d -Recurse -Force -ErrorAction Stop }
+    New-Item -ItemType Directory -Force -Path $d -ErrorAction Stop | Out-Null
 }
-Copy-Item "$MlDir\*" $destMl -Recurse -Force
-Copy-Item "$IaDir\*" $destIa -Recurse -Force
-Copy-Item $BoneLib $destGame -Force
+Copy-Item "$MlDir\*" $destMl -Recurse -Force -ErrorAction Stop
+Copy-Item "$IaDir\*" $destIa -Recurse -Force -ErrorAction Stop
+Copy-Item $BoneLib $destGame -Force -ErrorAction Stop
 
 git -C $WorkDir add -A
+if ($LASTEXITCODE -ne 0) { Fail "Could not stage the refs." }
 $changes = git -C $WorkDir status --porcelain
 if ($changes) {
     git -C $WorkDir commit -m "Update build references"
