@@ -73,6 +73,7 @@ namespace QuestShade
         private bool HQReady => Active && _post != null && _cfg != null && (_bloomIntensity > 0f || _dofStrength > 0f || LensFx || MotionBlurOn);
         public bool WantsHQ => HQReady && _cfg.BloomDofCapture;
         public bool WantsPreviewHQ => HQReady && _cfg.BloomDofPreview;
+        public bool WantsMotionBlur => CanPost && MotionBlurOn;
         public bool WantsDepth => _dofStrength > 0f;
 
         private bool _liveDof, _depthForced, _origDepth;
@@ -99,7 +100,7 @@ namespace QuestShade
             int eyeH = XRSettings.enabled && XRSettings.eyeTextureHeight > 0 ? XRSettings.eyeTextureHeight : (_cam != null ? _cam.pixelHeight : 1080);
             float blur = Mathf.Min(_dofMaxBlur, 14f) * eyeH / 1080f;
             _mat.SetVector(ID.Live, new Vector4(Level(_bloomIntensity) * 0.85f * _calInt, 0, blur, _dofBokeh));
-            float flare = 0f; // headset lens flare off (stacked ghost reflections on the bloom); photos/video keep theirs
+            float flare = 0f;
             _mat.SetVector(ID.LiveFlare, new Vector4(flare * 0.45f * _calInt, Mathf.Clamp(p.Float("LensFlare", "Spacing", 0.35f), 0.1f, 0.8f),
                 Mathf.Clamp(p.Float("LensFlare", "Halo", 0.4f), 0.05f, 0.7f) * 0.6f, 0f));
             float thr = Mathf.Max(Mathf.Clamp(p.Float("Bloom", "Threshold", 0.85f), 0f, 4f), _calThr);
@@ -113,13 +114,20 @@ namespace QuestShade
         private static readonly int SourceTexId = Shader.PropertyToID("_SourceTex");
         private Material _matGrade;
 
-        private RenderTexture _mbPrev;
+        private RenderTexture _mbPrev, _mbPrevRec;
         private void ResetMotionBlur()
         {
             if (_mbPrev == null) return;
             if (_post != null) _post.SetTexture(ID.PrevTex, null);
             UnityEngine.Object.Destroy(_mbPrev);
             _mbPrev = null;
+        }
+
+        public void ResetRecordingBlur()
+        {
+            if (_mbPrevRec == null) return;
+            UnityEngine.Object.Destroy(_mbPrevRec);
+            _mbPrevRec = null;
         }
 
         public bool GradeAgain(RenderTexture src, RenderTexture dst)
@@ -140,7 +148,7 @@ namespace QuestShade
             catch (Exception e) { Mod.Log.Warning("Second grade pass failed: " + e.Message); return false; }
         }
 
-        public void ProcessHQ(RenderTexture raw, RenderTexture dst, bool extras = true, bool light = false)
+        public void ProcessHQ(RenderTexture raw, RenderTexture dst, bool extras = true, bool light = false, bool record = false)
         {
             if (raw == null || dst == null || _post == null) return;
             int w = raw.width, h = raw.height;
@@ -207,22 +215,24 @@ namespace QuestShade
                 if (MotionBlurOn)
                 {
                     float blurW = Mathf.Clamp01(_cfg.MotionBlurStrength) * 0.85f;
-                    if (_mbPrev == null || _mbPrev.width != dst.width || _mbPrev.height != dst.height)
+                    RenderTexture hist = record ? _mbPrevRec : _mbPrev;
+                    if (hist == null || hist.width != dst.width || hist.height != dst.height)
                     {
-                        if (_mbPrev != null) { UnityEngine.Object.Destroy(_mbPrev); _mbPrev = null; }
-                        _mbPrev = new RenderTexture(dst.width, dst.height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear) { name = "QuestShade_MotionBlur", hideFlags = HideFlags.HideAndDontSave };
-                        _mbPrev.Create();
-                        Graphics.Blit(dst, _mbPrev);
+                        if (hist != null) { UnityEngine.Object.Destroy(hist); hist = null; }
+                        hist = new RenderTexture(dst.width, dst.height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear) { name = "QuestShade_MotionBlur", hideFlags = HideFlags.HideAndDontSave };
+                        hist.Create();
+                        Graphics.Blit(dst, hist);
                     }
                     else
                     {
                         mbTmp = RenderTexture.GetTemporary(dst.width, dst.height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
-                        _post.SetTexture(ID.PrevTex, _mbPrev);
+                        _post.SetTexture(ID.PrevTex, hist);
                         _post.SetFloat(ID.MotionBlur, blurW);
                         Graphics.Blit(dst, mbTmp, _post, 8);
                         Graphics.Blit(mbTmp, dst);
-                        Graphics.Blit(dst, _mbPrev);
+                        Graphics.Blit(dst, hist);
                     }
+                    if (record) _mbPrevRec = hist; else _mbPrev = hist;
                 }
             }
             catch (Exception e) { Mod.Log.Error("Bloom/DOF pass failed: " + e.Message); Graphics.Blit(raw, dst); }
@@ -287,7 +297,7 @@ namespace QuestShade
                 }
                 Array.Sort(lum);
                 float mean = (float)(sum / n), p90 = lum[(int)(n * 0.9f)], p95 = lum[(int)(n * 0.95f)];
-                if (mean < 0.02f && p90 < 0.05f) return;
+                if (mean < 0.02f && p90 < 0.05f) { _calDone = true; return; }
                 float bright = Mathf.InverseLerp(0.3f, 0.7f, mean);
                 _calThr = Mathf.Clamp(Mathf.Lerp(p90 * 0.85f, p95 * 0.97f, bright), 0f, Mathf.Lerp(0.85f, 0.95f, bright));
                 _calInt = Mathf.Clamp(0.3f / Mathf.Max(mean, 0.01f), 0.55f, 1f);

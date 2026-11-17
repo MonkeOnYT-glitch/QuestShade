@@ -381,6 +381,20 @@ namespace QuestShade
                 if (d > OthersReach * OthersReach) continue;
                 _near.Add((t, d));
             }
+            foreach (var rb in UnityEngine.Object.FindObjectsOfType<Rigidbody>())
+            {
+                if (rb == null || rb.isKinematic) continue;
+                var go = rb.gameObject;
+                if (!go.activeInHierarchy || go.name.StartsWith("QuestShade", StringComparison.Ordinal)) continue;
+                var t = go.transform;
+                if (t.IsChildOf(rig) || _roots.Contains(t)) continue;
+                bool dup = false;
+                foreach (var n in _near) if (t.IsChildOf(n.t) || n.t.IsChildOf(t)) { dup = true; break; }
+                if (dup) continue;
+                float d = (t.position - at).sqrMagnitude;
+                if (d > OthersReach * OthersReach) continue;
+                _near.Add((t, d));
+            }
             _near.Sort((x, y) => x.d.CompareTo(y.d));
             if (_near.Count > MaxOthers) _near.RemoveRange(MaxOthers, _near.Count - MaxOthers);
             int key = 17;
@@ -483,7 +497,7 @@ namespace QuestShade
                     {
                         if (_hits[i].distance < best) { best = _hits[i].distance; hit = _hits[i]; }
                     }
-                    else if (Mathf.Abs(_hits[i].normal.y) < 0.5f && Vector3.Dot(d, _hits[i].normal) < -0.1f && _hits[i].distance <= 12f)
+                    else if (Mathf.Abs(_hits[i].normal.y) < 0.5f && Vector3.Dot(d, _hits[i].normal) < -0.35f && _hits[i].distance <= 12f)
                     {
                         if (_hits[i].distance < bestWall) { bestWall = _hits[i].distance; wallHit = _hits[i]; }
                     }
@@ -604,7 +618,7 @@ namespace QuestShade
                 {
                     if (!hitAny || _hits[i].distance < hit.distance) { hit = _hits[i]; hitAny = true; }
                 }
-                else if (Mathf.Abs(_hits[i].normal.y) < 0.5f && Vector3.Dot(d, _hits[i].normal) < -0.1f && _hits[i].distance <= 12f)
+                else if (Mathf.Abs(_hits[i].normal.y) < 0.5f && Vector3.Dot(d, _hits[i].normal) < -0.35f && _hits[i].distance <= 12f)
                 {
                     if (!wallAny || _hits[i].distance < wallHit.distance) { wallHit = _hits[i]; wallAny = true; }
                 }
@@ -620,7 +634,7 @@ namespace QuestShade
                     {
                         if (!hitAny || _hits[i].distance < hit.distance) { hit = _hits[i]; hitAny = true; }
                     }
-                    else if (!hadWall && Mathf.Abs(_hits[i].normal.y) < 0.5f && Vector3.Dot(d, _hits[i].normal) < -0.1f && _hits[i].distance <= 12f)
+                    else if (!hadWall && Mathf.Abs(_hits[i].normal.y) < 0.5f && Vector3.Dot(d, _hits[i].normal) < -0.35f && _hits[i].distance <= 12f)
                     {
                         if (!wallAny || _hits[i].distance < wallHit.distance) { wallHit = _hits[i]; wallAny = true; }
                     }
@@ -656,7 +670,7 @@ namespace QuestShade
 
             Vector3 n = _plane ? _planeN : _wallN;
             float dn = Vector3.Dot(d, n);
-            float dark = Mathf.Clamp01(cfg.ShadowDarkness) * _k * _fade * Mathf.Clamp01((-dn - 0.1f) / 0.2f);
+            float dark = Mathf.Clamp01(cfg.ShadowDarkness) * _k * _fade * Mathf.Clamp01((-dn - 0.35f) / 0.2f);
             if (dark < 0.01f) { Show(false); return; }
 
             S("place");
@@ -718,11 +732,11 @@ namespace QuestShade
             bool lensOn = _lensLayer >= 0;
             SetList(_skins, _plane);
             SetList(_skinsWall, _wall);
-            SetList(_skinsLens, lensOn);
+            SetList(_skinsLens, lensOn && _plane);
             SetList(_skinsWallLens, lensOn && _wall);
             SetList(_parts, _plane && _partsOn);
             SetList(_partsWall, _wall && _partsOn);
-            SetList(_partsLens, lensOn);
+            SetList(_partsLens, lensOn && _plane);
             SetList(_partsWallLens, lensOn && _wall);
             if (_sheetWallLens != null && _sheetWallLens.activeSelf != (lensOn && _wall)) _sheetWallLens.SetActive(lensOn && _wall);
             if (!_logged)

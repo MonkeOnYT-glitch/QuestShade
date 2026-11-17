@@ -309,8 +309,6 @@ namespace QuestShade
                         float a = _micRing[_micR], b = _micRing[(_micR + 1) % _micRing.Length];
                         float x = a + (b - a) * (float)_micFrac;
                         float hp = 0.988f * (_hpY + x - _hpX); _hpX = x; _hpY = hp;
-                        // voiceover: auto-gain the mic up to a close-talk level (fast attack, slow release)
-                        // de-muffle: presence boost (add back the highs above ~2.5 kHz)
                         _lp += 0.28f * (hp - _lp);
                         hp += 0.9f * (hp - _lp);
                         float ax = Math.Abs(hp);
