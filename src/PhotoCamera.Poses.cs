@@ -13,6 +13,7 @@ namespace QuestShade
     {
 
         private float _handBack;
+        private bool _handNear;
         private bool _vertical, _photoVertical;
         private Vector4 _portraitSet = new Vector4(-1f, 0f, 0f, 0f);
         private static readonly int PortraitId = Shader.PropertyToID("_QS_Portrait");
@@ -39,6 +40,7 @@ namespace QuestShade
                 }
             }
             float back = limit == float.MaxValue ? 0f : Mathf.Clamp(want - Mathf.Max(minDist, limit), 0f, want - minDist);
+            _handNear = limit != float.MaxValue && limit < want + 0.05f;
             _handBack = back > _handBack ? back : Mathf.MoveTowards(_handBack, back, dt * 0.4f);
             return Mathf.Max(minDist, want - _handBack);
         }
@@ -178,7 +180,8 @@ namespace QuestShade
             }
             float fov = Mode == CamMode.PoliceCam ? Mathf.Max(cfg.ChestFov, 115f) : BodyMode ? cfg.ChestFov : cfg.Fov;
             if (fov != _appliedFov) { _appliedFov = fov; _cam.fieldOfView = fov; }
-            float near = 0.005f;
+            float near = BodyMode ? 0.05f : 0.015f;
+            if (_handNear && BodyMode) near = 0.01f;
             if (near != _appliedNear) { _appliedNear = near; _cam.nearClipPlane = near; }
 
             bool stereo = ShaderPack.HeadsetActive;

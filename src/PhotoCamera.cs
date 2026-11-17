@@ -27,7 +27,7 @@ namespace QuestShade
         public Camera LensCamera => _cam;
         public Effects Fx;
         private RenderTexture _rawPhotoRT, _rawRecRT, _rawPreviewRT;
-        private bool _photoHQ, _recHQ, _recExtras, _recSS, _previewHQ, _previewRendered, _recExtrasOn;
+        private bool _photoHQ, _recHQ, _recExtras, _recSS, _previewHQ, _previewRendered;
 
         private void LeavePreviewHQ()
         {
@@ -695,10 +695,7 @@ namespace QuestShade
             {
                 if (_recRendered)
                 {
-                    bool extrasNow = _recExtras && Perf.RecordingExtras;
-                    if (_recHQ && _recExtras && !extrasNow && _recExtrasOn) Mod.Log.Warning("Recording: extras switched off mid-take (Perf level " + Perf.Level + ")");
-                    _recExtrasOn = extrasNow;
-                    if (_recHQ) Fx.ProcessHQ(_rawRecRT, _recRT, extrasNow, record: true);
+                    if (_recHQ) Fx.ProcessHQ(_rawRecRT, _recRT, _recExtras && Perf.RecordingExtras);
                     else if (_recSS) Graphics.Blit(_rawRecRT, _recRT);
                     var frame = _recRT;
                     if (cfg.MatchPreview && Fx != null)
@@ -721,7 +718,7 @@ namespace QuestShade
 
             if (_previewOn != cfg.PreviewEnabled) { _previewOn = cfg.PreviewEnabled; _screenMat.mainTexture = _previewOn ? _previewRT : Texture2D.blackTexture; }
 
-            bool pHQ = Fx != null && (Fx.WantsPreviewHQ || Fx.WantsMotionBlur) && cfg.PreviewEnabled && !Hidden && Perf.PreviewExtras;
+            bool pHQ = Fx != null && Fx.WantsPreviewHQ && cfg.PreviewEnabled && !Hidden && Perf.PreviewExtras;
             if (pHQ != _previewHQ)
             {
                 _previewHQ = pHQ;

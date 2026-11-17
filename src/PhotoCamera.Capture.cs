@@ -29,12 +29,10 @@ namespace QuestShade
                 return false;
             }
             LeavePreviewHQ();
-            if (Fx != null) Fx.ResetRecordingBlur();
             float ss = cfg.RecordSupersample;
             int rw = Mathf.RoundToInt(w * ss), rh = Mathf.RoundToInt(h * ss);
             _recExtras = Fx != null && Fx.WantsHQ;
-            _recExtrasOn = _recExtras;
-            _recHQ = Fx != null && Fx.CanPost && (_recExtras || Fx.WantsMotionBlur || ss > 1.01f);
+            _recHQ = Fx != null && Fx.CanPost && (_recExtras || ss > 1.01f);
             _recSS = !_recHQ && ss > 1.01f;
             if (_recHQ || _recSS)
             {
@@ -45,7 +43,7 @@ namespace QuestShade
                 _cam.targetTexture = _rawRecRT;
             }
             else _cam.targetTexture = _recRT;
-            Mod.Log.Msg($"Recording: rendering {(_recHQ || _recSS ? $"{rw}x{rh}" : $"{w}x{h}")} -> {w}x{h}{(_recExtras ? ", bloom / depth of field on" : "")}{((Fx != null && Fx.WantsMotionBlur) ? ", motion blur on" : "")}");
+            Mod.Log.Msg($"Recording: rendering {(_recHQ || _recSS ? $"{rw}x{rh}" : $"{w}x{h}")} -> {w}x{h}{(_recExtras ? ", bloom / depth of field on" : "")}");
             VideoRecorder.Diag($"render {(_recHQ || _recSS ? $"{rw}x{rh}" : $"{w}x{h}")} -> {w}x{h}, effects chain {_recHQ}, extras {_recExtras}");
             _camData.renderShadows = Application.platform == RuntimePlatform.Android ? false : cfg.PhotoShadows;
             if (cfg.PreviewEnabled) _screenMat.mainTexture = _recRT;
@@ -70,7 +68,6 @@ namespace QuestShade
             _recSS = _recExtras = false;
             Free(ref _rawRecRT);
             Free(ref _gradeRT);
-            if (Fx != null) Fx.ResetRecordingBlur();
             return file;
         }
 
@@ -79,7 +76,7 @@ namespace QuestShade
             if (!Open || PhotoBusy || _cam == null || PhotoSaver.Busy || Recording) return false;
             if (!_photoRT.IsCreated()) _photoRT.Create();
             LeavePreviewHQ();
-            _photoHQ = Fx != null && (Fx.WantsHQ || Fx.WantsMotionBlur);
+            _photoHQ = Fx != null && Fx.WantsHQ;
             if (_photoHQ)
             {
                 _rawPhotoRT ??= MakeRaw(_photoRT.width, _photoRT.height, "QuestShade_PhotoRaw");
