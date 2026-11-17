@@ -169,13 +169,18 @@ namespace QuestShade
 
         private static byte[] TurnLeft(byte[] src, int w, int h)
         {
-            var a = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(src);
             var dst = new byte[src.Length];
-            var b = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(dst);
             for (int y = 0; y < h; y++)
             {
-                int row = y * w, nx = h - 1 - y;
-                for (int x = 0; x < w; x++) b[x * h + nx] = a[row + x];
+                for (int x = 0; x < w; x++)
+                {
+                    int s = (y * w + x) * 4;
+                    int d = (x * h + (h - 1 - y)) * 4;
+                    dst[d] = src[s];
+                    dst[d + 1] = src[s + 1];
+                    dst[d + 2] = src[s + 2];
+                    dst[d + 3] = src[s + 3];
+                }
             }
             return dst;
         }
