@@ -186,7 +186,7 @@ namespace QuestShade
                 n = AndroidJNI.CallIntMethod(obj, _arReadMid, args);
                 if (n > 0)
                 {
-                    short[] got = AndroidJNIHelper.ConvertFromJNIArray<short>(jarr);
+                    short[] got = AndroidJNIHelper.ConvertFromJNIArray<short[]>(jarr);
                     if (got != null) Array.Copy(got, 0, _arBuf, 0, Math.Min(n, got.Length));
                 }
             }
