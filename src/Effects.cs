@@ -69,8 +69,7 @@ namespace QuestShade
         public bool CanPost => Active && _post != null && _cfg != null;
         public bool PhotoHQ;
         private Config _cfg;
-        private bool MotionBlurOn => _cfg != null && _cfg.MotionBlur && _cfg.MotionBlurStrength > 0.01f;
-        private bool HQReady => Active && _post != null && _cfg != null && (_bloomIntensity > 0f || _dofStrength > 0f || LensFx || MotionBlurOn);
+        private bool HQReady => Active && _post != null && _cfg != null && (_bloomIntensity > 0f || _dofStrength > 0f || LensFx);
         public bool WantsHQ => HQReady && _cfg.BloomDofCapture;
         public bool WantsPreviewHQ => HQReady && _cfg.BloomDofPreview;
         public bool WantsDepth => _dofStrength > 0f;
@@ -113,15 +112,6 @@ namespace QuestShade
         private static readonly int SourceTexId = Shader.PropertyToID("_SourceTex");
         private Material _matGrade;
 
-        private RenderTexture _mbPrev;
-        private void ResetMotionBlur()
-        {
-            if (_mbPrev == null) return;
-            if (_post != null) _post.SetTexture(ID.PrevTex, null);
-            UnityEngine.Object.Destroy(_mbPrev);
-            _mbPrev = null;
-        }
-
         public bool GradeAgain(RenderTexture src, RenderTexture dst)
         {
             if (!Active || _matMono == null || src == null || dst == null) return false;
@@ -144,7 +134,7 @@ namespace QuestShade
         {
             if (raw == null || dst == null || _post == null) return;
             int w = raw.width, h = raw.height;
-            RenderTexture src = raw, dof = null, dof2 = null, flare = null, flare2 = null, god = null, mbTmp = null;
+            RenderTexture src = raw, dof = null, dof2 = null, flare = null, flare2 = null, god = null;
             int levels = 0;
             try
             {
@@ -204,26 +194,6 @@ namespace QuestShade
                     _post.SetVector(ID.Bloom, new Vector4(bloomV.x * 1.8f / Mathf.Max(1f, norm), bloomV.y, bloomV.z, bloomV.w));
                 }
                 Graphics.Blit(src, dst, _post, 4);
-                if (MotionBlurOn)
-                {
-                    float blurW = Mathf.Clamp01(_cfg.MotionBlurStrength) * 0.85f;
-                    if (_mbPrev == null || _mbPrev.width != dst.width || _mbPrev.height != dst.height)
-                    {
-                        if (_mbPrev != null) { UnityEngine.Object.Destroy(_mbPrev); _mbPrev = null; }
-                        _mbPrev = new RenderTexture(dst.width, dst.height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear) { name = "QuestShade_MotionBlur", hideFlags = HideFlags.HideAndDontSave };
-                        _mbPrev.Create();
-                        Graphics.Blit(dst, _mbPrev);
-                    }
-                    else
-                    {
-                        mbTmp = RenderTexture.GetTemporary(dst.width, dst.height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
-                        _post.SetTexture(ID.PrevTex, _mbPrev);
-                        _post.SetFloat(ID.MotionBlur, blurW);
-                        Graphics.Blit(dst, mbTmp, _post, 8);
-                        Graphics.Blit(mbTmp, dst);
-                        Graphics.Blit(dst, _mbPrev);
-                    }
-                }
             }
             catch (Exception e) { Mod.Log.Error("Bloom/DOF pass failed: " + e.Message); Graphics.Blit(raw, dst); }
             finally
@@ -232,7 +202,6 @@ namespace QuestShade
                 if (dof2 != null) RenderTexture.ReleaseTemporary(dof2);
                 if (flare != null) RenderTexture.ReleaseTemporary(flare);
                 if (flare2 != null) RenderTexture.ReleaseTemporary(flare2);
-                if (mbTmp != null) RenderTexture.ReleaseTemporary(mbTmp);
                 if (god != null) RenderTexture.ReleaseTemporary(god);
                 for (int i = 0; i < _down.Length; i++)
                 {
@@ -367,8 +336,8 @@ namespace QuestShade
             foreach (var id in ID.Stack) _post.SetVector(id, _mat.GetVector(id));
             _hurtApplied = -1f; _fisheyeApplied = -1f;
             if (_lut != null) _post.SetTexture(ID.Lut, _lut);
-            if (_bloomIntensity > 0f || _dofStrength > 0f || LensFx || MotionBlurOn)
-                Mod.Log.Msg($"Photo/video extras: bloom {_bloomIntensity:0.##}, depth of field {_dofStrength:0.##} (focus {(focus > 0 ? focus.ToString("0.0") + " m" : "auto")}), lens flare {_flareVec.x:0.##}, lens dirt {_dirtAmt:0.##}, motion blur {(MotionBlurOn ? _cfg.MotionBlurStrength.ToString("0.##") : "off")}");
+            if (_bloomIntensity > 0f || _dofStrength > 0f || LensFx)
+                Mod.Log.Msg($"Photo/video extras: bloom {_bloomIntensity:0.##}, depth of field {_dofStrength:0.##} (focus {(focus > 0 ? focus.ToString("0.0") + " m" : "auto")}), lens flare {_flareVec.x:0.##}, lens dirt {_dirtAmt:0.##}");
         }
         public void EnsureCamera(Config cfg)
         {
@@ -702,7 +671,6 @@ BokehIntensity = 0.3
         private void Rebuild(Config cfg)
         {
             if (!EnsureShader()) { _hasAnything = false; return; }
-            ResetMotionBlur();
             var p = cfg.Preset;
             int n = 0;
             var m = _mat;
@@ -774,7 +742,7 @@ BokehIntensity = 0.3
             if (cfg.BloomDofAll && p.Str("Import", "Answer", "") != "compress") p = p.WithFallback(DefaultExtras, "Bloom", "DepthOfField");
             try { RebuildHQ(p); } catch (Exception e) { _bloomIntensity = _dofStrength = 0f; Mod.Log.Warning("Bloom/DOF setup failed: " + e.Message); }
             try { SetLive(cfg, p); } catch (Exception e) { _liveDof = false; Mod.Log.Warning("Headset bloom/DOF setup failed: " + e.Message); }
-            _hasHQ = _bloomIntensity > 0f || _dofStrength > 0f || LensFx || MotionBlurOn;
+            _hasHQ = _bloomIntensity > 0f || _dofStrength > 0f || LensFx;
             if (_hasHQ) n++;
             _hasAnything = n > 0;
             Mod.Log.Msg($"Preset '{cfg.PresetName}' applied ({n} effect{(n == 1 ? "" : "s")})");
@@ -802,7 +770,6 @@ BokehIntensity = 0.3
                 Dof = Shader.PropertyToID("_QS_Dof"), DofAF = Shader.PropertyToID("_QS_DofAF"), DofPx = Shader.PropertyToID("_QS_DofPx"),
                 Bloom = Shader.PropertyToID("_QS_Bloom"), BloomTint = Shader.PropertyToID("_QS_BloomTint"),
                 BloomTex = Shader.PropertyToID("_QS_BloomTex"), BloomLow = Shader.PropertyToID("_QS_BloomLow"),
-                PrevTex = Shader.PropertyToID("_QS_PrevTex"), MotionBlur = Shader.PropertyToID("_QS_MotionBlur"),
                 Flare = Shader.PropertyToID("_QS_Flare"), FlareTex = Shader.PropertyToID("_QS_FlareTex"),
                 God = Shader.PropertyToID("_QS_God"), GodTex = Shader.PropertyToID("_QS_GodTex"), Sun = Shader.PropertyToID("_QS_Sun"),
                 SunL = Shader.PropertyToID("_QS_SunL"), SunR = Shader.PropertyToID("_QS_SunR"),
