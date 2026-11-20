@@ -40,6 +40,10 @@ namespace QuestShade
         private string _micDev;
         private int _micRate, _micLastPos, _micLen;
         private bool _micOwned;
+        private AndroidJavaObject _arRecord;
+        private IntPtr _arReadMid;
+        private short[] _arBuf;
+        private bool _micNative;
         private float[] _micRing; private int _micW, _micR, _micCount;
         private double _micFrac;
         private int _micCh = 1;
@@ -136,6 +140,68 @@ namespace QuestShade
             Interlocked.Add(ref _gameFrames, frames);
         }
 
+        private bool StartAudioRecord()
+        {
+            if (Application.platform != RuntimePlatform.Android) return false;
+            try
+            {
+                var arClass = new AndroidJavaClass("android.media.AudioRecord");
+                int minBuf = arClass.CallStatic<int>("getMinBufferSize", 48000, 16, 2);
+                if (minBuf <= 0) return false;
+                int bufBytes = Math.Max(minBuf, 8192) * 2;
+                var rec = new AndroidJavaObject("android.media.AudioRecord", 1, 48000, 16, 2, bufBytes);
+                if (rec == null) return false;
+                if (rec.Call<int>("getState") != 1) { try { rec.Call("release"); } catch { } return false; }
+                rec.Call("startRecording");
+                if (rec.Call<int>("getRecordingState") != 3) { try { rec.Call("stop"); rec.Call("release"); } catch { } return false; }
+                IntPtr cls = rec.GetRawClass();
+                _arReadMid = AndroidJNI.GetMethodID(cls, "read", "([SII)I");
+                AndroidJNI.DeleteLocalRef(cls);
+                if (_arReadMid == IntPtr.Zero) { try { rec.Call("stop"); rec.Call("release"); } catch { } return false; }
+                _arRecord = rec;
+                _arBuf = new short[4096];
+                _micRate = 48000;
+                _micCh = 1;
+                _micLen = 48000;
+                _micRing = new float[_micRate * 2]; _micW = _micR = _micCount = 0; _micFrac = 0;
+                VideoRecorder.Diag("audio: mic via AudioRecord (48 kHz, raw MIC)");
+                return true;
+            }
+            catch (Exception e) { Mod.Log.Warning("Recording: AudioRecord mic failed: " + e.Message); return false; }
+        }
+
+        private void PumpNativeMic()
+        {
+            if (_arRecord == null || _arBuf == null || _arReadMid == IntPtr.Zero) return;
+            int n = 0;
+            IntPtr jarr = IntPtr.Zero;
+            try
+            {
+                IntPtr obj = _arRecord.GetRawObject();
+                jarr = AndroidJNI.NewShortArray(_arBuf.Length);
+                var args = new Il2CppStructArray<jvalue>(3);
+                args[0] = new jvalue { l = jarr };
+                args[1] = new jvalue { i = 0 };
+                args[2] = new jvalue { i = _arBuf.Length };
+                n = AndroidJNI.CallIntMethod(obj, _arReadMid, args);
+                if (n > 0)
+                {
+                    short[] got = AndroidJNIHelper.ConvertFromJNIArray<short[]>(jarr);
+                    if (got != null) Array.Copy(got, 0, _arBuf, 0, Math.Min(n, got.Length));
+                }
+            }
+            catch { LetGoOfMic("AudioRecord read failed"); return; }
+            finally { if (jarr != IntPtr.Zero) AndroidJNI.DeleteLocalRef(jarr); }
+            if (n < 0) { LetGoOfMic("AudioRecord error " + n); return; }
+            if (n <= 0) return;
+            for (int k = 0; k < n; k++)
+            {
+                if (_micCount == _micRing.Length) { _micR = (_micR + 1) % _micRing.Length; _micCount--; }
+                _micRing[_micW] = _arBuf[k] / 32768f; _micW = (_micW + 1) % _micRing.Length; _micCount++;
+            }
+            if (!_micTraced) { _micTraced = true; VideoRecorder.Diag("audio: mic ok"); }
+        }
+
         private bool StartMic()
         {
             try
@@ -148,6 +214,13 @@ namespace QuestShade
                     Mod.Log.Msg("Recording: no microphone permission yet (asked Android)");
                     return false;
                 }
+                if (StartAudioRecord())
+                {
+                    _micNative = true;
+                    Mod.Log.Msg("Recording: mic via direct AudioRecord (48 kHz)");
+                    return true;
+                }
+                _micNative = false;
                 var devs = Microphone.devices;
                 if (devs == null || devs.Length == 0) { AskMicPermission(); Mod.Log.Msg("Recording: no microphone (asked Android for mic permission)"); return false; }
                 _micDev = null;
@@ -243,6 +316,7 @@ namespace QuestShade
         private void PumpMic()
         {
             if (!MicOn) return;
+            if (_micNative) { PumpNativeMic(); return; }
             if (!MicStillOurs()) { LetGoOfMic("another mod took the mic"); return; }
             int pos = Microphone.GetPosition(_micDev);
             if (pos < 0 || pos >= _micLen) return;
@@ -309,8 +383,6 @@ namespace QuestShade
                         float a = _micRing[_micR], b = _micRing[(_micR + 1) % _micRing.Length];
                         float x = a + (b - a) * (float)_micFrac;
                         float hp = 0.988f * (_hpY + x - _hpX); _hpX = x; _hpY = hp;
-                        // voiceover: auto-gain the mic up to a close-talk level (fast attack, slow release)
-                        // de-muffle: presence boost (add back the highs above ~2.5 kHz)
                         _lp += 0.28f * (hp - _lp);
                         hp += 0.9f * (hp - _lp);
                         float ax = Math.Abs(hp);
@@ -348,6 +420,8 @@ namespace QuestShade
             QSAudioTap.Sink = null;
             _tap = null;
             try { if (_micOwned) Microphone.End(_micDev); } catch { }
+            try { if (_arRecord != null) { _arRecord.Call("stop"); _arRecord.Call("release"); _arRecord.Dispose(); } } catch { }
+            _arRecord = null; _arReadMid = IntPtr.Zero; _micNative = false;
             _micOwned = false;
             _keptClip = null;
             _micClip = null;
