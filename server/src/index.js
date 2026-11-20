@@ -1,4 +1,4 @@
-import { discordTick } from "./discord.js";
+import { discordTick, interaction } from "./discord.js";
 
 const ALLOWED = {
   Color: ["Enabled", "Exposure", "Contrast", "Saturation", "HueShift", "ColorFilter"],
@@ -40,10 +40,11 @@ export default {
     ctx.waitUntil(hideSlop(env).catch(e => console.log("slop cleanup failed", e)));
   },
 
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const parts = url.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
     try {
+      if (req.method === "POST" && parts[0] === "discord" && parts[1] === "interactions") return await interaction(req, env, ctx);
       if (parts.length === 0) return json({ ok: true, service: "QuestShade presets" });
       if (parts[0] !== "api" || parts[1] !== "presets") return err(404, "Not found");
       const id = parts[2], action = parts[3];

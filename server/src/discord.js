@@ -21,6 +21,7 @@ export async function discordTick(env) {
   try { await liftOldTimeouts(env); } catch (e) { console.log("lift timeouts: " + e); }
   try { await testPings(env); } catch (e) { console.log("test pings: " + e); }
   try { await announcePings(env); } catch (e) { console.log("announcement pings: " + e); }
+  try { await tickets(env); } catch (e) { console.log("tickets: " + e); }
   try { await roadmap(env); } catch (e) { console.log("roadmap: " + e); }
   try { await collectSuggestions(env); } catch (e) { console.log("suggestions: " + e); }
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS answered (thread TEXT PRIMARY KEY, at INTEGER)").run();
@@ -306,4 +307,81 @@ async function reactRole(env, o) {
     if (wants && !has) { await call(env, "PUT", `/guilds/${GUILD}/members/${m.user.id}/roles/${role}`); changes++; }
     else if (!wants && has) { await call(env, "DELETE", `/guilds/${GUILD}/members/${m.user.id}/roles/${role}`); changes++; }
   }
+}
+
+// ---- Tickets: an "Open ticket" button in #tickets makes a private channel with staff; "Close ticket" deletes it ----
+const TICKETS_CH = "1572591591556649111", SUPPORT_CAT = "1569084690034589766";
+const STAFF_ROLES = ["1569084468004790396", "1569084469430984724"]; // Moderator, Developer
+const PUBLIC_KEY = "b11a521d26ed2d9f4f8b3d2ed36298e869059355da1404dea63ccbbe7e578c46";
+const VIEW = 1024n, SEND = 2048n, HISTORY = 65536n, ATTACH = 32768n, EMBED = 16384n, REACT = 64n;
+const TALK = String(VIEW | SEND | HISTORY | ATTACH | EMBED | REACT);
+
+const state = env => ({
+  get: async k => { await env.DB.prepare("CREATE TABLE IF NOT EXISTS bot_state (k TEXT PRIMARY KEY, v TEXT)").run(); return (await env.DB.prepare("SELECT v FROM bot_state WHERE k = ?1").bind(k).first())?.v; },
+  set: (k, v) => env.DB.prepare("INSERT OR REPLACE INTO bot_state (k, v) VALUES (?1, ?2)").bind(k, v).run(),
+});
+
+// cron: make sure the panel with the button is posted once
+async function tickets(env) {
+  const s = state(env);
+  if (await s.get("ticket_panel_btn")) return;
+  const sent = await call(env, "POST", `/channels/${TICKETS_CH}/messages`, {
+    content: `🎫 **Need help from the QuestShade team?**\nPress the button to open a private ticket channel that only you and staff can see.\nUse it for anything you'd rather not post publicly. For normal bugs and questions, <#${HELP_CH}> is faster.`,
+    allowed_mentions: { parse: [] },
+    components: [{ type: 1, components: [{ type: 2, style: 1, label: "Open ticket", emoji: { name: "🎫" }, custom_id: "ticket_open" }] }] });
+  if (sent?.id) await s.set("ticket_panel_btn", sent.id);
+}
+
+const hex = h => new Uint8Array(h.match(/../g).map(b => parseInt(b, 16)));
+const reply = (content, ephemeral = true) => new Response(JSON.stringify({ type: 4, data: { content, flags: ephemeral ? 64 : 0, allowed_mentions: { parse: [] } } }), { headers: { "Content-Type": "application/json" } });
+
+export async function interaction(req, env, ctx) {
+  const sig = req.headers.get("X-Signature-Ed25519"), ts = req.headers.get("X-Signature-Timestamp");
+  const body = await req.text();
+  if (!sig || !ts) return new Response("bad signature", { status: 401 });
+  const key = await crypto.subtle.importKey("raw", hex(PUBLIC_KEY), { name: "Ed25519" }, false, ["verify"]);
+  const ok = await crypto.subtle.verify("Ed25519", key, hex(sig), new TextEncoder().encode(ts + body));
+  if (!ok) return new Response("bad signature", { status: 401 });
+  const i = JSON.parse(body);
+  if (i.type === 1) return new Response(JSON.stringify({ type: 1 }), { headers: { "Content-Type": "application/json" } });
+  if (i.type !== 3) return reply("Not supported.");
+  const user = i.member?.user || i.user;
+  const s = state(env);
+  const open = JSON.parse((await s.get("tickets_open")) || "{}"); // userId -> channelId
+
+  if (i.data.custom_id === "ticket_open") {
+    if (open[user.id] && await call(env, "GET", `/channels/${open[user.id]}`)) return reply(`You already have a ticket open: <#${open[user.id]}>`);
+    const name = ("ticket-" + (user.username || user.id)).toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 90);
+    const ch = await call(env, "POST", `/guilds/${GUILD}/channels`, { name, type: 0, parent_id: SUPPORT_CAT, topic: `Private ticket for ${user.username}`,
+      permission_overwrites: [
+        { id: GUILD, type: 0, deny: String(VIEW), allow: "0" },
+        { id: user.id, type: 1, allow: TALK, deny: "0" },
+        { id: BOT_ID, type: 1, allow: String(VIEW | SEND | HISTORY | EMBED), deny: "0" },
+        ...STAFF_ROLES.map(r => ({ id: r, type: 0, allow: TALK, deny: "0" })),
+      ] });
+    if (!ch?.id) return reply("Couldn't open a ticket right now, try again in a minute.");
+    open[user.id] = ch.id;
+    await s.set("tickets_open", JSON.stringify(open));
+    ctx.waitUntil((async () => {
+      await call(env, "POST", `/channels/${ch.id}/messages`, {
+        content: `Hey <@${user.id}>, this is your private ticket. Only you and the QuestShade staff can see it.\nTell us what's up, and add screenshots or your MelonLoader log if it's a bug.`,
+        allowed_mentions: { users: [user.id] },
+        components: [{ type: 1, components: [{ type: 2, style: 4, label: "Close ticket", emoji: { name: "🔒" }, custom_id: "ticket_close" }] }] });
+      await call(env, "POST", `/channels/${MODLOG}/messages`, { allowed_mentions: { parse: [] }, content: `🎫 New ticket from <@${user.id}>: <#${ch.id}>` });
+    })());
+    return reply(`Your ticket is open: <#${ch.id}>`);
+  }
+
+  if (i.data.custom_id === "ticket_close") {
+    const owner = Object.keys(open).find(k => open[k] === i.channel_id);
+    if (owner) { delete open[owner]; await s.set("tickets_open", JSON.stringify(open)); }
+    ctx.waitUntil((async () => {
+      await new Promise(r => setTimeout(r, 3000));
+      await call(env, "DELETE", `/channels/${i.channel_id}`);
+      await call(env, "POST", `/channels/${MODLOG}/messages`, { allowed_mentions: { parse: [] },
+        content: `🎫 Ticket${owner ? ` of <@${owner}>` : ""} closed by <@${user.id}>` });
+    })());
+    return reply(`🔒 Closing this ticket...`, false);
+  }
+  return reply("Unknown button.");
 }
