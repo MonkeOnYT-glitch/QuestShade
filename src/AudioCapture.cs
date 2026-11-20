@@ -155,7 +155,7 @@ namespace QuestShade
                 rec.Call("startRecording");
                 if (rec.Call<int>("getRecordingState") != 3) { try { rec.Call("stop"); rec.Call("release"); } catch { } return false; }
                 IntPtr cls = rec.GetRawClass();
-                _arReadMid = AndroidJNI.GetMethodID(cls, "read", "([SII)I");
+                _arReadMid = AndroidJNI.GetMethodID(cls, "read", "([SIII)I"); // with READ_NON_BLOCKING: never stall the game thread waiting for mic data
                 AndroidJNI.DeleteLocalRef(cls);
                 if (_arReadMid == IntPtr.Zero) { try { rec.Call("stop"); rec.Call("release"); } catch { } return false; }
                 _arRecord = rec;
@@ -179,10 +179,11 @@ namespace QuestShade
             {
                 IntPtr obj = _arRecord.GetRawObject();
                 jarr = AndroidJNI.NewShortArray(_arBuf.Length);
-                var args = new Il2CppStructArray<jvalue>(3);
+                var args = new Il2CppStructArray<jvalue>(4);
                 args[0] = new jvalue { l = jarr };
                 args[1] = new jvalue { i = 0 };
                 args[2] = new jvalue { i = _arBuf.Length };
+                args[3] = new jvalue { i = 1 }; // AudioRecord.READ_NON_BLOCKING
                 n = AndroidJNI.CallIntMethod(obj, _arReadMid, args);
                 if (n > 0)
                 {

@@ -32,13 +32,13 @@ namespace QuestShade
         private static float _nextItems, _sunAt, _sunSeenAt, _fade, _k = 0.6f, _wait;
         private static Light _sun;
         private static Vector3 _dir = new Vector3(0.42f, -1f, 0.3f).normalized, _planeP, _planeN = Vector3.up, _wallP, _wallN = Vector3.up;
-        private static bool _plane, _wall, _failed, _logged, _checked, _sunSeen, _partsOn, _offLogged;
+        private static bool _plane, _wall, _failed, _logged, _checked, _sunSeen, _partsOn;
 
         private static string StepFile => System.IO.Path.Combine(Config.Root, "shadow5-step.txt");
 
         public static void OnLevel()
         {
-            _sun = null; _sunAt = Time.unscaledTime + 2f; _fade = 0f; _logged = false; _plane = false; _wall = false; _sunSeen = false; _offLogged = false;
+            _sun = null; _sunAt = Time.unscaledTime + 2f; _fade = 0f; _logged = false; _plane = false; _wall = false; _sunSeen = false;
             _wait = Time.unscaledTime + 4f;
         }
 
@@ -60,7 +60,6 @@ namespace QuestShade
                 if (last == "ok" || last.Length == 0) return false;
                 _failed = true;
                 Mod.Log.Warning($"Shadows: last time the game died at shadow step \"{last}\". Body shadow is OFF now so you can play. Please send this log. (Turn Body shadow off and on in Lighting > Body shadow to try again.)");
-                try { System.IO.File.Delete(StepFile); } catch { }
             }
             catch { }
             return _failed;
@@ -68,7 +67,7 @@ namespace QuestShade
 
         public static void Retry()
         {
-            _checked = true; _failed = false; _logged = false; _wait = 0f; _offLogged = false;
+            _checked = true; _failed = false; _logged = false; _wait = 0f;
             try { if (System.IO.File.Exists(StepFile)) System.IO.File.Delete(StepFile); } catch { }
             Mod.Log.Msg("Shadows: trying the body shadow again");
         }
@@ -77,21 +76,7 @@ namespace QuestShade
         {
             bool want = cfg.Shadows && cfg.Enabled && !_failed && ShaderPack.Shadow != null && head != null && Avatar != null;
             if (want && DiedLastTime()) want = false;
-            if (!want)
-            {
-                if (!_offLogged)
-                {
-                    _offLogged = true;
-                    if (!cfg.Shadows) Mod.Log.Msg("Shadows: off (Body shadow toggle is off)");
-                    else if (!cfg.Enabled) Mod.Log.Msg("Shadows: off (mod disabled)");
-                    else if (_failed) Mod.Log.Msg("Shadows: off (latched off after a previous crash, toggle Body shadow off/on to retry)");
-                    else if (ShaderPack.Shadow == null) Mod.Log.Msg("Shadows: off (shadow shader missing, shader pack not loaded)");
-                    else if (head == null) Mod.Log.Msg("Shadows: off (no head camera)");
-                    else if (Avatar == null) Mod.Log.Msg("Shadows: off (no avatar)");
-                }
-                Show(false); return;
-            }
-            _offLogged = false;
+            if (!want) { Show(false); return; }
             try { Run(cfg, head); }
             catch (Exception e)
             {
