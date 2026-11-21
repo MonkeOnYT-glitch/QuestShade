@@ -56,6 +56,7 @@ namespace QuestShade
         private bool _guardCleared;
 
         private static string GuardFile => Path.Combine(Config.Root, "audio_guard.txt");
+        private static string NoNativeFile => Path.Combine(Config.Root, "no_headset_mic.txt");
 
         public bool Start(Config cfg)
         {
@@ -70,7 +71,14 @@ namespace QuestShade
                     File.Delete(GuardFile);
                     string off = "";
                     if (game && g.Contains("game")) { game = false; cfg.RecordGameAudio = false; off = "Game audio"; }
-                    if (mic && g.Contains("mic")) { mic = false; cfg.RecordMic = false; off = off.Length > 0 ? "Game audio + mic" : "Microphone"; }
+                    if (mic && g.Contains("nativemic"))
+                    {
+                        // The direct headset mic took the game down: keep the mic on, but use the game's own mic from now on.
+                        try { File.WriteAllText(NoNativeFile, "headset mic crashed the game " + DateTime.Now.ToString("u")); } catch { }
+                        Notice = "The direct headset mic crashed the game last time, so recordings use the game's mic from now on.";
+                        VideoRecorder.Diag("audio guard: direct headset mic disabled after last crash, using Unity mic");
+                    }
+                    else if (mic && g.Contains("mic")) { mic = false; cfg.RecordMic = false; off = off.Length > 0 ? "Game audio + mic" : "Microphone"; }
                     if (off.Length > 0)
                     {
                         Notice = $"{off} crashed the game last time - turned off. Turn it back on in the menu to try again.";
@@ -88,6 +96,7 @@ namespace QuestShade
             WriteGuard((game ? "game " : "") + (mic ? "mic" : ""));
             if (game) GameOn = AttachTap();
             if (mic) MicOn = StartMic();
+            if (MicOn && _micNative) WriteGuard((GameOn ? "game " : "") + "mic nativemic");
             if (!GameOn && !MicOn) ClearGuard();
             Status = $"game audio {(GameOn ? "on" : "off")}, mic {(MicOn ? $"on ({_micDev ?? "default"}, {_micRate} Hz)" : "off")}";
             return GameOn || MicOn;
@@ -187,8 +196,10 @@ namespace QuestShade
                 n = AndroidJNI.CallIntMethod(obj, _arReadMid, args);
                 if (n > 0)
                 {
-                    short[] got = AndroidJNIHelper.ConvertFromJNIArray<short[]>(jarr);
-                    if (got != null) Array.Copy(got, 0, _arBuf, 0, Math.Min(n, got.Length));
+                    // Not AndroidJNIHelper.ConvertFromJNIArray<short[]>: that generic has no AOT code in BONELAB's
+                    // IL2CPP build, and calling it kills the whole game on the first frame of mic audio.
+                    var got = AndroidJNI.FromShortArray(jarr);
+                    if (got != null) { int m = Math.Min(n, got.Length); for (int k = 0; k < m; k++) _arBuf[k] = got[k]; }
                 }
             }
             catch { LetGoOfMic("AudioRecord read failed"); return; }
@@ -215,7 +226,7 @@ namespace QuestShade
                     Mod.Log.Msg("Recording: no microphone permission yet (asked Android)");
                     return false;
                 }
-                if (StartAudioRecord())
+                if (!File.Exists(NoNativeFile) && StartAudioRecord())
                 {
                     _micNative = true;
                     Mod.Log.Msg("Recording: mic via direct AudioRecord (48 kHz)");
