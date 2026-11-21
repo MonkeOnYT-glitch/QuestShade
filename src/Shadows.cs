@@ -14,6 +14,7 @@ namespace QuestShade
         public static bool CameraOpen;
         public static Camera Lens;
         private static bool _mapMode, _mapDecided, _mapLogged;
+        private static int _skinApplied = -1;
 
         private const int MaxParts = 12;
         private const float Reach = 40f, Lift = 0.012f;
@@ -258,6 +259,7 @@ namespace QuestShade
             foreach (var smr in av.GetComponentsInChildren<SkinnedMeshRenderer>(false))
             {
                 if (smr == null) continue;
+                if (NotLod0(smr.name)) continue; // hair/body LOD1..3 would stack extra shadows
                 S("copy body: read mesh");
                 var mesh = smr.sharedMesh;
                 if (mesh == null) continue;
@@ -366,6 +368,7 @@ namespace QuestShade
         private static readonly List<(Transform t, float d)> _near = new List<(Transform, float)>();
         private static readonly HashSet<int> _seenRoots = new HashSet<int>();
         private static int _othersKey, _placeNext;
+        private static float _othersRebuildAt;
         private static float _nextOthers;
         private static bool _othersOn;
         private static Vector3 _placedDir;
@@ -398,7 +401,7 @@ namespace QuestShade
         private static void Others(Transform av, Vector3 at)
         {
             _near.Clear(); _seenRoots.Clear(); _seenBodies.Clear();
-            Transform rig = av; for (int i = 0; i < 6 && rig.parent != null; i++) rig = rig.parent;
+            Transform rig = RigRoot(av);
             T("npcs: overlap");
             var _cols = Physics.OverlapSphere(at, OthersReach, _maskAll, QueryTriggerInteraction.Ignore); int n = _cols != null ? _cols.Length : 0;
             T("npcs: sort " + n);
@@ -422,6 +425,9 @@ namespace QuestShade
             int key = 17;
             foreach (var e in _near) key = key * 31 + e.t.GetInstanceID();
             if (key == _othersKey) { _othersTraced = true; return; }
+            // Rebuilding copies is the expensive part: at most once every 3 s, so walking past props doesn't cause a hitch every second.
+            if (_othersTraced && Time.unscaledTime < _othersRebuildAt) return;
+            _othersRebuildAt = Time.unscaledTime + 3f;
             T("npcs: clear");
             ClearOthers();
             _othersKey = key;
@@ -470,6 +476,19 @@ namespace QuestShade
             if (!_othersTraced) { _othersTraced = true; Mod.Log.Msg($"Shadows: {_groups.Count} nearby NPC/prop(s) cast shadows ({meshes} meshes)"); }
         }
 
+
+        // The player's rig root (the RigManager object). Climbing a fixed number of levels could overshoot into a parent
+        // shared by the whole level, which made every prop count as "part of the player" and get skipped.
+        private static Transform RigRoot(Transform av)
+        {
+            var t = av;
+            for (int i = 0; i < 10 && t != null; i++)
+            {
+                if (t.name.IndexOf("RigManager", StringComparison.OrdinalIgnoreCase) >= 0) return t;
+                t = t.parent;
+            }
+            return av.parent != null ? av.parent : av;
+        }
         // Lower-detail copies (LOD1, LOD2...) would stack extra shadows. Reading LODGroup data is fragile here, so go by name.
         private static bool NotLod0(string name)
         {
@@ -633,6 +652,16 @@ namespace QuestShade
             foreach (var g in list) if (g != null && g.layer != layer) g.layer = layer;
         }
 
+        private static void AlwaysSkin(List<GameObject> list)
+        {
+            foreach (var g in list)
+            {
+                if (g == null) continue;
+                var s = g.GetComponent<SkinnedMeshRenderer>();
+                if (s != null && !s.updateWhenOffscreen) s.updateWhenOffscreen = true;
+            }
+        }
+
         private static void RunMap(Config cfg, Camera head)
         {
             float now = Time.unscaledTime;
@@ -650,6 +679,10 @@ namespace QuestShade
             SetList(_partsLens, false); SetList(_partsWall, false); SetList(_partsWallLens, false);
             SetList(_othersLens, false);
             SetLayer(_skins, L); SetLayer(_parts, L); SetLayer(_others, L);
+            // Unity skips animating skinned meshes it thinks no camera sees; the sun camera alone didn't count, so shadows only
+            // appeared after you looked down at your body. Always update the caster copies.
+            int sk = _skins.Count * 1000 + _others.Count + (_othersKey & 0xFFFF) * 7 + _avatarId * 31;
+            if (sk != _skinApplied) { _skinApplied = sk; AlwaysSkin(_skins); AlwaysSkin(_others); }
             Show(true);
             SetList(_skins, true);
             foreach (var g in _groups) foreach (var r in g.Copies) if (r != null && !r.enabled) r.enabled = true;

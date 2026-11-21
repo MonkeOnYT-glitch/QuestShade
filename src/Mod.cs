@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.60-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.61-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.59", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.60", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]

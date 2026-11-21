@@ -136,6 +136,19 @@ Shader "Hidden/QuestShade/FinalBlit"
                 return ComputeWorldSpacePosition(uv, raw, UNITY_MATRIX_I_VP);
             }
 
+            // 1 = lit, 0 = shadowed, with bilinear blending between the 4 nearest shadow-map texels.
+            half QSLit(float2 uv, float d, float t)
+            {
+                float2 p = uv / t - 0.5;
+                float2 f = frac(p);
+                float2 b = (floor(p) + 0.5) * t;
+                half a0 = SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, b, 0).r >= d ? 1 : 0;
+                half a1 = SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, b + float2(t, 0), 0).r >= d ? 1 : 0;
+                half a2 = SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, b + float2(0, t), 0).r >= d ? 1 : 0;
+                half a3 = SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, b + float2(t, t), 0).r >= d ? 1 : 0;
+                return lerp(lerp(a0, a1, f.x), lerp(a2, a3, f.x), f.y);
+            }
+
             half QSShadow(float2 uv)
             {
                 UNITY_BRANCH if (_QS_SMOrigin.w <= 0) return 1;
@@ -147,11 +160,11 @@ Shader "Hidden/QuestShade/FinalBlit"
                 if (edge.x <= 0 || edge.y <= 0) return 1;
                 float d = dot(w - _QS_SMOrigin.xyz, _QS_SMDir.xyz) - _QS_SMOpts.z;
                 float t = _QS_SMDir.w;
-                half lit = 0;
-                lit += SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2(-0.5, -0.5) * t, 0).r >= d ? 1 : 0;
-                lit += SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2( 0.5, -0.5) * t, 0).r >= d ? 1 : 0;
-                lit += SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2(-0.5,  0.5) * t, 0).r >= d ? 1 : 0;
-                lit += SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2( 0.5,  0.5) * t, 0).r >= d ? 1 : 0;
+                // Soft edges: 4 bilinear-filtered comparisons (16 texels) spread over the softness radius.
+                // Each comparison blends the 4 nearest texels by distance, so edges are smooth instead of stair-stepped.
+                float r = max(_QS_SMOpts.w, 0.5) * t;
+                half lit = QSLit(suv + float2(-r, -r), d, t) + QSLit(suv + float2(r, -r), d, t)
+                         + QSLit(suv + float2(-r,  r), d, t) + QSLit(suv + float2(r,  r), d, t);
                 half shade = (1 - lit * 0.25) * saturate(min(edge.x, edge.y) * 10); // fade out near the edge of the map
                 return 1 - shade * _QS_SMOrigin.w;
             }

@@ -17,7 +17,7 @@ namespace QuestShade
         private static UniversalAdditionalCameraData _headData;
         private static Camera _head;
         private static int _layer = -2, _res;
-        private static bool _on, _logged;
+        private static bool _on, _logged, _renderWarned;
         private static float _dark;
         private static Config _cfg;
 
@@ -86,17 +86,20 @@ namespace QuestShade
             _cam.orthographicSize = range;
             _cam.nearClipPlane = 0.02f;
             _cam.farClipPlane = depth;
-            _cam.enabled = true;
 
             var scaleBias = Matrix4x4.TRS(new Vector3(0.5f, 0.5f, 0f), Quaternion.identity, new Vector3(0.5f, 0.5f, 1f));
             Shader.SetGlobalMatrix(SMId, scaleBias * _cam.projectionMatrix * _cam.worldToCameraMatrix);
             Shader.SetGlobalTexture(SMTexId, _rt);
             Shader.SetGlobalVector(DirId, new Vector4(dir.x, dir.y, dir.z, 1f / res));
-            Shader.SetGlobalVector(OptsId, new Vector4(cfg.ShadowMapCpuMatrices ? 1f : 0f, cfg.ShadowMapFlipY ? 1f : 0f, Mathf.Clamp(cfg.ShadowMapBias, 0f, 0.5f), 0f));
+            Shader.SetGlobalVector(OptsId, new Vector4(cfg.ShadowMapCpuMatrices ? 1f : 0f, cfg.ShadowMapFlipY ? 1f : 0f, Mathf.Clamp(cfg.ShadowMapBias, 0f, 0.5f), Mathf.Clamp(cfg.ShadowMapSoftness, 0.5f, 4f)));
             // The casters measure distance from this point; w (darkness) is set per camera in BeginCamera.
             Shader.SetGlobalVector(OriginId, new Vector4(origin.x, origin.y, origin.z, _dark));
             _originXYZ = origin;
             _on = true;
+            // Kept disabled and rendered by hand: an enabled extra camera (lowest depth in the scene) can be picked up by the game or
+            // other mods as "the" camera, which made the player freeze / lose the joystick until regrabbing.
+            if (cfg.ShadowMapManualRender) { if (_cam.enabled) _cam.enabled = false; try { _cam.Render(); } catch (Exception e) { if (!_renderWarned) { _renderWarned = true; Mod.Log.Warning("Shadow map: manual render failed, switching to auto: " + e.Message); } cfg.ShadowMapManualRender = false; } }
+            else if (!_cam.enabled) _cam.enabled = true;
             if (!_logged)
             {
                 _logged = true;
