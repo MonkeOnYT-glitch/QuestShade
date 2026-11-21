@@ -128,6 +128,24 @@ namespace QuestShade
             {
                 fixed (long* a = args) { var r = ((delegate* unmanaged<IntPtr, IntPtr, IntPtr, long*, IntPtr>)_f[CallStaticObjectMethodAI])(_e, cls, mid, a); Check(what); return r; }
             }
+
+            private const int NewGlobalRefI = 21, DeleteGlobalRefI = 22, CallStaticIntMethodAI = 131, NewShortArrayI = 178, GetShortArrayRegionI = 202;
+
+            public int CallStaticInt(IntPtr cls, IntPtr mid, string what, params long[] args)
+            {
+                fixed (long* a = args) { var r = ((delegate* unmanaged<IntPtr, IntPtr, IntPtr, long*, int>)_f[CallStaticIntMethodAI])(_e, cls, mid, a); Check(what); return r; }
+            }
+
+            public IntPtr Global(IntPtr o) => o == IntPtr.Zero ? IntPtr.Zero : ((delegate* unmanaged<IntPtr, IntPtr, IntPtr>)_f[NewGlobalRefI])(_e, o);
+            public void DeleteGlobal(IntPtr o) { if (o != IntPtr.Zero) ((delegate* unmanaged<IntPtr, IntPtr, void>)_f[DeleteGlobalRefI])(_e, o); }
+
+            public IntPtr NewShorts(int n) { var r = ((delegate* unmanaged<IntPtr, int, IntPtr>)_f[NewShortArrayI])(_e, n); Check("NewShortArray"); return NotNull(r, "NewShortArray"); }
+
+            public void GetShorts(IntPtr arr, int start, int len, short[] into)
+            {
+                fixed (short* p = into) ((delegate* unmanaged<IntPtr, IntPtr, int, int, short*, void>)_f[GetShortArrayRegionI])(_e, arr, start, len, p);
+                Check("GetShortArrayRegion");
+            }
         }
 
         public sealed class JavaException : Exception { public JavaException(string m) : base("Java: " + m) { } }

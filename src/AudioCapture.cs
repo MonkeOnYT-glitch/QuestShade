@@ -40,8 +40,10 @@ namespace QuestShade
         private string _micDev;
         private int _micRate, _micLastPos, _micLen;
         private bool _micOwned;
-        private AndroidJavaObject _arRecord;
-        private IntPtr _arReadMid;
+        // Direct headset mic through raw JNI (the same path the video encoder uses). Unity's AndroidJavaObject
+        // generics (Call<int>, CallStatic<int>, ConvertFromJNIArray<T>) aren't all compiled into BONELAB and crash the game.
+        private IntPtr _arRecord, _arArray, _arClass;
+        private IntPtr _arReadMid, _arStopMid, _arReleaseMid;
         private short[] _arBuf;
         private bool _micNative;
         private float[] _micRing; private int _micW, _micR, _micCount;
@@ -70,7 +72,7 @@ namespace QuestShade
                     string g = File.ReadAllText(GuardFile);
                     File.Delete(GuardFile);
                     string off = "";
-                    if (game && g.Contains("game")) { game = false; cfg.RecordGameAudio = false; off = "Game audio"; }
+                    if (game && g.Contains("game") && !g.Contains("nativemic")) { game = false; cfg.RecordGameAudio = false; off = "Game audio"; }
                     if (mic && g.Contains("nativemic"))
                     {
                         // The direct headset mic took the game down: keep the mic on, but use the game's own mic from now on.
@@ -152,22 +154,37 @@ namespace QuestShade
         private bool StartAudioRecord()
         {
             if (Application.platform != RuntimePlatform.Android) return false;
+            if (!Jni.Init()) return false;
+            bool attached = false;
             try
             {
-                var arClass = new AndroidJavaClass("android.media.AudioRecord");
-                int minBuf = arClass.CallStatic<int>("getMinBufferSize", 48000, 16, 2);
-                if (minBuf <= 0) return false;
-                int bufBytes = Math.Max(minBuf, 8192) * 2;
-                var rec = new AndroidJavaObject("android.media.AudioRecord", 1, 48000, 16, 2, bufBytes);
-                if (rec == null) return false;
-                if (rec.Call<int>("getState") != 1) { try { rec.Call("release"); } catch { } return false; }
-                rec.Call("startRecording");
-                if (rec.Call<int>("getRecordingState") != 3) { try { rec.Call("stop"); rec.Call("release"); } catch { } return false; }
-                IntPtr cls = rec.GetRawClass();
-                _arReadMid = AndroidJNI.GetMethodID(cls, "read", "([SIII)I"); // with READ_NON_BLOCKING: never stall the game thread waiting for mic data
-                AndroidJNI.DeleteLocalRef(cls);
-                if (_arReadMid == IntPtr.Zero) { try { rec.Call("stop"); rec.Call("release"); } catch { } return false; }
-                _arRecord = rec;
+                var e = Jni.Attach(out attached);
+                e.PushFrame(16);
+                try
+                {
+                    VideoRecorder.Diag("audio: AudioRecord: class");
+                    var cls = e.Class("android/media/AudioRecord");
+                    // MIC source (1), 48 kHz, mono (CHANNEL_IN_MONO = 16), 16-bit PCM (ENCODING_PCM_16BIT = 2)
+                    int minBuf = e.CallStaticInt(cls, e.StaticMethod(cls, "getMinBufferSize", "(III)I"), "getMinBufferSize", 48000, 16, 2);
+                    if (minBuf <= 0) { VideoRecorder.Diag("audio: AudioRecord: no buffer size " + minBuf); return false; }
+                    int bufBytes = Math.Max(minBuf, 8192) * 2;
+                    VideoRecorder.Diag("audio: AudioRecord: create");
+                    var rec = e.New(cls, e.Method(cls, "<init>", "(IIIII)V"), 1, 48000, 16, 2, bufBytes);
+                    var release = e.Method(cls, "release", "()V");
+                    if (e.CallInt(rec, e.Method(cls, "getState", "()I"), "getState") != 1) { e.CallVoid(rec, release, "release"); VideoRecorder.Diag("audio: AudioRecord: not initialized"); return false; }
+                    VideoRecorder.Diag("audio: AudioRecord: start");
+                    e.CallVoid(rec, e.Method(cls, "startRecording", "()V"), "startRecording");
+                    var stop = e.Method(cls, "stop", "()V");
+                    if (e.CallInt(rec, e.Method(cls, "getRecordingState", "()I"), "getRecordingState") != 3)
+                    { e.CallVoid(rec, stop, "stop"); e.CallVoid(rec, release, "release"); VideoRecorder.Diag("audio: AudioRecord: didn't start (mic busy?)"); return false; }
+                    // read(short[], int, int, int) with READ_NON_BLOCKING: never stall the game thread waiting for mic data
+                    _arReadMid = e.Method(cls, "read", "([SIII)I");
+                    _arStopMid = stop; _arReleaseMid = release;
+                    _arClass = e.Global(cls);
+                    _arRecord = e.Global(rec);
+                    _arArray = e.Global(e.NewShorts(4096));
+                }
+                finally { e.PopFrame(); }
                 _arBuf = new short[4096];
                 _micRate = 48000;
                 _micCh = 1;
@@ -176,34 +193,43 @@ namespace QuestShade
                 VideoRecorder.Diag("audio: mic via AudioRecord (48 kHz, raw MIC)");
                 return true;
             }
-            catch (Exception e) { Mod.Log.Warning("Recording: AudioRecord mic failed: " + e.Message); return false; }
+            catch (Exception ex) { Mod.Log.Warning("Recording: direct headset mic failed, using the game's mic: " + ex.Message); StopAudioRecord(); return false; }
+            finally { if (attached) Jni.Detach(); }
+        }
+
+        private void StopAudioRecord()
+        {
+            if (_arRecord == IntPtr.Zero && _arArray == IntPtr.Zero && _arClass == IntPtr.Zero) return;
+            bool attached = false;
+            try
+            {
+                var e = Jni.Attach(out attached);
+                if (_arRecord != IntPtr.Zero)
+                {
+                    try { if (_arStopMid != IntPtr.Zero) e.CallVoid(_arRecord, _arStopMid, "stop"); } catch { }
+                    try { if (_arReleaseMid != IntPtr.Zero) e.CallVoid(_arRecord, _arReleaseMid, "release"); } catch { }
+                }
+                e.DeleteGlobal(_arRecord); e.DeleteGlobal(_arArray); e.DeleteGlobal(_arClass);
+            }
+            catch { }
+            finally { if (attached) Jni.Detach(); }
+            _arRecord = _arArray = _arClass = IntPtr.Zero;
+            _arReadMid = _arStopMid = _arReleaseMid = IntPtr.Zero;
         }
 
         private void PumpNativeMic()
         {
-            if (_arRecord == null || _arBuf == null || _arReadMid == IntPtr.Zero) return;
-            int n = 0;
-            IntPtr jarr = IntPtr.Zero;
+            if (_arRecord == IntPtr.Zero || _arArray == IntPtr.Zero || _arBuf == null || _arReadMid == IntPtr.Zero) return;
+            int n;
+            bool attached = false;
             try
             {
-                IntPtr obj = _arRecord.GetRawObject();
-                jarr = AndroidJNI.NewShortArray(_arBuf.Length);
-                var args = new Il2CppStructArray<jvalue>(4);
-                args[0] = new jvalue { l = jarr };
-                args[1] = new jvalue { i = 0 };
-                args[2] = new jvalue { i = _arBuf.Length };
-                args[3] = new jvalue { i = 1 }; // AudioRecord.READ_NON_BLOCKING
-                n = AndroidJNI.CallIntMethod(obj, _arReadMid, args);
-                if (n > 0)
-                {
-                    // Not AndroidJNIHelper.ConvertFromJNIArray<short[]>: that generic has no AOT code in BONELAB's
-                    // IL2CPP build, and calling it kills the whole game on the first frame of mic audio.
-                    var got = AndroidJNI.FromShortArray(jarr);
-                    if (got != null) { int m = Math.Min(n, got.Length); for (int k = 0; k < m; k++) _arBuf[k] = got[k]; }
-                }
+                var e = Jni.Attach(out attached);
+                n = e.CallInt(_arRecord, _arReadMid, "read", Jni.O(_arArray), 0, _arBuf.Length, 1); // 1 = READ_NON_BLOCKING
+                if (n > 0) e.GetShorts(_arArray, 0, Math.Min(n, _arBuf.Length), _arBuf);
             }
             catch { LetGoOfMic("AudioRecord read failed"); return; }
-            finally { if (jarr != IntPtr.Zero) AndroidJNI.DeleteLocalRef(jarr); }
+            finally { if (attached) Jni.Detach(); }
             if (n < 0) { LetGoOfMic("AudioRecord error " + n); return; }
             if (n <= 0) return;
             for (int k = 0; k < n; k++)
@@ -226,7 +252,12 @@ namespace QuestShade
                     Mod.Log.Msg("Recording: no microphone permission yet (asked Android)");
                     return false;
                 }
-                if (!File.Exists(NoNativeFile) && StartAudioRecord())
+                bool tryNative = !File.Exists(NoNativeFile);
+                // Mark the attempt first: if starting the headset mic takes the game down, next time uses the game's mic.
+                if (tryNative) WriteGuard((GameOn ? "game " : "") + "mic nativemic");
+                bool native = tryNative && StartAudioRecord();
+                if (tryNative && !native) WriteGuard((GameOn ? "game " : "") + "mic");
+                if (native)
                 {
                     _micNative = true;
                     Mod.Log.Msg("Recording: mic via direct AudioRecord (48 kHz)");
@@ -432,8 +463,8 @@ namespace QuestShade
             QSAudioTap.Sink = null;
             _tap = null;
             try { if (_micOwned) Microphone.End(_micDev); } catch { }
-            try { if (_arRecord != null) { _arRecord.Call("stop"); _arRecord.Call("release"); _arRecord.Dispose(); } } catch { }
-            _arRecord = null; _arReadMid = IntPtr.Zero; _micNative = false;
+            StopAudioRecord();
+            _micNative = false;
             _micOwned = false;
             _keptClip = null;
             _micClip = null;
