@@ -113,6 +113,48 @@ Shader "Hidden/QuestShade/FinalBlit"
             float4 _QS_Dof;
             float4 _QS_DofAF;
             float SceneDist(float2 uv) { return LinearEyeDepth(SampleSceneDepth(uv), _ZBufferParams); }
+
+            // ---- QuestShade shadow map (world-space map rendered from the sun, applied per pixel from scene depth) ----
+            TEXTURE2D(_QS_SMTex); SAMPLER(sampler_QS_SMTex);
+            float4x4 _QS_SM;            // world -> shadow map uv (xy)
+            float4 _QS_SMOrigin;        // xyz: light-side origin, w: on (darkness 0..1, 0 = off)
+            float4 _QS_SMDir;           // xyz: light direction, w: 1 / map texel size in uv (for PCF)
+            float4 _QS_SMOpts;          // x: 1 = use CPU eye matrices, y: 1 = flip screen y, z: depth bias (m), w: fade range (m)
+            float4x4 _QS_InvVP0, _QS_InvVP1;
+
+            float3 QSWorldFromDepth(float2 uv, float raw)
+            {
+            #if !UNITY_REVERSED_Z
+                raw = lerp(UNITY_NEAR_CLIP_VALUE, 1, raw);
+            #endif
+                if (_QS_SMOpts.y > 0.5) uv.y = 1 - uv.y;
+                UNITY_BRANCH if (_QS_SMOpts.x > 0.5)
+                {
+                    float4x4 inv = unity_StereoEyeIndex == 0 ? _QS_InvVP0 : _QS_InvVP1;
+                    return ComputeWorldSpacePosition(uv, raw, inv);
+                }
+                return ComputeWorldSpacePosition(uv, raw, UNITY_MATRIX_I_VP);
+            }
+
+            half QSShadow(float2 uv)
+            {
+                UNITY_BRANCH if (_QS_SMOrigin.w <= 0) return 1;
+                float raw = SampleSceneDepth(uv);
+                if (Linear01Depth(raw, _ZBufferParams) > 0.995) return 1; // sky / nothing there
+                float3 w = QSWorldFromDepth(uv, raw);
+                float2 suv = mul(_QS_SM, float4(w, 1)).xy;
+                float2 edge = min(suv, 1 - suv);
+                if (edge.x <= 0 || edge.y <= 0) return 1;
+                float d = dot(w - _QS_SMOrigin.xyz, _QS_SMDir.xyz) - _QS_SMOpts.z;
+                float t = _QS_SMDir.w;
+                half lit = 0;
+                lit += SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2(-0.5, -0.5) * t, 0).r >= d ? 1 : 0;
+                lit += SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2( 0.5, -0.5) * t, 0).r >= d ? 1 : 0;
+                lit += SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2(-0.5,  0.5) * t, 0).r >= d ? 1 : 0;
+                lit += SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2( 0.5,  0.5) * t, 0).r >= d ? 1 : 0;
+                half shade = (1 - lit * 0.25) * saturate(min(edge.x, edge.y) * 10); // fade out near the edge of the map
+                return 1 - shade * _QS_SMOrigin.w;
+            }
             float FocusDist()
             {
                 float f = _QS_Dof.y;
@@ -254,6 +296,7 @@ Shader "Hidden/QuestShade/FinalBlit"
                 return Prepass(input.uv);
 #else
                 half4 outc = half4(QSStack(input.uv, input.positionCS.xy), 1);
+                outc.rgb *= QSShadow(input.uv);
                 #ifdef _LINEAR_TO_SRGB_CONVERSION
                 outc = LinearToSRGB(outc);
                 #endif

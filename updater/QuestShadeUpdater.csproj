@@ -4,7 +4,10 @@
     <QSTarget Condition="'$(QSTarget)' == ''">Quest</QSTarget>
     <TargetFramework>net8.0</TargetFramework>
     <DefineConstants>$(DefineConstants);QUEST</DefineConstants>
-    <OutputPath>bin\$(QSTarget)\</OutputPath>
+    <OutputPath Condition="'$(QSChannel)' != 'Test'">bin\$(QSTarget)\</OutputPath>
+    <!-- dotnet build -p:QSChannel=Test : the test updater, which also takes GitHub pre-releases -->
+    <OutputPath Condition="'$(QSChannel)' == 'Test'">bin\Test\</OutputPath>
+    <DefineConstants Condition="'$(QSChannel)' == 'Test'">$(DefineConstants);QS_TEST_CHANNEL</DefineConstants>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AssemblyName>QuestShadeUpdater</AssemblyName>
     <RootNamespace>QuestShadeUpdater</RootNamespace>

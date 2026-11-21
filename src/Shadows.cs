@@ -12,6 +12,8 @@ namespace QuestShade
         public static Func<GameObject, Transform> ItemRoot;
         public static Func<int> PlayerLayers;
         public static bool CameraOpen;
+        public static Camera Lens;
+        private static bool _mapMode, _mapDecided, _mapLogged;
 
         private const int MaxParts = 12;
         private const float Reach = 40f, Lift = 0.012f;
@@ -89,6 +91,7 @@ namespace QuestShade
 
         private static void Show(bool on)
         {
+            if (!on && _mapMode) ShadowMap.Off();
             if (_root != null && _root.activeSelf != on) _root.SetActive(on);
             if (_othersOn != on) { _othersOn = on; foreach (var g in _others) if (g != null && g.activeSelf != on) g.SetActive(on); }
             if (_partsOn == on) return;
@@ -106,7 +109,7 @@ namespace QuestShade
 
         private static void Ensure()
         {
-            if (_shade == null) _shade = Mat("Shadow", 2510, 15f, 6f, 2f, 4f);
+            if (_shade == null) _shade = _mapMode ? CasterMat() : Mat("Shadow", 2510, 15f, 6f, 2f, 4f);
             if (_none == null) _none = Mat("ShadowNone", 2510, 0f, 1f, 0f, 4f);
             if (_clear == null) _clear = Mat("ShadowClear", 2511, 0f, 8f, 1f, 8f);
             if (_shadeLens == null) _shadeLens = Mat("ShadowLens", 2510, 15f, 6f, 2f, 4f, false);
@@ -617,6 +620,45 @@ namespace QuestShade
             return sb.ToString();
         }
 
+
+        // ---- Shadow-map mode: copies are drawn by the sun camera into QuestShade's shadow map instead of being flattened ----
+        private static Material CasterMat()
+        {
+            var m = new Material(ShaderPack.ShadowCaster) { name = "QuestShade_ShadowCaster", hideFlags = HideFlags.HideAndDontSave };
+            return m;
+        }
+
+        private static void SetLayer(List<GameObject> list, int layer)
+        {
+            foreach (var g in list) if (g != null && g.layer != layer) g.layer = layer;
+        }
+
+        private static void RunMap(Config cfg, Camera head)
+        {
+            float now = Time.unscaledTime;
+            if (now >= _sunAt) { _sunAt = now + 6f; if (_sun == null || !_sun.isActiveAndEnabled) FindSun(); }
+            Vector3 dir = Slant;
+            if (_sun != null && _sun.isActiveAndEnabled && _sun.intensity > 0.05f && _sun.transform.forward.y < -0.2f) dir = _sun.transform.forward;
+            _dir = Vector3.Slerp(_dir, dir, 1f - Mathf.Exp(-Time.unscaledDeltaTime * 2f));
+
+            int L = ShadowMap.Layer;
+            if (_sheet != null && _sheet.activeSelf) _sheet.SetActive(false);
+            if (_sheetWall != null && _sheetWall.activeSelf) _sheetWall.SetActive(false);
+            if (_sheetLens != null && _sheetLens.activeSelf) _sheetLens.SetActive(false);
+            if (_sheetWallLens != null && _sheetWallLens.activeSelf) _sheetWallLens.SetActive(false);
+            SetList(_skinsLens, false); SetList(_skinsWall, false); SetList(_skinsWallLens, false);
+            SetList(_partsLens, false); SetList(_partsWall, false); SetList(_partsWallLens, false);
+            SetList(_othersLens, false);
+            SetLayer(_skins, L); SetLayer(_parts, L); SetLayer(_others, L);
+            Show(true);
+            SetList(_skins, true);
+            foreach (var g in _groups) foreach (var r in g.Copies) if (r != null && !r.enabled) r.enabled = true;
+            foreach (var g in _heldGroups) foreach (var r in g.Copies) if (r != null && !r.enabled) r.enabled = true;
+
+            ShadowMap.Update(cfg, head, Lens, _dir, Mathf.Clamp01(cfg.ShadowDarkness) * 0.8f);
+            if (!_mapLogged) { _mapLogged = true; Mod.Log.Msg($"Shadows: shadow map casters: {_skins.Count} body, {_parts.Count} held, {_others.Count} NPC/prop meshes"); }
+        }
+
         private static void FindSun()
         {
             Light best = null;
@@ -639,6 +681,7 @@ namespace QuestShade
             int avId = av.GetInstanceID();
             if (avId != _seenAvatar) { _seenAvatar = avId; _wait = Mathf.Max(_wait, now + 3f); }
             if (now < _wait) { Show(false); return; }
+            if (!_mapDecided) { _mapDecided = true; _mapMode = cfg.ShadowMap && ShadowMap.Available; Mod.Log.Msg(_mapMode ? "Shadows: using the shadow map (floors, walls and objects)" : "Shadows: using flat shadows"); }
             S("setup"); Ensure();
             if (avId != _avatarId) { S("copy body"); Build(av); }
             if (now >= _nextItems) { _nextItems = now + 0.25f; S("held items"); Items(); }
@@ -647,6 +690,7 @@ namespace QuestShade
             // and stop rewriting the step file every frame while there's no floor to cast onto.
             if (!_stepsOk) { _stepsOk = true; try { System.IO.File.WriteAllText(StepFile, "ok"); } catch { } }
             if (_skins.Count == 0) { Why("no body meshes to copy"); Show(false); return; }
+            if (_mapMode) { RunMap(cfg, head); return; }
 
             S("sun");
             if (now >= _sunAt) { _sunAt = now + 6f; if (_sun == null || !_sun.isActiveAndEnabled) FindSun(); }

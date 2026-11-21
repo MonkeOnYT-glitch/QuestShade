@@ -431,6 +431,7 @@ namespace QuestShade
 
         private void OnBeginCamera(ScriptableRenderContext ctx, Camera cam)
         {
+            try { ShadowMap.BeginCamera(cam); } catch { }
             try
             {
                 if (cam != null && LensHide != null)

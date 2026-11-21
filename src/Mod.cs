@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.59-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.60-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.58", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.59", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -172,6 +172,7 @@ namespace QuestShade
                     { _calibTries++; _nextCalibAt = now + 5f; _cam.SchedulePrewarm(0f); }
                 }
                 Shadows.CameraOpen = _cam.Open;
+                Shadows.Lens = _cam.Open ? _cam.LensCamera : null;
                 Shadows.Tick(_cfg, head);
                 _toast.LateTick(head);
                 if (_boneLib)

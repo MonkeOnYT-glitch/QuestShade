@@ -7,7 +7,7 @@ namespace QuestShade
 {
     internal static class ShaderPack
     {
-        public static Shader FinalBlit, Screen, Yuv, Post, Body, Outline, Beam, Shadow;
+        public static Shader FinalBlit, Screen, Yuv, Post, Body, Outline, Beam, Shadow, ShadowCaster;
         public static GameObject Handheld;
         public static string Error;
         private static bool _tried;
@@ -34,6 +34,7 @@ namespace QuestShade
                 Outline = Get(bundle, "Assets/QuestShade/QSOutline.shader");
                 Beam = Get(bundle, "Assets/QuestShade/QSBeam.shader");
                 Shadow = Get(bundle, "Assets/QuestShade/QSShadow.shader");
+                ShadowCaster = Get(bundle, "Assets/QuestShade/QSShadowCaster.shader");
                 try
                 {
                     Handheld = Body != null ? bundle.LoadAsset<GameObject>("Assets/QuestShade/HandheldCam/QSHandheld.prefab") : null;
@@ -41,7 +42,7 @@ namespace QuestShade
                 }
                 catch (Exception e) { Mod.Log.Warning("Camera model failed to load: " + e.Message); Handheld = null; }
                 if (FinalBlit == null) { Error = "post shader not supported on this GPU"; Mod.Log.Error(Error); return false; }
-                Mod.Log.Msg($"Shader pack loaded ({bytes.Length / 1024} KB): blit={Ok(FinalBlit)} screen={Ok(Screen)} yuv={Ok(Yuv)} bloom/dof={Ok(Post)} camera model={(Handheld != null ? "ok" : "missing")}");
+                Mod.Log.Msg($"Shader pack loaded ({bytes.Length / 1024} KB): blit={Ok(FinalBlit)} screen={Ok(Screen)} yuv={Ok(Yuv)} bloom/dof={Ok(Post)} shadows={Ok(Shadow)} shadow map={Ok(ShadowCaster)} camera model={(Handheld != null ? "ok" : "missing")}");
                 return true;
             }
             catch (Exception e) { Error = "shader pack error: " + e.Message; Mod.Log.Error("Shader pack: " + e); return false; }

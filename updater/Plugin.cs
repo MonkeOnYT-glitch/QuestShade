@@ -8,7 +8,11 @@ using System.Threading.Tasks;
 using MelonLoader;
 using MelonLoader.Utils;
 
+#if QS_TEST_CHANNEL
+[assembly: MelonInfo(typeof(QuestShadeUpdater.Plugin), "QuestShade Updater (test builds)", "1.0.3", "MonkeOnYT")]
+#else
 [assembly: MelonInfo(typeof(QuestShadeUpdater.Plugin), "QuestShade Updater", "1.0.3", "MonkeOnYT")]
+#endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 
 namespace QuestShadeUpdater
@@ -66,9 +70,24 @@ namespace QuestShadeUpdater
                 try { var v = AssemblyName.GetAssemblyName(modPath).Version; if (v != null) current = new Version(v.Major, v.Minor, Math.Max(0, v.Build)); } catch { }
             }
 
+#if QS_TEST_CHANNEL
+            // Test channel: the newest published release, pre-releases included (drafts skipped).
+            string json = Http.GetString($"https://api.github.com/repos/{Repo}/releases?per_page=15");
+            using var list = JsonDocument.Parse(json);
+            JsonElement root = default; Version best = null;
+            foreach (var r in list.RootElement.EnumerateArray())
+            {
+                if (r.TryGetProperty("draft", out var dr) && dr.GetBoolean()) continue;
+                if (!Version.TryParse((r.GetProperty("tag_name").GetString() ?? "").TrimStart('v', 'V'), out var v)) continue;
+                if (best == null || v > best) { best = v; root = r; }
+            }
+            if (best == null) { Log.Warning("No releases found"); return; }
+            Log.Msg($"Test channel: newest build is {best}{(root.TryGetProperty("prerelease", out var pr) && pr.GetBoolean() ? " (pre-release)" : "")}");
+#else
             string json = Http.GetString($"https://api.github.com/repos/{Repo}/releases/latest");
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
+#endif
             string tag = root.GetProperty("tag_name").GetString() ?? "";
             if (!Version.TryParse(tag.TrimStart('v', 'V'), out var latest)) { Log.Warning($"Can't read the release version '{tag}'"); return; }
             if (latest <= current) { Log.Msg($"QuestShade is up to date ({current})"); return; }
