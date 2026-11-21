@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using MelonLoader;
 using MelonLoader.Utils;
 
-[assembly: MelonInfo(typeof(QuestShadeUpdater.Plugin), "QuestShade Updater", "1.0.2", "MonkeOnYT")]
+[assembly: MelonInfo(typeof(QuestShadeUpdater.Plugin), "QuestShade Updater", "1.0.3", "MonkeOnYT")]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 
 namespace QuestShadeUpdater
@@ -29,20 +29,29 @@ namespace QuestShadeUpdater
             {
                 if (!AutoUpdateOn()) { Log.Msg("Auto-update is off ([General] AutoUpdate in QuestShade.ini)"); return; }
                 string dir = Path.Combine(MelonEnvironment.UserDataDirectory, "QuestShade");
-                string lockFile = Path.Combine(dir, "updater-boot.lock"), disabled = Path.Combine(dir, "updater-disabled.txt");
-                if (File.Exists(disabled)) { Log.Warning("Boot-time updates are off (updater-disabled.txt). The in-game updater still works."); return; }
+                string lockFile = Path.Combine(dir, "updater-boot.lock"), strikesFile = Path.Combine(dir, "updater-strikes.txt");
+                Directory.CreateDirectory(dir);
+                // Old builds turned boot updates off for good after one interrupted boot, so every update then needed a restart.
+                TryDelete(Path.Combine(dir, "updater-disabled.txt"));
+                int strikes = 0; DateTime lastStrike = DateTime.MinValue;
+                try { var s = File.ReadAllText(strikesFile).Split('|'); int.TryParse(s[0], out strikes); if (s.Length > 1) DateTime.TryParse(s[1], null, System.Globalization.DateTimeStyles.RoundtripKind, out lastStrike); } catch { }
                 if (File.Exists(lockFile))
                 {
-                    try { File.Move(lockFile, disabled); } catch { }
-                    Log.Warning("The last boot stopped during the update check, so boot-time updates are now off. The in-game updater still works.");
+                    // The last boot ended during the check (crash, quit, headset slept...). Skip just this boot.
+                    TryDelete(lockFile);
+                    strikes++;
+                    try { File.WriteAllText(strikesFile, strikes + "|" + DateTime.UtcNow.ToString("o")); } catch { }
+                    Log.Warning($"The last boot stopped during the update check ({strikes} in a row), skipping it this launch. The in-game updater still works.");
                     return;
                 }
-                Directory.CreateDirectory(dir);
+                if (strikes >= 3 && DateTime.UtcNow - lastStrike < TimeSpan.FromDays(1))
+                { Log.Warning("Boot-time updates paused for a day after 3 interrupted boots in a row. The in-game updater still works."); return; }
                 File.WriteAllText(lockFile, DateTime.UtcNow.ToString("o"));
                 var work = Task.Run(Run);
                 bool finished = work.Wait(BudgetMs);
                 if (!finished) { _givenUp = true; Log.Warning("GitHub is slow to answer, skipping the update check this launch"); }
-                try { File.Delete(lockFile); } catch { }
+                TryDelete(lockFile);
+                TryDelete(strikesFile);
                 if (finished && work.IsFaulted) throw work.Exception;
             }
             catch (Exception e) { Log.Warning("Update check failed: " + (e.InnerException ?? e).Message); }
