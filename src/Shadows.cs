@@ -8,6 +8,7 @@ namespace QuestShade
     internal static class Shadows
     {
         public static Func<Transform> Avatar;
+        public static Func<Transform> PlayerRoot; // BoneLib RigManager
         public static Func<int, GameObject> Held;
         public static Func<GameObject, Transform> ItemRoot;
         public static Func<int> PlayerLayers;
@@ -288,15 +289,46 @@ namespace QuestShade
         private static readonly List<Transform> _roots = new List<Transform>();
         private static readonly List<(MeshRenderer r, Mesh m, float size)> _found = new List<(MeshRenderer, Mesh, float)>();
 
+        // Copies never go inside the game's own objects (adding children to held guns / NPCs confused BONELAB's grab and
+        // physics code: the rig froze or the joystick stopped until you regrabbed). They live under QuestShade's own root and
+        // follow their source every frame instead.
+        private static readonly List<(Transform copy, Transform src)> _follow = new List<(Transform, Transform)>();
+
         private static GameObject Part(string name, Transform parent, Mesh mesh, int subs, Material mat, Material none)
         {
             var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
+            bool ours = parent != null && _root != null && parent.IsChildOf(_root.transform);
+            if (ours) go.transform.SetParent(parent, false);
+            else
+            {
+                go.transform.SetParent(_root != null ? _root.transform : null, false);
+                _follow.Add((go.transform, parent));
+                Follow(go.transform, parent);
+            }
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             var copy = go.AddComponent<MeshRenderer>();
             Shade(copy, subs, mat, none);
             Plain(copy);
             return go;
+        }
+
+        private static void Follow(Transform copy, Transform src)
+        {
+            if (copy == null || src == null) return;
+            copy.SetPositionAndRotation(src.position, src.rotation);
+            copy.localScale = src.lossyScale;
+        }
+
+        private static void SyncFollowers()
+        {
+            for (int i = _follow.Count - 1; i >= 0; i--)
+            {
+                var (c, s) = _follow[i];
+                if (c == null) { _follow.RemoveAt(i); continue; }
+                if (s == null) { if (c.gameObject.activeSelf) c.gameObject.SetActive(false); continue; }
+                if (!c.gameObject.activeSelf) continue;
+                Follow(c, s);
+            }
         }
 
         private static void Items()
@@ -408,7 +440,8 @@ namespace QuestShade
             _near.Clear(); _seenRoots.Clear(); _seenBodies.Clear();
             Transform rig = RigRoot(av);
             T("npcs: overlap");
-            var _cols = Physics.OverlapSphere(at, OthersReach, _maskAll, QueryTriggerInteraction.Ignore); int n = _cols != null ? _cols.Length : 0;
+            // Every layer: the "player layers" mask also held the prop layers, so props were never found. You are skipped by the rig check.
+            var _cols = Physics.OverlapSphere(at, OthersReach, ~(1 << 2), QueryTriggerInteraction.Ignore); int n = _cols != null ? _cols.Length : 0;
             T("npcs: sort " + n);
             int noBody = 0, dup = 0, mine = 0, held = 0;
             for (int i = 0; i < n; i++)
@@ -504,6 +537,7 @@ namespace QuestShade
         // shared by the whole level, which made every prop count as "part of the player" and get skipped.
         private static Transform RigRoot(Transform av)
         {
+            try { var pr = PlayerRoot != null ? PlayerRoot() : null; if (pr != null) return pr; } catch { }
             var t = av;
             for (int i = 0; i < 10 && t != null; i++)
             {
@@ -745,6 +779,7 @@ namespace QuestShade
             // The risky part (copying meshes) is done. Mark it so a later crash elsewhere (e.g. a recording) is never blamed on shadows,
             // and stop rewriting the step file every frame while there's no floor to cast onto.
             if (!_stepsOk) { _stepsOk = true; try { System.IO.File.WriteAllText(StepFile, "ok"); } catch { } }
+            SyncFollowers();
             if (_skins.Count == 0) { Why("no body meshes to copy"); Show(false); return; }
             if (_mapMode) { RunMap(cfg, head); return; }
 
