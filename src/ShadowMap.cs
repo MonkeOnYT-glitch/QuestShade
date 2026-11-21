@@ -24,7 +24,7 @@ namespace QuestShade
 
         private static readonly int SMTexId = Shader.PropertyToID("_QS_SMTex"), SMId = Shader.PropertyToID("_QS_SM"),
             OriginId = Shader.PropertyToID("_QS_SMOrigin"), DirId = Shader.PropertyToID("_QS_SMDir"), OptsId = Shader.PropertyToID("_QS_SMOpts"),
-            InvVP0Id = Shader.PropertyToID("_QS_InvVP0"), InvVP1Id = Shader.PropertyToID("_QS_InvVP1");
+            InvVP0Id = Shader.PropertyToID("_QS_InvVP0"), InvVP1Id = Shader.PropertyToID("_QS_InvVP1"), ParamsId = Shader.PropertyToID("_QS_SMParams");
 
         // The lowest free layer (the camera's lens-only layer takes the highest one).
         public static int Layer
@@ -101,6 +101,7 @@ namespace QuestShade
             var scaleBias = Matrix4x4.TRS(new Vector3(0.5f, 0.5f, 0f), Quaternion.identity, new Vector3(0.5f, 0.5f, 1f));
             Shader.SetGlobalMatrix(SMId, scaleBias * _cam.projectionMatrix * _cam.worldToCameraMatrix);
             Shader.SetGlobalTexture(SMTexId, _rt);
+            Shader.SetGlobalVector(ParamsId, new Vector4(texel, 0f, 0f, 0f));
             Shader.SetGlobalVector(DirId, new Vector4(dir.x, dir.y, dir.z, 1f / res));
             Shader.SetGlobalVector(OptsId, new Vector4(cfg.ShadowMapCpuMatrices ? 1f : 0f, cfg.ShadowMapFlipY ? 1f : 0f, Mathf.Clamp(cfg.ShadowMapBias, 0f, 0.5f), Mathf.Clamp(cfg.ShadowMapSoftness, 0.5f, 4f)));
             // The casters measure distance from this point; w (darkness) is set per camera in BeginCamera.

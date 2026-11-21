@@ -149,23 +149,48 @@ Shader "Hidden/QuestShade/FinalBlit"
                 return lerp(lerp(a0, a1, f.x), lerp(a2, a3, f.x), f.y);
             }
 
+            float4 _QS_SMParams; // x: world size of one shadow-map texel (m)
+
             half QSShadow(float2 uv)
             {
                 UNITY_BRANCH if (_QS_SMOrigin.w <= 0) return 1;
+                // World position and surface direction first (screen derivatives must come before any per-pixel branch).
                 float raw = SampleSceneDepth(uv);
-                if (Linear01Depth(raw, _ZBufferParams) > 0.995) return 1; // sky / nothing there
                 float3 w = QSWorldFromDepth(uv, raw);
+            #if UNITY_REVERSED_Z
+                float3 wn = QSWorldFromDepth(uv, 1);
+            #else
+                float3 wn = QSWorldFromDepth(uv, 0);
+            #endif
+                float3 nrm = normalize(cross(ddy(w), ddx(w)));
+                nrm = dot(nrm, wn - w) < 0 ? -nrm : nrm; // face the viewer
+                if (Linear01Depth(raw, _ZBufferParams) > 0.995) return 1; // sky / nothing there
+                // Only surfaces that face the light get a cast shadow; it fades out on sides lit at a glancing angle, so a
+                // hand over the edge of a crate doesn't smear a long shadow down its side.
+                float ndl = dot(nrm, -_QS_SMDir.xyz);
+                half face = saturate((ndl - 0.08) * 4);
+                if (face <= 0) return 1;
+                // Push the lookup off the surface along its normal: stops the surface shadowing itself (light/dark stripes on guns).
+                w += nrm * (_QS_SMParams.x * 1.5);
                 float2 suv = mul(_QS_SM, float4(w, 1)).xy;
                 float2 edge = min(suv, 1 - suv);
                 if (edge.x <= 0 || edge.y <= 0) return 1;
                 float d = dot(w - _QS_SMOrigin.xyz, _QS_SMDir.xyz) - _QS_SMOpts.z;
                 float t = _QS_SMDir.w;
-                // Soft edges: 4 bilinear-filtered comparisons (16 texels) spread over the softness radius.
-                // Each comparison blends the 4 nearest texels by distance, so edges are smooth instead of stair-stepped.
                 float r = max(_QS_SMOpts.w, 0.5) * t;
-                half lit = QSLit(suv + float2(-r, -r), d, t) + QSLit(suv + float2(r, -r), d, t)
-                         + QSLit(suv + float2(-r,  r), d, t) + QSLit(suv + float2(r,  r), d, t);
-                half shade = (1 - lit * 0.25) * saturate(min(edge.x, edge.y) * 10); // fade out near the edge of the map
+                // Cheap first: 4 single samples. If they agree (fully lit or fully in shadow, i.e. most of the screen) we're done.
+                half q = (SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2(-r, -r), 0).r >= d ? 1 : 0)
+                       + (SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2( r, -r), 0).r >= d ? 1 : 0)
+                       + (SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2(-r,  r), 0).r >= d ? 1 : 0)
+                       + (SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2( r,  r), 0).r >= d ? 1 : 0);
+                half lit = q * 0.25;
+                UNITY_BRANCH if (q > 0 && q < 4)
+                {
+                    // Near a shadow edge: smooth it with 4 bilinear-filtered comparisons (16 texels).
+                    lit = (QSLit(suv + float2(-r, -r), d, t) + QSLit(suv + float2(r, -r), d, t)
+                         + QSLit(suv + float2(-r,  r), d, t) + QSLit(suv + float2(r,  r), d, t)) * 0.25;
+                }
+                half shade = (1 - lit) * face * saturate(min(edge.x, edge.y) * 10); // fade out near the edge of the map
                 return 1 - shade * _QS_SMOrigin.w;
             }
             float FocusDist()
@@ -295,6 +320,7 @@ Shader "Hidden/QuestShade/FinalBlit"
             {
                 half3 c = FetchSrc(uv);
                 c = (any(isnan(c)) || any(isinf(c))) ? half3(0, 0, 0) : min(max(c, 0), 32);
+                c *= QSShadow(uv); // shadows in camera photos/videos (the camera uses this pass when bloom / depth of field are on)
                 half coc = 0;
                 UNITY_BRANCH if (_QS_Dof.x > 0) coc = CoC(SceneDist(uv), FocusDist());
                 coc = isnan(coc) ? 0 : saturate(coc);

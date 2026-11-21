@@ -20,6 +20,7 @@ namespace QuestShade
         private Vector3 _propSpawnPos;
         private int _propHand;
         private bool PropActive => _prop != null && _prop.Alive;
+        public Transform PropRoot => PropActive && _prop.Root != null ? _prop.Root.transform : null;
         public bool HasBody => PropActive;
         public int HoldingHand => !Open ? 0 : PropActive ? _propHand : _held >= 0 ? _held + 1 : 0;
 

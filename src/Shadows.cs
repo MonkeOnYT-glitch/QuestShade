@@ -13,6 +13,7 @@ namespace QuestShade
         public static Func<int> PlayerLayers;
         public static bool CameraOpen;
         public static Camera Lens;
+        public static Transform CameraProp; // the QuestShade camera prop: never a shadow caster (it shadowed its own handle/screen)
         private static bool _mapMode, _mapDecided, _mapLogged;
         private static int _skinApplied = -1;
 
@@ -309,6 +310,7 @@ namespace QuestShade
                 Transform root = null;
                 try { root = ItemRoot != null ? ItemRoot(go) : null; } catch { }
                 root ??= go.transform;
+                if (CameraProp != null && (root == CameraProp || root.IsChildOf(CameraProp) || CameraProp.IsChildOf(root))) continue; // held camera: no shadow on its own handle/screen
                 if (!_roots.Contains(root)) _roots.Add(root);
             }
             int key = 17;
@@ -395,6 +397,7 @@ namespace QuestShade
 
         private static readonly HashSet<int> _seenBodies = new HashSet<int>(), _keepRoots = new HashSet<int>(), _skipRoots = new HashSet<int>();
         private static bool _othersTraced;
+        private static int _scanLogs;
         private const int MaxRootRenderers = 24;
 
         // Breadcrumbs for the first scans only, so a crash in here points at the exact step next launch.
@@ -407,21 +410,29 @@ namespace QuestShade
             T("npcs: overlap");
             var _cols = Physics.OverlapSphere(at, OthersReach, _maskAll, QueryTriggerInteraction.Ignore); int n = _cols != null ? _cols.Length : 0;
             T("npcs: sort " + n);
+            int noBody = 0, dup = 0, mine = 0, held = 0;
             for (int i = 0; i < n; i++)
             {
                 var col = _cols[i];
                 if (col == null) continue;
                 var rb = col.attachedRigidbody;
-                if (rb == null || !_seenBodies.Add(rb.GetInstanceID())) continue; // static level geometry has no body: skip it
+                if (rb == null) { noBody++; continue; } // static level geometry has no body: skip it
+                if (!_seenBodies.Add(rb.GetInstanceID())) { dup++; continue; }
+                // Group by the spawned/BONELAB object it belongs to. Kinematic bodies count too: NPCs are kinematic while
+                // animated and sleeping props can be, and skipping them left nearly everything without a shadow.
+                Transform root = null;
                 var pool = rb.GetComponentInParent<Il2CppSLZ.Marrow.Pool.Poolee>();
-                Transform root = pool != null ? pool.transform : (rb.isKinematic ? null : rb.transform);
-                if (root == null || !_seenRoots.Add(root.GetInstanceID())) continue;
-                if (root.name.StartsWith("QuestShade", StringComparison.Ordinal) || root.IsChildOf(rig)) continue;
-                bool held = false;
-                foreach (var r in _roots) if (root == r || root.IsChildOf(r) || r.IsChildOf(root)) { held = true; break; }
-                if (held) continue;
+                if (pool != null) root = pool.transform;
+                else { var ent = rb.GetComponentInParent<Il2CppSLZ.Marrow.Interaction.MarrowEntity>(); root = ent != null ? ent.transform : rb.transform; }
+                if (root == null || !_seenRoots.Add(root.GetInstanceID())) { dup++; continue; }
+                if (root.name.StartsWith("QuestShade", StringComparison.Ordinal) || root.IsChildOf(rig) || rig.IsChildOf(root)) { mine++; continue; }
+                if (CameraProp != null && (root == CameraProp || root.IsChildOf(CameraProp))) { mine++; continue; }
+                bool isHeld = false;
+                foreach (var r in _roots) if (root == r || root.IsChildOf(r) || r.IsChildOf(root)) { isHeld = true; break; }
+                if (isHeld) { held++; continue; }
                 _near.Add((root, (root.position - at).sqrMagnitude));
             }
+            if (_scanLogs < 4 && n > 0) { _scanLogs++; Mod.Log.Msg($"Shadows: scan {n} colliders -> {_near.Count} objects (no body {noBody}, same object {dup}, you {mine}, held {held})"); }
             _near.Sort((x, y) => x.d.CompareTo(y.d));
             if (_near.Count > MaxOthers) _near.RemoveRange(MaxOthers, _near.Count - MaxOthers);
             // Incremental: keep copies for things still nearby, drop the ones that left, build only newcomers.
