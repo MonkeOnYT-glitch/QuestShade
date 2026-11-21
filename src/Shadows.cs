@@ -89,7 +89,7 @@ namespace QuestShade
         private static void Show(bool on)
         {
             if (_root != null && _root.activeSelf != on) _root.SetActive(on);
-            if (_othersOn != on) { _othersOn = on; foreach (var g in _others) if (g != null && g.activeSelf != on) g.SetActive(on); foreach (var g in _othersWall) if (g != null && g.activeSelf != on) g.SetActive(on); }
+            if (_othersOn != on) { _othersOn = on; foreach (var g in _others) if (g != null && g.activeSelf != on) g.SetActive(on); }
             if (_partsOn == on) return;
             _partsOn = on;
             foreach (var g in _parts) if (g != null && g.activeSelf != on) g.SetActive(on);
@@ -353,15 +353,25 @@ namespace QuestShade
         }
 
 
-        private const int MaxOthers = 10, MaxOtherMeshes = 40;
-        private const float OthersReach = 14f;
+        // ---- NPCs, spawned props and loose physics props near the player ----
+        // Kept cheap on purpose: a local overlap check instead of scanning every object in the level, one shadow copy
+        // (plus its camera copy) per mesh, and only a couple of objects re-cast onto their floor each frame.
+        private const int MaxOthers = 6, MaxOtherMeshes = 16, MaxOtherSkins = 6, PlacePerFrame = 2;
+        private const float OthersReach = 12f;
         private static readonly List<GameObject> _others = new List<GameObject>(), _othersLens = new List<GameObject>();
-        private static readonly List<GameObject> _othersWall = new List<GameObject>(), _othersWallLens = new List<GameObject>();
         private static readonly List<(Transform t, float d)> _near = new List<(Transform, float)>();
-        private static int _othersKey;
+        private static readonly HashSet<int> _seenRoots = new HashSet<int>();
+        private static readonly Collider[] _cols = new Collider[96];
+        private static int _othersKey, _placeNext;
         private static float _nextOthers;
         private static bool _othersOn;
-        private sealed class Group { public Transform Root; public Renderer Src; public readonly List<Renderer> Copies = new List<Renderer>(); public readonly List<Renderer> WallCopies = new List<Renderer>(); }
+        private static Vector3 _placedDir;
+        private sealed class Group
+        {
+            public Transform Root; public Renderer Src;
+            public readonly List<Renderer> Copies = new List<Renderer>(), WallCopies = new List<Renderer>();
+            public bool Placed, WallPlaced; public Vector3 P, N, WP, WN;
+        }
         private static readonly List<Group> _groups = new List<Group>();
         private static readonly List<Group> _heldGroups = new List<Group>();
         private static readonly RaycastHit[] _hits = new RaycastHit[12];
@@ -371,101 +381,80 @@ namespace QuestShade
         {
             foreach (var g in _others) if (g != null) UnityEngine.Object.Destroy(g);
             foreach (var g in _othersLens) if (g != null) UnityEngine.Object.Destroy(g);
-            foreach (var g in _othersWall) if (g != null) UnityEngine.Object.Destroy(g);
-            foreach (var g in _othersWallLens) if (g != null) UnityEngine.Object.Destroy(g);
-            _others.Clear(); _othersLens.Clear(); _othersWall.Clear(); _othersWallLens.Clear(); _othersKey = 0; _groups.Clear();
+            _others.Clear(); _othersLens.Clear(); _othersKey = 0; _groups.Clear(); _placeNext = 0;
         }
 
         private static void Others(Transform av, Vector3 at)
         {
-            _near.Clear();
+            _near.Clear(); _seenRoots.Clear();
             Transform rig = av; for (int i = 0; i < 6 && rig.parent != null; i++) rig = rig.parent;
-            foreach (var p in UnityEngine.Object.FindObjectsOfType<Il2CppSLZ.Marrow.Pool.Poolee>())
+            int n = Physics.OverlapSphereNonAlloc(at, OthersReach, _cols, _maskAll, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < n; i++)
             {
-                if (p == null) continue;
-                var go = p.gameObject;
-                if (!go.activeInHierarchy || go.name.StartsWith("QuestShade", StringComparison.Ordinal)) continue;
-                var t = go.transform;
-                if (t.IsChildOf(rig) || _roots.Contains(t)) continue;
-                float d = (t.position - at).sqrMagnitude;
-                if (d > OthersReach * OthersReach) continue;
-                _near.Add((t, d));
-            }
-            foreach (var rb in UnityEngine.Object.FindObjectsOfType<Rigidbody>())
-            {
-                if (rb == null || rb.isKinematic) continue;
-                var go = rb.gameObject;
-                if (!go.activeInHierarchy || go.name.StartsWith("QuestShade", StringComparison.Ordinal)) continue;
-                var t = go.transform;
-                if (t.IsChildOf(rig) || _roots.Contains(t)) continue;
-                bool dup = false;
-                foreach (var n in _near) if (t.IsChildOf(n.t) || n.t.IsChildOf(t)) { dup = true; break; }
-                if (dup) continue;
-                float d = (t.position - at).sqrMagnitude;
-                if (d > OthersReach * OthersReach) continue;
-                _near.Add((t, d));
+                var col = _cols[i];
+                if (col == null) continue;
+                Transform root = null;
+                var pool = col.GetComponentInParent<Il2CppSLZ.Marrow.Pool.Poolee>();
+                if (pool != null) root = pool.transform;
+                else { var rb = col.attachedRigidbody; if (rb != null && !rb.isKinematic) root = rb.transform; }
+                if (root == null || !_seenRoots.Add(root.GetInstanceID())) continue;
+                if (root.name.StartsWith("QuestShade", StringComparison.Ordinal) || root.IsChildOf(rig) || _roots.Contains(root)) continue;
+                bool inside = false;
+                foreach (var r in _roots) if (root.IsChildOf(r)) { inside = true; break; }
+                if (inside) continue;
+                _near.Add((root, (root.position - at).sqrMagnitude));
             }
             _near.Sort((x, y) => x.d.CompareTo(y.d));
             if (_near.Count > MaxOthers) _near.RemoveRange(MaxOthers, _near.Count - MaxOthers);
             int key = 17;
-            foreach (var n in _near) key = key * 31 + n.t.GetInstanceID();
+            foreach (var e in _near) key = key * 31 + e.t.GetInstanceID();
             if (key == _othersKey) return;
             ClearOthers();
             _othersKey = key;
             _lensLayer = -2; _layer = -1;
-            int meshes = 0;
+            int meshes = 0, skins = 0;
             foreach (var (root, _) in _near)
             {
-                var grp = new Group { Root = root }; _groups.Add(grp);
-                var lodKeep = new HashSet<int>();
+                if (meshes >= MaxOtherMeshes) break;
+                var grp = new Group { Root = root };
+                HashSet<int> lodKeep = null;
                 var lodg = root.GetComponentInChildren<LODGroup>();
-                if (lodg != null) { var lods = lodg.GetLODs(); if (lods != null && lods.Length > 1) foreach (var lr in lods[0].renderers) if (lr != null) lodKeep.Add(lr.GetInstanceID()); }
+                if (lodg != null) { var lods = lodg.GetLODs(); if (lods != null && lods.Length > 1) { lodKeep = new HashSet<int>(); foreach (var lr in lods[0].renderers) if (lr != null) lodKeep.Add(lr.GetInstanceID()); } }
                 foreach (var smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(false))
                 {
-                    if (meshes >= MaxOtherMeshes) break;
+                    if (meshes >= MaxOtherMeshes || skins >= MaxOtherSkins) break;
                     if (smr == null || !smr.enabled || smr.sharedMesh == null) continue;
-                    if (lodKeep.Count > 0 && !lodKeep.Contains(smr.GetInstanceID())) continue;
+                    if (lodKeep != null && !lodKeep.Contains(smr.GetInstanceID())) continue;
                     var mesh = smr.sharedMesh; int subs = mesh.subMeshCount;
                     if (!ReadSolid(smr, subs, true)) continue;
                     var go = Skin("NpcSkin", smr, mesh, subs, _shade, _none).gameObject;
                     var lens = Skin("NpcSkinLens", smr, mesh, subs, _shadeLens, _noneLens).gameObject;
-                    grp.Src ??= smr; grp.Copies.Add(go.GetComponent<Renderer>()); grp.Copies.Add(lens.GetComponent<Renderer>());
                     lens.SetActive(false);
-                    _others.Add(go); _othersLens.Add(lens); meshes++;
-                    var wallGo = Skin("NpcSkinWall", smr, mesh, subs, _shade, _none).gameObject;
-                    var wallLens = Skin("NpcSkinWallLens", smr, mesh, subs, _shadeLens, _noneLens).gameObject;
-                    grp.WallCopies.Add(wallGo.GetComponent<Renderer>()); grp.WallCopies.Add(wallLens.GetComponent<Renderer>());
-                    wallLens.SetActive(false);
-                    _othersWall.Add(wallGo); _othersWallLens.Add(wallLens);
+                    grp.Src ??= smr; grp.Copies.Add(go.GetComponent<Renderer>()); grp.Copies.Add(lens.GetComponent<Renderer>());
+                    _others.Add(go); _othersLens.Add(lens); meshes++; skins++;
                 }
                 foreach (var mr in root.GetComponentsInChildren<MeshRenderer>(false))
                 {
                     if (meshes >= MaxOtherMeshes) break;
                     if (mr == null || !mr.enabled || mr.gameObject.name.StartsWith("QuestShade", StringComparison.Ordinal)) continue;
-                    if (lodKeep.Count > 0 && !lodKeep.Contains(mr.GetInstanceID())) continue;
+                    if (lodKeep != null && !lodKeep.Contains(mr.GetInstanceID())) continue;
                     var mf = mr.GetComponent<MeshFilter>();
                     var mesh = mf != null ? mf.sharedMesh : null;
                     if (mesh == null) continue;
-                    var e = mr.bounds.extents;
-                    if (Math.Min(e.x, Math.Min(e.y, e.z)) < 0.0015f || Math.Max(e.x, Math.Max(e.y, e.z)) > 6f) continue;
+                    var ext = mr.bounds.extents;
+                    if (Math.Min(ext.x, Math.Min(ext.y, ext.z)) < 0.0015f || Math.Max(ext.x, Math.Max(ext.y, ext.z)) > 6f) continue;
                     int subs = mesh.subMeshCount;
                     if (!ReadSolid(mr, subs)) continue;
                     var go = Part(PartName, mr.transform, mesh, subs, _shade, _none);
                     var lens = Part(PartName + "Lens", go.transform, mesh, subs, _shadeLens, _noneLens);
                     lens.SetActive(false);
-                    grp.Src ??= mr; grp.Copies.Add(go.GetComponent<Renderer>()); grp.Copies.Add(lens.GetComponent<Renderer>());
                     go.SetActive(_othersOn);
+                    grp.Src ??= mr; grp.Copies.Add(go.GetComponent<Renderer>()); grp.Copies.Add(lens.GetComponent<Renderer>());
                     _others.Add(go); _othersLens.Add(lens); meshes++;
-                    var wallGo = Part(PartName + "Wall", mr.transform, mesh, subs, _shade, _none);
-                    var wallLens = Part(PartName + "WallLens", wallGo.transform, mesh, subs, _shadeLens, _noneLens);
-                    wallLens.SetActive(false);
-                    grp.WallCopies.Add(wallGo.GetComponent<Renderer>()); grp.WallCopies.Add(wallLens.GetComponent<Renderer>());
-                    wallGo.SetActive(_othersOn);
-                    _othersWall.Add(wallGo); _othersWallLens.Add(wallLens);
                 }
+                if (grp.Copies.Count > 0) { foreach (var r in grp.Copies) if (r != null) r.enabled = false; _groups.Add(grp); }
             }
         }
-
 
         private static bool BadFloorHit(RaycastHit hit)
         {
@@ -473,129 +462,88 @@ namespace QuestShade
             if (col == null) return true;
             var go = col.gameObject;
             if (go == null) return true;
-            if (col.GetComponentInParent<SpriteRenderer>() != null) return true;
+            // Only skip obvious non-floors. The old "see-through material" test (which also looked at parent objects)
+            // threw out floors like Void G114's grid, so shadows never found the ground.
+            if (col.GetComponent<SpriteRenderer>() != null) return true;
             if (go.name.IndexOf("decal", StringComparison.OrdinalIgnoreCase) >= 0) return true;
-            var r = col.GetComponent<Renderer>();
-            if (r == null) r = col.GetComponentInParent<Renderer>();
-            if (r == null) return false;
-            var mats = r.sharedMaterials;
-            if (mats == null || mats.Length == 0) return false;
-            foreach (var m in mats)
-            {
-                if (m == null) continue;
-                if (m.renderQueue < 3000) return false;
-            }
-            return true;
+            return false;
         }
+
+        // Finds the floor (and a wall, if wanted) under an object along the light, ignoring the object itself.
+        private static void Cast(Group g, Vector3 d, Transform skip, bool wantWall, out bool floor, out RaycastHit fh, out bool wall, out RaycastHit wh)
+        {
+            floor = wall = false; fh = wh = default;
+            int n = Physics.RaycastNonAlloc(g.Src.bounds.center, d, _hits, 20f, _maskAll, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < n; i++)
+            {
+                var h = _hits[i]; var col = h.collider;
+                if (col == null) continue;
+                var t = col.transform;
+                if (t.IsChildOf(g.Root) || (skip != null && t.IsChildOf(skip)) || BadFloorHit(h)) continue;
+                if (h.normal.y > 0.5f) { if (Vector3.Dot(d, h.normal) < -0.1f && (!floor || h.distance < fh.distance)) { fh = h; floor = true; } }
+                else if (wantWall && Mathf.Abs(h.normal.y) < 0.5f && Vector3.Dot(d, h.normal) < -0.35f && h.distance <= 12f && (!wall || h.distance < wh.distance)) { wh = h; wall = true; }
+            }
+        }
+
+        private static void Apply(List<Renderer> copies, bool on, Vector3 p, Vector3 nrm, Vector3 d)
+        {
+            if (on)
+            {
+                _mpb.Clear();
+                _mpb.SetVector(PointId, new Vector4(p.x, p.y, p.z, 0f));
+                _mpb.SetVector(NormalId, new Vector4(nrm.x, nrm.y, nrm.z, Lift));
+                _mpb.SetVector(DirId, new Vector4(d.x, d.y, d.z, 0f));
+            }
+            foreach (var r in copies)
+            {
+                if (r == null) continue;
+                if (r.enabled != on) r.enabled = on;
+                if (on) r.SetPropertyBlock(_mpb);
+            }
+        }
+
+        private static bool Moved(Vector3 a, Vector3 b) => (a - b).sqrMagnitude > 0.0004f;
 
         private static void PlaceOthers(Vector3 d)
         {
+            if (_groups.Count == 0) return;
             _mpb ??= new MaterialPropertyBlock();
-            foreach (var g in _groups)
+            bool dirChanged = Vector3.Dot(d, _placedDir) < 0.9999f;
+            if (dirChanged) { _placedDir = d; foreach (var g in _groups) g.Placed = false; }
+            // Groups that were never placed go first, then a couple per frame in rotation.
+            int budget = PlacePerFrame;
+            foreach (var g in _groups) if (!g.Placed && budget > 0 && g.Root != null && g.Src != null) { PlaceOne(g, d); budget--; }
+            for (int k = 0; k < _groups.Count && budget > 0; k++)
             {
+                _placeNext = (_placeNext + 1) % _groups.Count;
+                var g = _groups[_placeNext];
                 if (g.Root == null || g.Src == null) continue;
-                Vector3 c = g.Src.bounds.center;
-                int n = Physics.RaycastNonAlloc(c, d, _hits, 20f, _maskAll, QueryTriggerInteraction.Ignore);
-                float best = float.MaxValue, bestWall = float.MaxValue;
-                RaycastHit hit = default, wallHit = default;
-                for (int i = 0; i < n; i++)
-                {
-                    var col = _hits[i].collider;
-                    if (col == null || col.transform.IsChildOf(g.Root)) continue;
-                    if (BadFloorHit(_hits[i])) continue;
-                    if (_hits[i].normal.y > 0.5f)
-                    {
-                        if (_hits[i].distance < best) { best = _hits[i].distance; hit = _hits[i]; }
-                    }
-                    else if (Mathf.Abs(_hits[i].normal.y) < 0.5f && Vector3.Dot(d, _hits[i].normal) < -0.35f && _hits[i].distance <= 12f)
-                    {
-                        if (_hits[i].distance < bestWall) { bestWall = _hits[i].distance; wallHit = _hits[i]; }
-                    }
-                }
-                bool ok = best < float.MaxValue && Vector3.Dot(d, hit.normal) < -0.1f;
-                if (ok)
-                {
-                    _mpb.Clear();
-                    _mpb.SetVector(PointId, new Vector4(hit.point.x, hit.point.y, hit.point.z, 0f));
-                    _mpb.SetVector(NormalId, new Vector4(hit.normal.x, hit.normal.y, hit.normal.z, Lift));
-                    _mpb.SetVector(DirId, new Vector4(d.x, d.y, d.z, 0f));
-                }
-                foreach (var r in g.Copies)
-                {
-                    if (r == null) continue;
-                    if (r.enabled != ok) r.enabled = ok;
-                    if (ok) r.SetPropertyBlock(_mpb);
-                }
-                bool wallOk = bestWall < float.MaxValue;
-                if (wallOk)
-                {
-                    _mpb.Clear();
-                    _mpb.SetVector(PointId, new Vector4(wallHit.point.x, wallHit.point.y, wallHit.point.z, 0f));
-                    _mpb.SetVector(NormalId, new Vector4(wallHit.normal.x, wallHit.normal.y, wallHit.normal.z, Lift));
-                    _mpb.SetVector(DirId, new Vector4(d.x, d.y, d.z, 0f));
-                }
-                foreach (var r in g.WallCopies)
-                {
-                    if (r == null) continue;
-                    if (r.enabled != wallOk) r.enabled = wallOk;
-                    if (wallOk) r.SetPropertyBlock(_mpb);
-                }
+                PlaceOne(g, d); budget--;
             }
         }
 
+        private static void PlaceOne(Group g, Vector3 d)
+        {
+            Cast(g, d, null, false, out bool floor, out var fh, out _, out _);
+            if (!g.Placed || floor != g.Copies[0].enabled || (floor && (Moved(fh.point, g.P) || Moved(fh.normal, g.N))))
+            {
+                Apply(g.Copies, floor, fh.point, fh.normal, d);
+                if (floor) { g.P = fh.point; g.N = fh.normal; }
+            }
+            g.Placed = true;
+        }
+
+        // Held items move fast, so they re-cast every frame (there are at most two).
         private static void PlaceHeld(Vector3 d, Transform av)
         {
+            if (_heldGroups.Count == 0) return;
             _mpb ??= new MaterialPropertyBlock();
             foreach (var g in _heldGroups)
             {
-                if (g.Root == null || g.Src == null) continue;
-                Vector3 c = g.Src.bounds.center;
-                int n = Physics.RaycastNonAlloc(c, d, _hits, 20f, _maskAll, QueryTriggerInteraction.Ignore);
-                float best = float.MaxValue, bestWall = float.MaxValue;
-                RaycastHit hit = default, wallHit = default;
-                for (int i = 0; i < n; i++)
-                {
-                    var col = _hits[i].collider;
-                    if (col == null || col.transform.IsChildOf(g.Root)) continue;
-                    if (av != null && col.transform.IsChildOf(av)) continue;
-                    if (BadFloorHit(_hits[i])) continue;
-                    if (_hits[i].normal.y > 0.5f)
-                    {
-                        if (_hits[i].distance < best) { best = _hits[i].distance; hit = _hits[i]; }
-                    }
-                    else if (Mathf.Abs(_hits[i].normal.y) < 0.5f && Vector3.Dot(d, _hits[i].normal) < -0.35f && _hits[i].distance <= 12f)
-                    {
-                        if (_hits[i].distance < bestWall) { bestWall = _hits[i].distance; wallHit = _hits[i]; }
-                    }
-                }
-                bool ok = best < float.MaxValue && Vector3.Dot(d, hit.normal) < -0.1f;
-                if (ok)
-                {
-                    _mpb.Clear();
-                    _mpb.SetVector(PointId, new Vector4(hit.point.x, hit.point.y, hit.point.z, 0f));
-                    _mpb.SetVector(NormalId, new Vector4(hit.normal.x, hit.normal.y, hit.normal.z, Lift));
-                    _mpb.SetVector(DirId, new Vector4(d.x, d.y, d.z, 0f));
-                }
-                foreach (var r in g.Copies)
-                {
-                    if (r == null) continue;
-                    if (r.enabled != ok) r.enabled = ok;
-                    if (ok) r.SetPropertyBlock(_mpb);
-                }
-                bool wallOk = bestWall < float.MaxValue;
-                if (wallOk)
-                {
-                    _mpb.Clear();
-                    _mpb.SetVector(PointId, new Vector4(wallHit.point.x, wallHit.point.y, wallHit.point.z, 0f));
-                    _mpb.SetVector(NormalId, new Vector4(wallHit.normal.x, wallHit.normal.y, wallHit.normal.z, Lift));
-                    _mpb.SetVector(DirId, new Vector4(d.x, d.y, d.z, 0f));
-                }
-                foreach (var r in g.WallCopies)
-                {
-                    if (r == null) continue;
-                    if (r.enabled != wallOk) r.enabled = wallOk;
-                    if (wallOk) r.SetPropertyBlock(_mpb);
-                }
+                if (g.Root == null || g.Src == null || g.Copies.Count == 0) continue;
+                Cast(g, d, av, true, out bool floor, out var fh, out bool wall, out var wh);
+                Apply(g.Copies, floor, fh.point, fh.normal, d);
+                Apply(g.WallCopies, wall, wh.point, wh.normal, d);
             }
         }
 
@@ -779,7 +727,6 @@ namespace QuestShade
                 foreach (var g in _parts) if (g != null) g.layer = layer;
                 foreach (var g in _partsWall) if (g != null) g.layer = layer;
                 foreach (var g in _others) if (g != null) g.layer = layer;
-                foreach (var g in _othersWall) if (g != null) g.layer = layer;
             }
             int lensLayer = CameraOpen && FlashBeams.LensLayer != null ? FlashBeams.LensLayer() : -1;
             if (lensLayer != _lensLayer)
@@ -793,7 +740,6 @@ namespace QuestShade
                 foreach (var g in _partsLens) if (g != null) { if (on) g.layer = lensLayer; g.SetActive(on); }
                 foreach (var g in _partsWallLens) if (g != null && on) g.layer = lensLayer;
                 foreach (var g in _othersLens) if (g != null) { if (on) g.layer = lensLayer; g.SetActive(on); }
-                foreach (var g in _othersWallLens) if (g != null && on) g.layer = lensLayer;
             }
 
             Show(true);

@@ -69,7 +69,9 @@ namespace QuestShade
         public bool CanPost => Active && _post != null && _cfg != null;
         public bool PhotoHQ;
         private Config _cfg;
-        private bool MotionBlurOn => _cfg != null && _cfg.MotionBlur && _cfg.MotionBlurStrength > 0.01f;
+        // Pass 8 is the motion blur blend. If the shader pack predates it, blitting with it draws nothing and the
+        // preview/photos come out black, so only use it when the shader really has it.
+        private bool MotionBlurOn => _cfg != null && _cfg.MotionBlur && _cfg.MotionBlurStrength > 0.01f && _post != null && _post.passCount > 8;
         private bool HQReady => Active && _post != null && _cfg != null && (_bloomIntensity > 0f || _dofStrength > 0f || LensFx || MotionBlurOn);
         public bool WantsHQ => HQReady && _cfg.BloomDofCapture;
         public bool WantsPreviewHQ => HQReady && _cfg.BloomDofPreview;
