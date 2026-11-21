@@ -406,6 +406,15 @@ namespace QuestShade
                         hp += 0.9f * (hp - _lp);
                         // Fixed boost, no auto-gain: the old "stabilizer" pumped the volume up and down between words.
                         float m = hp * MicBoost * _micVol;
+                        // Noise gate: breathing and room hiss sit well below speech, so mute the mic between words.
+                        // Opens in ~2 ms, stays open 250 ms after you stop talking, then fades out over ~60 ms.
+                        float am = Math.Abs(m);
+                        _gEnv += (am > _gEnv ? 0.2f : 0.0015f) * (am - _gEnv);
+                        if (_gEnv > GateOpen) _gHold = Rate / 4;
+                        else if (_gHold > 0) _gHold--;
+                        float gWant = (_gEnv > GateOpen || _gHold > 0) ? 1f : 0f;
+                        _gGain += (gWant > _gGain ? 0.01f : 0.0004f) * (gWant - _gGain);
+                        m *= _gGain;
                         l += m; r += m;
                         _micFrac += step;
                         while (_micFrac >= 1.0 && _micCount > 1) { _micFrac -= 1.0; _micR = (_micR + 1) % _micRing.Length; _micCount--; }
@@ -419,8 +428,9 @@ namespace QuestShade
             _framesOut += frames;
         }
 
-        private bool _micPrimed; private float _hpX, _hpY, _lp;
-        private const float MicBoost = 8f; // the Quest mic is very quiet raw; Soft() keeps loud peaks from clipping
+        private bool _micPrimed; private float _hpX, _hpY, _lp, _gEnv, _gGain; private int _gHold;
+        private const float GateOpen = 0.06f; // level (after boost) the voice must pass to open the gate
+        private const float MicBoost = 6.5f; // the Quest mic is very quiet raw; Soft() keeps loud peaks from clipping
 
         private static float Soft(float x)
         {
