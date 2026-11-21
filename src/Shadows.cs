@@ -573,6 +573,32 @@ namespace QuestShade
             SetBlock(_skinsWall); SetBlock(_skinsWallLens);
         }
 
+
+        // Says (at most every 5 s) why the shadow is hidden, so a missing shadow is never a mystery in the log.
+        private static float _whyAt;
+        private static void Why(string reason)
+        {
+            float now = Time.unscaledTime;
+            if (now < _whyAt) return;
+            _whyAt = now + 5f;
+            Mod.Log.Msg("Shadows: hidden - " + reason);
+        }
+
+        private static string HitList(Vector3 origin, Vector3 d)
+        {
+            int n = Physics.RaycastNonAlloc(origin, d, _hits, Reach, _maskAll, QueryTriggerInteraction.Ignore);
+            if (n == 0) return $"The ray hit nothing (mask {_maskAll:X}, dir {d.x:0.##},{d.y:0.##},{d.z:0.##}).";
+            var sb = new System.Text.StringBuilder($"Ray hits ({n}): ");
+            for (int i = 0; i < n && i < 6; i++)
+            {
+                var h = _hits[i];
+                var c = h.collider;
+                sb.Append(c != null ? c.name : "?").Append(" [layer ").Append(c != null ? c.gameObject.layer : -1)
+                  .Append($", up {h.normal.y:0.##}, {h.distance:0.#} m{(BadFloorHit(h) ? ", skipped" : "")}]  ");
+            }
+            return sb.ToString();
+        }
+
         private static void FindSun()
         {
             Light best = null;
@@ -602,7 +628,7 @@ namespace QuestShade
             // The risky part (copying meshes) is done. Mark it so a later crash elsewhere (e.g. a recording) is never blamed on shadows,
             // and stop rewriting the step file every frame while there's no floor to cast onto.
             if (!_stepsOk) { _stepsOk = true; try { System.IO.File.WriteAllText(StepFile, "ok"); } catch { } }
-            if (_skins.Count == 0) { Show(false); return; }
+            if (_skins.Count == 0) { Why("no body meshes to copy"); Show(false); return; }
 
             S("sun");
             if (now >= _sunAt) { _sunAt = now + 6f; if (_sun == null || !_sun.isActiveAndEnabled) FindSun(); }
@@ -683,12 +709,12 @@ namespace QuestShade
                 _wall = true;
             }
             else _wall = false;
-            if (!_plane && !_wall) { Show(false); return; }
+            if (!_plane && !_wall) { if (Time.unscaledTime >= _whyAt) Why("no floor or wall found under you. " + HitList(origin, d)); Show(false); return; }
 
             Vector3 n = _plane ? _planeN : _wallN;
             float dn = Vector3.Dot(d, n);
-            float dark = Mathf.Clamp01(cfg.ShadowDarkness) * _k * _fade * Mathf.Clamp01((-dn - 0.35f) / 0.2f);
-            if (dark < 0.01f) { Show(false); return; }
+            float dark = Mathf.Clamp01(cfg.ShadowDarkness) * _k * _fade * Mathf.Clamp01((-dn - 0.1f) / 0.2f);
+            if (dark < 0.01f) { if (Time.unscaledTime >= _whyAt) Why($"too faint (darkness {cfg.ShadowDarkness:0.##}, light {_k:0.##}, fade {_fade:0.##}, angle {dn:0.##})"); Show(false); return; }
 
             S("place");
             if (_plane)

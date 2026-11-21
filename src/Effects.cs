@@ -142,7 +142,7 @@ namespace QuestShade
             catch (Exception e) { Mod.Log.Warning("Second grade pass failed: " + e.Message); return false; }
         }
 
-        public void ProcessHQ(RenderTexture raw, RenderTexture dst, bool extras = true, bool light = false)
+        public void ProcessHQ(RenderTexture raw, RenderTexture dst, bool extras = true, bool light = false, bool motionBlur = false)
         {
             if (raw == null || dst == null || _post == null) return;
             int w = raw.width, h = raw.height;
@@ -206,7 +206,9 @@ namespace QuestShade
                     _post.SetVector(ID.Bloom, new Vector4(bloomV.x * 1.8f / Mathf.Max(1f, norm), bloomV.y, bloomV.z, bloomV.w));
                 }
                 Graphics.Blit(src, dst, _post, 4);
-                if (MotionBlurOn)
+                // Motion blur blends with the previous frame, so it only makes sense on video. The preview and photos never use it
+                // (feeding it the preview frame by frame could leave the preview black).
+                if (motionBlur && MotionBlurOn)
                 {
                     float blurW = Mathf.Clamp01(_cfg.MotionBlurStrength) * 0.85f;
                     if (_mbPrev == null || _mbPrev.width != dst.width || _mbPrev.height != dst.height)

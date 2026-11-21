@@ -695,7 +695,7 @@ namespace QuestShade
             {
                 if (_recRendered)
                 {
-                    if (_recHQ) Fx.ProcessHQ(_rawRecRT, _recRT, _recExtras && Perf.RecordingExtras);
+                    if (_recHQ) Fx.ProcessHQ(_rawRecRT, _recRT, _recExtras && Perf.RecordingExtras, motionBlur: true);
                     else if (_recSS) Graphics.Blit(_rawRecRT, _recRT);
                     var frame = _recRT;
                     if (cfg.MatchPreview && Fx != null)
