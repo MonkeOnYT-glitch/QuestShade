@@ -41,6 +41,7 @@ namespace QuestShade
 
         public static void OnLevel()
         {
+            _skipRoots.Clear();
             _sun = null; _sunAt = Time.unscaledTime + 2f; _fade = 0f; _logged = false; _plane = false; _wall = false; _sunSeen = false;
             _wait = Time.unscaledTime + 4f;
         }
@@ -362,7 +363,7 @@ namespace QuestShade
         // ---- NPCs, spawned props and loose physics props near the player ----
         // Kept cheap on purpose: a local overlap check instead of scanning every object in the level, one shadow copy
         // (plus its camera copy) per mesh, and only a couple of objects re-cast onto their floor each frame.
-        private const int MaxOthers = 6, MaxOtherMeshes = 16, MaxOtherSkins = 6, PlacePerFrame = 2;
+        private const int MaxOthers = 10, MaxOtherMeshes = 24, MaxOtherSkins = 6, PlacePerFrame = 2;
         private const float OthersReach = 12f;
         private static readonly List<GameObject> _others = new List<GameObject>(), _othersLens = new List<GameObject>();
         private static readonly List<(Transform t, float d)> _near = new List<(Transform, float)>();
@@ -374,7 +375,8 @@ namespace QuestShade
         private static Vector3 _placedDir;
         private sealed class Group
         {
-            public Transform Root; public Renderer Src;
+            public Transform Root; public Renderer Src; public int RootId, Meshes, Skins;
+            public readonly List<GameObject> Objs = new List<GameObject>();
             public readonly List<Renderer> Copies = new List<Renderer>(), WallCopies = new List<Renderer>();
             public bool Placed, WallPlaced; public Vector3 P, N, WP, WN;
         }
@@ -388,10 +390,10 @@ namespace QuestShade
         {
             foreach (var g in _others) if (g != null) UnityEngine.Object.Destroy(g);
             foreach (var g in _othersLens) if (g != null) UnityEngine.Object.Destroy(g);
-            _others.Clear(); _othersLens.Clear(); _othersKey = 0; _groups.Clear(); _placeNext = 0;
+            _others.Clear(); _othersLens.Clear(); _othersKey = 0; _groups.Clear(); _placeNext = 0; _skipRoots.Clear();
         }
 
-        private static readonly HashSet<int> _seenBodies = new HashSet<int>();
+        private static readonly HashSet<int> _seenBodies = new HashSet<int>(), _keepRoots = new HashSet<int>(), _skipRoots = new HashSet<int>();
         private static bool _othersTraced;
         private const int MaxRootRenderers = 24;
 
@@ -422,25 +424,32 @@ namespace QuestShade
             }
             _near.Sort((x, y) => x.d.CompareTo(y.d));
             if (_near.Count > MaxOthers) _near.RemoveRange(MaxOthers, _near.Count - MaxOthers);
-            int key = 17;
-            foreach (var e in _near) key = key * 31 + e.t.GetInstanceID();
-            if (key == _othersKey) { _othersTraced = true; return; }
-            // Rebuilding copies is the expensive part: at most once every 3 s, so walking past props doesn't cause a hitch every second.
-            if (_othersTraced && Time.unscaledTime < _othersRebuildAt) return;
-            _othersRebuildAt = Time.unscaledTime + 3f;
-            T("npcs: clear");
-            ClearOthers();
-            _othersKey = key;
-            _lensLayer = -2; _layer = -1;
+            // Incremental: keep copies for things still nearby, drop the ones that left, build only newcomers.
+            _keepRoots.Clear();
+            foreach (var e in _near) _keepRoots.Add(e.t.GetInstanceID());
+            bool changed = false;
+            for (int i = _groups.Count - 1; i >= 0; i--)
+            {
+                var g = _groups[i];
+                if (g.Root != null && _keepRoots.Contains(g.RootId)) continue;
+                foreach (var o in g.Objs) { if (o == null) continue; _others.Remove(o); _othersLens.Remove(o); UnityEngine.Object.Destroy(o); }
+                _groups.RemoveAt(i); changed = true;
+            }
             int meshes = 0, skins = 0;
+            foreach (var g in _groups) { meshes += g.Meshes; skins += g.Skins; }
             foreach (var (root, _) in _near)
             {
                 if (meshes >= MaxOtherMeshes) break;
+                int id = root.GetInstanceID();
+                if (_skipRoots.Contains(id)) continue;
+                bool have = false;
+                foreach (var g in _groups) if (g.RootId == id) { have = true; break; }
+                if (have) continue;
                 T("npcs: build " + root.name);
-                var grp = new Group { Root = root };
+                var grp = new Group { Root = root, RootId = id };
                 var smrs = root.GetComponentsInChildren<SkinnedMeshRenderer>(false);
                 var mrs = root.GetComponentsInChildren<MeshRenderer>(false);
-                if (smrs.Length + mrs.Length > MaxRootRenderers) continue; // a whole building or level chunk, not a prop
+                if (smrs.Length + mrs.Length > MaxRootRenderers) { _skipRoots.Add(id); continue; } // a whole building or level chunk, not a prop
                 foreach (var smr in smrs)
                 {
                     if (meshes >= MaxOtherMeshes || skins >= MaxOtherSkins) break;
@@ -451,6 +460,7 @@ namespace QuestShade
                     var lens = Skin("NpcSkinLens", smr, mesh, subs, _shadeLens, _noneLens).gameObject;
                     lens.SetActive(false);
                     grp.Src ??= smr; grp.Copies.Add(go.GetComponent<Renderer>()); grp.Copies.Add(lens.GetComponent<Renderer>());
+                    grp.Objs.Add(go); grp.Objs.Add(lens); grp.Meshes++; grp.Skins++;
                     _others.Add(go); _othersLens.Add(lens); meshes++; skins++;
                 }
                 foreach (var mr in mrs)
@@ -469,13 +479,15 @@ namespace QuestShade
                     lens.SetActive(false);
                     go.SetActive(_othersOn);
                     grp.Src ??= mr; grp.Copies.Add(go.GetComponent<Renderer>()); grp.Copies.Add(lens.GetComponent<Renderer>());
+                    grp.Objs.Add(go); grp.Objs.Add(lens); grp.Meshes++;
                     _others.Add(go); _othersLens.Add(lens); meshes++;
                 }
-                if (grp.Copies.Count > 0) { foreach (var r in grp.Copies) if (r != null) r.enabled = false; _groups.Add(grp); }
+                if (grp.Copies.Count > 0) { foreach (var r in grp.Copies) if (r != null) r.enabled = false; _groups.Add(grp); changed = true; }
+                else _skipRoots.Add(id);
             }
+            if (changed) { _othersKey++; _lensLayer = -2; _layer = -1; }
             if (!_othersTraced) { _othersTraced = true; Mod.Log.Msg($"Shadows: {_groups.Count} nearby NPC/prop(s) cast shadows ({meshes} meshes)"); }
         }
-
 
         // The player's rig root (the RigManager object). Climbing a fixed number of levels could overshoot into a parent
         // shared by the whole level, which made every prop count as "part of the player" and get skipped.

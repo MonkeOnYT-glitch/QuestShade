@@ -401,7 +401,8 @@ namespace QuestShade
                     {
                         float a = _micRing[_micR], b = _micRing[(_micR + 1) % _micRing.Length];
                         float x = a + (b - a) * (float)_micFrac;
-                        float hp = 0.975f * (_hpY + x - _hpX); _hpX = x; _hpY = hp; // low cut ~190 Hz at 48 kHz (was ~90 Hz): takes the boom out
+                        float hp = 0.975f * (_hpY + x - _hpX); _hpX = x; _hpY = hp; // low cut ~190 Hz at 48 kHz
+                        float hp2 = 0.975f * (_hp2Y + hp - _hp2X); _hp2X = hp; _hp2Y = hp2; hp = hp2; // second stage: twice as steep, takes the remaining boom out
                         _lp += 0.28f * (hp - _lp);
                         hp += 0.9f * (hp - _lp);
                         // Fixed boost, no auto-gain: the old "stabilizer" pumped the volume up and down between words.
@@ -428,9 +429,9 @@ namespace QuestShade
             _framesOut += frames;
         }
 
-        private bool _micPrimed; private float _hpX, _hpY, _lp, _gEnv, _gGain; private int _gHold;
-        private const float GateOpen = 0.06f; // level (after boost) the voice must pass to open the gate
-        private const float MicBoost = 6.5f; // the Quest mic is very quiet raw; Soft() keeps loud peaks from clipping
+        private bool _micPrimed; private float _hpX, _hpY, _hp2X, _hp2Y, _lp, _gEnv, _gGain; private int _gHold;
+        private const float GateOpen = 0.05f; // level (after boost) the voice must pass to open the gate
+        private const float MicBoost = 5.5f; // the Quest mic is very quiet raw; Soft() keeps loud peaks from clipping
 
         private static float Soft(float x)
         {

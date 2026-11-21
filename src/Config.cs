@@ -27,7 +27,7 @@ namespace QuestShade
         public bool HeadsetBloom = false;
         public bool MotionBlur = false;
         // Shadow map (test): world-space shadows on every surface. CpuMatrices / FlipY are test switches for the per-eye math.
-        public bool ShadowMap = true, ShadowMapCpuMatrices = false, ShadowMapFlipY = false, ShadowMapManualRender = true;
+        public bool ShadowMap = true, ShadowMapCpuMatrices = false, ShadowMapFlipY = false, ShadowMapManualRender = true, ShadowMapCamera = true, ShadowMapCameraFlipY = false;
         public int ShadowMapRes = 2048;
         public float ShadowMapRange = 8f, ShadowMapBias = 0.04f, ShadowMapSoftness = 1.2f;
         public float MotionBlurStrength = 0.5f;
@@ -194,6 +194,8 @@ namespace QuestShade
             ShadowMapBias = ini.Float("Lighting", "ShadowMapBias", 0.04f);
             ShadowMapSoftness = ini.Float("Lighting", "ShadowMapSoftness", 1.2f);
             ShadowMapManualRender = ini.Bool("Lighting", "ShadowMapManualRender", true);
+            ShadowMapCamera = ini.Bool("Lighting", "ShadowMapCamera", true);
+            ShadowMapCameraFlipY = ini.Bool("Lighting", "ShadowMapCameraFlipY", false);
             ShadowDarkness = Mathf.Clamp01(ini.Float("Lighting", "ShadowDarkness", 0.55f));
             Fisheye = Mathf.Clamp01(ini.Float("Camera", "Fisheye", 0f));
             Vertical = ini.Bool("Camera", "Vertical", false);

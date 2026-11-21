@@ -15,7 +15,8 @@ namespace QuestShade
         private static Camera _cam;
         private static RenderTexture _rt;
         private static UniversalAdditionalCameraData _headData;
-        private static Camera _head;
+        private static Camera _head, _lens;
+        private static UniversalAdditionalCameraData _lensData;
         private static int _layer = -2, _res;
         private static bool _on, _logged, _renderWarned;
         private static float _dark;
@@ -50,7 +51,7 @@ namespace QuestShade
 
         public static void Update(Config cfg, Camera head, Camera lens, Vector3 dir, float darkness)
         {
-            _cfg = cfg; _head = head; _dark = Mathf.Clamp01(darkness);
+            _cfg = cfg; _head = head; _lens = lens; _dark = Mathf.Clamp01(darkness);
             int L = Layer;
             if (L < 0 || head == null) { Off(); return; }
             int res = Mathf.ClosestPowerOfTwo(Mathf.Clamp(cfg.ShadowMapRes, 256, 2048));
@@ -71,6 +72,16 @@ namespace QuestShade
                 if (_headData != null && !_headData.requiresDepthTexture) _headData.requiresDepthTexture = true;
             }
             catch { }
+            // So does the in-game camera, for shadows in its photos and videos.
+            if (lens != null && cfg.ShadowMapCamera)
+            {
+                try
+                {
+                    if (_lensData == null || _lensData.gameObject != lens.gameObject) _lensData = lens.GetComponent<UniversalAdditionalCameraData>();
+                    if (_lensData != null && !_lensData.requiresDepthTexture) _lensData.requiresDepthTexture = true;
+                }
+                catch { }
+            }
 
             // Place the sun camera around the player and snap it to whole shadow-map texels, so edges don't shimmer as you walk.
             dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.down;
@@ -112,13 +123,19 @@ namespace QuestShade
         // Shadows only on the headset (the camera's own footage is handled separately); everything else gets darkness 0.
         public static void BeginCamera(Camera cam)
         {
-            if (!_on || cam == null) return;
+            if (!_on || cam == null || _cfg == null) return;
             bool head = _head != null && cam.Pointer == _head.Pointer;
-            Shader.SetGlobalVector(OriginId, new Vector4(_originXYZ.x, _originXYZ.y, _originXYZ.z, head ? _dark : 0f));
-            if (!head || _cfg == null || !_cfg.ShadowMapCpuMatrices) return;
+            bool lens = !head && _lens != null && _cfg.ShadowMapCamera && cam.Pointer == _lens.Pointer;
+            Shader.SetGlobalVector(OriginId, new Vector4(_originXYZ.x, _originXYZ.y, _originXYZ.z, head || lens ? _dark : 0f));
+            if (!head && !lens) return;
+            // The in-game camera always uses its own (CPU) matrices; the headset uses the built-in eye matrices unless switched.
+            bool cpu = lens || _cfg.ShadowMapCpuMatrices;
+            bool flip = lens ? _cfg.ShadowMapCameraFlipY : _cfg.ShadowMapFlipY;
+            Shader.SetGlobalVector(OptsId, new Vector4(cpu ? 1f : 0f, flip ? 1f : 0f, Mathf.Clamp(_cfg.ShadowMapBias, 0f, 0.5f), Mathf.Clamp(_cfg.ShadowMapSoftness, 0.5f, 4f)));
+            if (!cpu) return;
             try
             {
-                if (cam.stereoEnabled)
+                if (!lens && cam.stereoEnabled)
                 {
                     Shader.SetGlobalMatrix(InvVP0Id, Inv(cam.GetStereoProjectionMatrix(Camera.StereoscopicEye.Left), cam.GetStereoViewMatrix(Camera.StereoscopicEye.Left)));
                     Shader.SetGlobalMatrix(InvVP1Id, Inv(cam.GetStereoProjectionMatrix(Camera.StereoscopicEye.Right), cam.GetStereoViewMatrix(Camera.StereoscopicEye.Right)));
