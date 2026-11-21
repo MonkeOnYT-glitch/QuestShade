@@ -362,8 +362,6 @@ namespace QuestShade
         private static readonly List<GameObject> _others = new List<GameObject>(), _othersLens = new List<GameObject>();
         private static readonly List<(Transform t, float d)> _near = new List<(Transform, float)>();
         private static readonly HashSet<int> _seenRoots = new HashSet<int>();
-        // Il2Cpp-side buffers: a plain C# array gets copied on the way in, so Unity fills the copy and we read an empty array.
-        private static readonly Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Collider> _cols = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Collider>(96);
         private static int _othersKey, _placeNext;
         private static float _nextOthers;
         private static bool _othersOn;
@@ -376,7 +374,8 @@ namespace QuestShade
         }
         private static readonly List<Group> _groups = new List<Group>();
         private static readonly List<Group> _heldGroups = new List<Group>();
-        private static readonly Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<RaycastHit> _hits = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<RaycastHit>(16);
+        // Physics results come from the allocating calls (OverlapSphere / RaycastAll): the NonAlloc versions either
+        // return an empty copy (plain C# arrays) or crash the game (Il2Cpp arrays made at load time) in BONELAB.
         private static MaterialPropertyBlock _mpb;
 
         private static void ClearOthers()
@@ -398,7 +397,7 @@ namespace QuestShade
             _near.Clear(); _seenRoots.Clear(); _seenBodies.Clear();
             Transform rig = av; for (int i = 0; i < 6 && rig.parent != null; i++) rig = rig.parent;
             T("npcs: overlap");
-            int n = Physics.OverlapSphereNonAlloc(at, OthersReach, _cols, _maskAll, QueryTriggerInteraction.Ignore);
+            var _cols = Physics.OverlapSphere(at, OthersReach, _maskAll, QueryTriggerInteraction.Ignore); int n = _cols != null ? _cols.Length : 0;
             T("npcs: sort " + n);
             for (int i = 0; i < n; i++)
             {
@@ -492,7 +491,7 @@ namespace QuestShade
         private static void Cast(Group g, Vector3 d, Transform skip, bool wantWall, out bool floor, out RaycastHit fh, out bool wall, out RaycastHit wh)
         {
             floor = wall = false; fh = wh = default;
-            int n = Physics.RaycastNonAlloc(g.Src.bounds.center, d, _hits, 20f, _maskAll, QueryTriggerInteraction.Ignore);
+            var _hits = Physics.RaycastAll(g.Src.bounds.center, d, 20f, _maskAll, QueryTriggerInteraction.Ignore); int n = _hits != null ? _hits.Length : 0;
             for (int i = 0; i < n; i++)
             {
                 var h = _hits[i]; var col = h.collider;
@@ -605,7 +604,7 @@ namespace QuestShade
 
         private static string HitList(Vector3 origin, Vector3 d)
         {
-            int n = Physics.RaycastNonAlloc(origin, d, _hits, Reach, _maskAll, QueryTriggerInteraction.Ignore);
+            var _hits = Physics.RaycastAll(origin, d, Reach, _maskAll, QueryTriggerInteraction.Ignore); int n = _hits != null ? _hits.Length : 0;
             if (n == 0) return $"The ray hit nothing (mask {_maskAll:X}, dir {d.x:0.##},{d.y:0.##},{d.z:0.##}).";
             var sb = new System.Text.StringBuilder($"Ray hits ({n}): ");
             for (int i = 0; i < n && i < 6; i++)
@@ -672,7 +671,7 @@ namespace QuestShade
             Vector3 d = _dir;
             bool hitAny = false, wallAny = false;
             RaycastHit hit = default, wallHit = default;
-            int count = Physics.RaycastNonAlloc(origin, d, _hits, Reach, _mask, QueryTriggerInteraction.Ignore);
+            var _hits = Physics.RaycastAll(origin, d, Reach, _mask, QueryTriggerInteraction.Ignore); int count = _hits != null ? _hits.Length : 0;
             for (int i = 0; i < count; i++)
             {
                 if (BadFloorHit(_hits[i])) continue;
@@ -688,7 +687,7 @@ namespace QuestShade
             bool hadFloor = hitAny, hadWall = wallAny;
             if (!hitAny || !wallAny)
             {
-                count = Physics.RaycastNonAlloc(origin, d, _hits, Reach, _maskAll, QueryTriggerInteraction.Ignore);
+                _hits = Physics.RaycastAll(origin, d, Reach, _maskAll, QueryTriggerInteraction.Ignore); count = _hits != null ? _hits.Length : 0;
                 for (int i = 0; i < count; i++)
                 {
                     if (BadFloorHit(_hits[i])) continue;
