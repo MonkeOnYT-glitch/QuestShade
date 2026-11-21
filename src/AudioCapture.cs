@@ -65,30 +65,10 @@ namespace QuestShade
             bool game = cfg.RecordGameAudio, mic = cfg.RecordMic;
             _gameVol = cfg.GameVolume * 0.5f; _micVol = cfg.MicVolume;
 
-            try
-            {
-                if (File.Exists(GuardFile))
-                {
-                    string g = File.ReadAllText(GuardFile);
-                    File.Delete(GuardFile);
-                    string off = "";
-                    if (game && g.Contains("game") && !g.Contains("nativemic")) { game = false; cfg.RecordGameAudio = false; off = "Game audio"; }
-                    if (mic && g.Contains("nativemic"))
-                    {
-                        // The direct headset mic took the game down: keep the mic on, but use the game's own mic from now on.
-                        try { File.WriteAllText(NoNativeFile, "headset mic crashed the game " + DateTime.Now.ToString("u")); } catch { }
-                        Notice = "The direct headset mic crashed the game last time, so recordings use the game's mic from now on.";
-                        VideoRecorder.Diag("audio guard: direct headset mic disabled after last crash, using Unity mic");
-                    }
-                    else if (mic && g.Contains("mic")) { mic = false; cfg.RecordMic = false; off = off.Length > 0 ? "Game audio + mic" : "Microphone"; }
-                    if (off.Length > 0)
-                    {
-                        Notice = $"{off} crashed the game last time - turned off. Turn it back on in the menu to try again.";
-                        VideoRecorder.Diag("audio guard: " + off + " switched off after last crash");
-                    }
-                }
-            }
-            catch { }
+            // No crash guard: game audio and the mic are never switched off because of an earlier crash.
+            // Clear anything older versions left behind so nobody stays stuck with audio or the headset mic off.
+            try { if (File.Exists(GuardFile)) File.Delete(GuardFile); } catch { }
+            try { if (File.Exists(NoNativeFile)) File.Delete(NoNativeFile); } catch { }
 
             Rate = AudioSettings.outputSampleRate;
             if (Rate <= 0) Rate = 48000;
@@ -104,13 +84,9 @@ namespace QuestShade
             return GameOn || MicOn;
         }
 
-        private static void WriteGuard(string what)
-        {
-            if (what.Trim().Length == 0) return;
-            try { File.WriteAllText(GuardFile, what); } catch { }
-        }
-
-        private static void ClearGuard() { try { if (File.Exists(GuardFile)) File.Delete(GuardFile); } catch { } }
+        // Crash guard removed: these stay as no-ops so the call sites don't need to change.
+        private static void WriteGuard(string what) { }
+        private static void ClearGuard() { }
 
         private bool AttachTap()
         {

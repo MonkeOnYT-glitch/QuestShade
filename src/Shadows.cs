@@ -57,9 +57,10 @@ namespace QuestShade
             {
                 if (!System.IO.File.Exists(StepFile)) return false;
                 var last = System.IO.File.ReadAllText(StepFile).Trim();
+                System.IO.File.Delete(StepFile);
                 if (last == "ok" || last.Length == 0) return false;
-                _failed = true;
-                Mod.Log.Warning($"Shadows: last time the game died at shadow step \"{last}\". Body shadow is OFF now so you can play. Please send this log. (Turn Body shadow off and on in Lighting > Body shadow to try again.)");
+                // No crash guard: shadows stay on. Just note where the last session stopped, to help find crashes.
+                Mod.Log.Msg($"Shadows: the last session ended during shadow step \"{last}\" (shadows stay on)");
             }
             catch { }
             return _failed;
