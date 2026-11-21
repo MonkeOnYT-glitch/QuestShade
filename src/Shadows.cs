@@ -385,31 +385,41 @@ namespace QuestShade
             _others.Clear(); _othersLens.Clear(); _othersKey = 0; _groups.Clear(); _placeNext = 0;
         }
 
+        private static readonly HashSet<int> _seenBodies = new HashSet<int>();
+        private static bool _othersTraced;
+        private const int MaxRootRenderers = 24;
+
+        // Breadcrumbs for the first scans only, so a crash in here points at the exact step next launch.
+        private static void T(string s) { if (_othersTraced) return; Mod.Log.Msg("Shadows step: " + s); try { System.IO.File.WriteAllText(StepFile, s); } catch { } }
+
         private static void Others(Transform av, Vector3 at)
         {
-            _near.Clear(); _seenRoots.Clear();
+            _near.Clear(); _seenRoots.Clear(); _seenBodies.Clear();
             Transform rig = av; for (int i = 0; i < 6 && rig.parent != null; i++) rig = rig.parent;
+            T("npcs: overlap");
             int n = Physics.OverlapSphereNonAlloc(at, OthersReach, _cols, _maskAll, QueryTriggerInteraction.Ignore);
+            T("npcs: sort " + n);
             for (int i = 0; i < n; i++)
             {
                 var col = _cols[i];
                 if (col == null) continue;
-                Transform root = null;
-                var pool = col.GetComponentInParent<Il2CppSLZ.Marrow.Pool.Poolee>();
-                if (pool != null) root = pool.transform;
-                else { var rb = col.attachedRigidbody; if (rb != null && !rb.isKinematic) root = rb.transform; }
+                var rb = col.attachedRigidbody;
+                if (rb == null || !_seenBodies.Add(rb.GetInstanceID())) continue; // static level geometry has no body: skip it
+                var pool = rb.GetComponentInParent<Il2CppSLZ.Marrow.Pool.Poolee>();
+                Transform root = pool != null ? pool.transform : (rb.isKinematic ? null : rb.transform);
                 if (root == null || !_seenRoots.Add(root.GetInstanceID())) continue;
-                if (root.name.StartsWith("QuestShade", StringComparison.Ordinal) || root.IsChildOf(rig) || _roots.Contains(root)) continue;
-                bool inside = false;
-                foreach (var r in _roots) if (root.IsChildOf(r)) { inside = true; break; }
-                if (inside) continue;
+                if (root.name.StartsWith("QuestShade", StringComparison.Ordinal) || root.IsChildOf(rig)) continue;
+                bool held = false;
+                foreach (var r in _roots) if (root == r || root.IsChildOf(r) || r.IsChildOf(root)) { held = true; break; }
+                if (held) continue;
                 _near.Add((root, (root.position - at).sqrMagnitude));
             }
             _near.Sort((x, y) => x.d.CompareTo(y.d));
             if (_near.Count > MaxOthers) _near.RemoveRange(MaxOthers, _near.Count - MaxOthers);
             int key = 17;
             foreach (var e in _near) key = key * 31 + e.t.GetInstanceID();
-            if (key == _othersKey) return;
+            if (key == _othersKey) { _othersTraced = true; return; }
+            T("npcs: clear");
             ClearOthers();
             _othersKey = key;
             _lensLayer = -2; _layer = -1;
@@ -417,15 +427,15 @@ namespace QuestShade
             foreach (var (root, _) in _near)
             {
                 if (meshes >= MaxOtherMeshes) break;
+                T("npcs: build " + root.name);
                 var grp = new Group { Root = root };
-                HashSet<int> lodKeep = null;
-                var lodg = root.GetComponentInChildren<LODGroup>();
-                if (lodg != null) { var lods = lodg.GetLODs(); if (lods != null && lods.Length > 1) { lodKeep = new HashSet<int>(); foreach (var lr in lods[0].renderers) if (lr != null) lodKeep.Add(lr.GetInstanceID()); } }
-                foreach (var smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+                var smrs = root.GetComponentsInChildren<SkinnedMeshRenderer>(false);
+                var mrs = root.GetComponentsInChildren<MeshRenderer>(false);
+                if (smrs.Length + mrs.Length > MaxRootRenderers) continue; // a whole building or level chunk, not a prop
+                foreach (var smr in smrs)
                 {
                     if (meshes >= MaxOtherMeshes || skins >= MaxOtherSkins) break;
-                    if (smr == null || !smr.enabled || smr.sharedMesh == null) continue;
-                    if (lodKeep != null && !lodKeep.Contains(smr.GetInstanceID())) continue;
+                    if (smr == null || !smr.enabled || smr.sharedMesh == null || NotLod0(smr.name)) continue;
                     var mesh = smr.sharedMesh; int subs = mesh.subMeshCount;
                     if (!ReadSolid(smr, subs, true)) continue;
                     var go = Skin("NpcSkin", smr, mesh, subs, _shade, _none).gameObject;
@@ -434,11 +444,10 @@ namespace QuestShade
                     grp.Src ??= smr; grp.Copies.Add(go.GetComponent<Renderer>()); grp.Copies.Add(lens.GetComponent<Renderer>());
                     _others.Add(go); _othersLens.Add(lens); meshes++; skins++;
                 }
-                foreach (var mr in root.GetComponentsInChildren<MeshRenderer>(false))
+                foreach (var mr in mrs)
                 {
                     if (meshes >= MaxOtherMeshes) break;
-                    if (mr == null || !mr.enabled || mr.gameObject.name.StartsWith("QuestShade", StringComparison.Ordinal)) continue;
-                    if (lodKeep != null && !lodKeep.Contains(mr.GetInstanceID())) continue;
+                    if (mr == null || !mr.enabled || NotLod0(mr.name) || mr.gameObject.name.StartsWith("QuestShade", StringComparison.Ordinal)) continue;
                     var mf = mr.GetComponent<MeshFilter>();
                     var mesh = mf != null ? mf.sharedMesh : null;
                     if (mesh == null) continue;
@@ -455,6 +464,14 @@ namespace QuestShade
                 }
                 if (grp.Copies.Count > 0) { foreach (var r in grp.Copies) if (r != null) r.enabled = false; _groups.Add(grp); }
             }
+            if (!_othersTraced) { _othersTraced = true; Mod.Log.Msg($"Shadows: {_groups.Count} nearby NPC/prop(s) cast shadows ({meshes} meshes)"); }
+        }
+
+        // Lower-detail copies (LOD1, LOD2...) would stack extra shadows. Reading LODGroup data is fragile here, so go by name.
+        private static bool NotLod0(string name)
+        {
+            int i = name.LastIndexOf("LOD", StringComparison.OrdinalIgnoreCase);
+            return i >= 0 && i + 3 < name.Length && char.IsDigit(name[i + 3]) && name[i + 3] != '0';
         }
 
         private static bool BadFloorHit(RaycastHit hit)
