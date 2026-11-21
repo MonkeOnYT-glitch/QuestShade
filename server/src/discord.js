@@ -256,7 +256,7 @@ const TEST_CHANNEL = "public-testing", TEST_ROLE = "Testing Pings", CHECK = "✅
 
 const testPings = env => reactRole(env, { key: "test", channel: TEST_CHANNEL, role: TEST_ROLE, text: `@everyone react with ${CHECK} if you want public testing pings` });
 const announcePings = env => reactRole(env, { key: "ann", channel: "announcements", role: "Announcement Pings", text: `@everyone want a ping whenever there's a new announcement? React with ${CHECK} below and you'll get the Announcement Pings role. Remove your reaction any time to stop.` });
-const testerRole = env => reactRole(env, { key: "tester", channel: "beta-builds", role: "Tester", text: `@everyone want to try QuestShade beta builds before everyone else? React with ${CHECK} below to get the **Tester** role. You will get access to test builds and can help find bugs. Remove your reaction any time to leave.` });
+const testerRole = env => reactRole(env, { key: "tester2", channel: "announcements", role: "Tester", text: `@everyone want to try QuestShade beta builds before everyone else? React with ${CHECK} below to get the **Tester** role. Test builds get posted in <#1569084693112950945>, so you can try new stuff early and help find bugs. Remove your reaction any time to leave.` });
 
 async function reactRole(env, o) {
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS bot_state (k TEXT PRIMARY KEY, v TEXT)").run();
