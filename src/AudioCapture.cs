@@ -425,7 +425,7 @@ namespace QuestShade
                     {
                         float a = _micRing[_micR], b = _micRing[(_micR + 1) % _micRing.Length];
                         float x = a + (b - a) * (float)_micFrac;
-                        float hp = 0.988f * (_hpY + x - _hpX); _hpX = x; _hpY = hp;
+                        float hp = 0.975f * (_hpY + x - _hpX); _hpX = x; _hpY = hp; // low cut ~190 Hz at 48 kHz (was ~90 Hz): takes the boom out
                         _lp += 0.28f * (hp - _lp);
                         hp += 0.9f * (hp - _lp);
                         // Fixed boost, no auto-gain: the old "stabilizer" pumped the volume up and down between words.
@@ -444,7 +444,7 @@ namespace QuestShade
         }
 
         private bool _micPrimed; private float _hpX, _hpY, _lp;
-        private const float MicBoost = 10f; // the Quest mic is very quiet raw; Soft() keeps loud peaks from clipping
+        private const float MicBoost = 8f; // the Quest mic is very quiet raw; Soft() keeps loud peaks from clipping
 
         private static float Soft(float x)
         {

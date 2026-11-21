@@ -361,7 +361,8 @@ namespace QuestShade
         private static readonly List<GameObject> _others = new List<GameObject>(), _othersLens = new List<GameObject>();
         private static readonly List<(Transform t, float d)> _near = new List<(Transform, float)>();
         private static readonly HashSet<int> _seenRoots = new HashSet<int>();
-        private static readonly Collider[] _cols = new Collider[96];
+        // Il2Cpp-side buffers: a plain C# array gets copied on the way in, so Unity fills the copy and we read an empty array.
+        private static readonly Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Collider> _cols = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Collider>(96);
         private static int _othersKey, _placeNext;
         private static float _nextOthers;
         private static bool _othersOn;
@@ -374,7 +375,7 @@ namespace QuestShade
         }
         private static readonly List<Group> _groups = new List<Group>();
         private static readonly List<Group> _heldGroups = new List<Group>();
-        private static readonly RaycastHit[] _hits = new RaycastHit[12];
+        private static readonly Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<RaycastHit> _hits = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<RaycastHit>(16);
         private static MaterialPropertyBlock _mpb;
 
         private static void ClearOthers()
