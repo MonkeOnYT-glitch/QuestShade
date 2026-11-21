@@ -32,7 +32,7 @@ namespace QuestShade
         private static float _nextItems, _sunAt, _sunSeenAt, _fade, _k = 0.6f, _wait;
         private static Light _sun;
         private static Vector3 _dir = new Vector3(0.42f, -1f, 0.3f).normalized, _planeP, _planeN = Vector3.up, _wallP, _wallN = Vector3.up;
-        private static bool _plane, _wall, _failed, _logged, _checked, _sunSeen, _partsOn;
+        private static bool _plane, _wall, _failed, _logged, _checked, _sunSeen, _partsOn, _stepsOk;
 
         private static string StepFile => System.IO.Path.Combine(Config.Root, "shadow5-step.txt");
 
@@ -44,7 +44,7 @@ namespace QuestShade
 
         private static void S(string s)
         {
-            if (_logged) return;
+            if (_logged || _stepsOk) return;
             Mod.Log.Msg("Shadows step: " + s);
             try { System.IO.File.WriteAllText(StepFile, s); } catch { }
         }
@@ -651,6 +651,9 @@ namespace QuestShade
             if (avId != _avatarId) { S("copy body"); Build(av); }
             if (now >= _nextItems) { _nextItems = now + 0.25f; S("held items"); Items(); }
             if (now >= _nextOthers) { _nextOthers = now + 1f; S("npcs and props"); Others(av, head.transform.position); }
+            // The risky part (copying meshes) is done. Mark it so a later crash elsewhere (e.g. a recording) is never blamed on shadows,
+            // and stop rewriting the step file every frame while there's no floor to cast onto.
+            if (!_stepsOk) { _stepsOk = true; try { System.IO.File.WriteAllText(StepFile, "ok"); } catch { } }
             if (_skins.Count == 0) { Show(false); return; }
 
             S("sun");

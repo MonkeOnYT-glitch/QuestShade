@@ -428,11 +428,8 @@ namespace QuestShade
                         float hp = 0.988f * (_hpY + x - _hpX); _hpX = x; _hpY = hp;
                         _lp += 0.28f * (hp - _lp);
                         hp += 0.9f * (hp - _lp);
-                        float ax = Math.Abs(hp);
-                        _env += (ax > _env ? 0.01f : 0.00005f) * (ax - _env);
-                        float want = _env > 0.0005f ? Math.Min(18f, Math.Max(1f, 0.30f / _env)) : _agc;
-                        _agc += (want < _agc ? 0.002f : 0.00002f) * (want - _agc);
-                        float m = hp * _agc * _micVol;
+                        // Fixed boost, no auto-gain: the old "stabilizer" pumped the volume up and down between words.
+                        float m = hp * MicBoost * _micVol;
                         l += m; r += m;
                         _micFrac += step;
                         while (_micFrac >= 1.0 && _micCount > 1) { _micFrac -= 1.0; _micR = (_micR + 1) % _micRing.Length; _micCount--; }
@@ -446,7 +443,8 @@ namespace QuestShade
             _framesOut += frames;
         }
 
-        private bool _micPrimed; private float _hpX, _hpY, _env, _lp, _agc = 4f;
+        private bool _micPrimed; private float _hpX, _hpY, _lp;
+        private const float MicBoost = 10f; // the Quest mic is very quiet raw; Soft() keeps loud peaks from clipping
 
         private static float Soft(float x)
         {
