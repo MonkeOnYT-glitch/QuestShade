@@ -745,20 +745,20 @@ namespace QuestShade
                 q.CreateFunction("Yes - compress it (colours only, fastest)", Color.green, () => { ReShadeImport.Answer(name, true); _mod.SelectPreset(name); _mod.ReloadAll(); Notify($"{shown}: compressed to colours only"); });
                 q.CreateFunction("No - keep everything that runs", Color.white, () => { ReShadeImport.Answer(name, false); _mod.SelectPreset(name); _mod.ReloadAll(); Notify($"{shown}: kept (heavy parts skipped)"); });
             }
-            int n = 0; foreach (var p in cfg.Presets) if (p.EndsWith(ReShadeImport.Suffix)) n++;
-            _importPage.CreateFunction($"{n} imported - pick them in Presets > Choose preset", Color.white, () => Notify("Imported ReShade presets end in (ReShade) in Presets > Choose preset.", 3f));
+            int n = ReShadeImport.LastCopied.Count; foreach (var p in cfg.Presets) if (p.EndsWith(ReShadeImport.Suffix)) n++;
+            _importPage.CreateFunction($"{n} imported - pick them in Presets > Choose preset", Color.white, () => Notify("ReShade presets end in (ReShade); shared QuestShade presets keep their own name. Find them in Presets > Choose preset.", 4f));
             if (ReShadeImport.LastSkipped.Count > 0)
             {
-                var sk = string.Join(", ", ReShadeImport.LastSkipped);
-                _importPage.CreateFunction($"{ReShadeImport.LastSkipped.Count} of {ReShadeImport.LastFound} .ini skipped: not ReShade presets", Color.yellow,
-                    () => Notify($"Skipped (no Techniques= line, so not a ReShade preset): {sk}. Use the preset .ini ReShade saves, not ReShade.ini or a settings file.", 8f));
+                var sk = string.Join("; ", ReShadeImport.LastSkipped);
+                _importPage.CreateFunction($"{ReShadeImport.LastSkipped.Count} of {ReShadeImport.LastFound} files skipped (press for why)", Color.yellow,
+                    () => Notify($"Skipped: {sk}", 8f));
             }
             if (ReShadeImport.LastFailed.Count > 0)
             {
                 var fl = string.Join(", ", ReShadeImport.LastFailed);
                 _importPage.CreateFunction($"{ReShadeImport.LastFailed.Count} failed to import (see log)", Color.red, () => Notify($"Failed: {fl}. Post your MelonLoader Latest.log in #help.", 6f));
             }
-            _importPage.CreateFunction("How to add: UserData/QuestShade/ReShade", Color.gray, () => Notify("Copy a ReShade .ini into UserData/QuestShade/ReShade, then Reload. No .fx files needed.", 6f));
+            _importPage.CreateFunction("How to add: UserData/QuestShade/ReShade", Color.gray, () => Notify("Copy a ReShade or QuestShade preset (.ini or .txt) into UserData/QuestShade/ReShade, then Reload. No .fx files needed.", 6f));
             _importPage.CreateFunction("Reload", Color.yellow, () => _mod.ReloadAll());
             if (pending.Count > 0 && _asked.Add(pending[0])) Notify($"[{pending[0].Replace(ReShadeImport.Suffix, "")}] Was Too Heavy To Run. Would You Like To Compress It? (Presets > ReShade imports)", 6f);
         }

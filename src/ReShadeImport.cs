@@ -24,7 +24,67 @@ namespace QuestShade
 
         // What the last scan saw, for the ReShade imports page (so "0 imported" always comes with a reason).
         public static int LastFound;
-        public static readonly List<string> LastSkipped = new List<string>(), LastFailed = new List<string>();
+        public static readonly List<string> LastSkipped = new List<string>(), LastFailed = new List<string>(), LastCopied = new List<string>();
+
+        private enum Kind { None, ReShade, QuestShade, QuestShadeSettings }
+
+        // Sections a QuestShade preset is made of (what the preset browser / in-game editor writes).
+        private static readonly HashSet<string> QsSections = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            "Shared", "Color", "WhiteBalance", "LiftGammaGain", "Sharpen", "ChromaticAberration", "LensDistortion", "Vignette", "Bloom",
+            "EyeAdaptation", "LensFlare", "LensDirt", "GodRays", "FilmGrain", "Tonemapping", "DepthOfField", "Lut", "LUT", "ColorLut",
+            "Exposure", "Curves", "Levels", "Fog", "Chain", "Import" };
+
+        private static Kind Classify(string file, out string why)
+        {
+            why = "";
+            string fn = Path.GetFileName(file);
+            if (fn.Equals("ReShade.ini", StringComparison.OrdinalIgnoreCase)) { why = "ReShade's own settings file, not a preset"; return Kind.None; }
+            string text;
+            try { text = File.ReadAllText(file); } catch (Exception e) { why = "couldn't read it: " + e.Message; return Kind.None; }
+            bool techniques = false, general = false, camera = false; int qs = 0; string presetName = null;
+            string section = "";
+            foreach (var raw in text.Split('\n'))
+            {
+                var l = raw.Trim();
+                if (l.Length == 0 || l[0] == ';' || l[0] == '#') continue;
+                if (l[0] == '[' && l.EndsWith("]"))
+                {
+                    section = l.Substring(1, l.Length - 2).Trim();
+                    if (section.Equals("General", StringComparison.OrdinalIgnoreCase)) general = true;
+                    else if (section.Equals("Camera", StringComparison.OrdinalIgnoreCase) || section.Equals("Controls", StringComparison.OrdinalIgnoreCase)) camera = true;
+                    else if (QsSections.Contains(section)) qs++;
+                    continue;
+                }
+                if (section.Length == 0 && l.StartsWith("Techniques", StringComparison.OrdinalIgnoreCase)) techniques = true;
+                else if (l.StartsWith("Techniques", StringComparison.OrdinalIgnoreCase) && l.Contains("=")) techniques = true;
+                if (general && section.Equals("General", StringComparison.OrdinalIgnoreCase) && l.StartsWith("Preset", StringComparison.OrdinalIgnoreCase) && l.Contains("="))
+                {
+                    presetName = l.Substring(l.IndexOf('=') + 1); int c = presetName.IndexOf(';'); if (c >= 0) presetName = presetName.Substring(0, c); presetName = presetName.Trim();
+                }
+            }
+            if (techniques) return Kind.ReShade;
+            if (general && camera)
+            {
+                why = "a whole QuestShade settings file, not a preset" + (presetName != null ? $"; its look is the preset \"{presetName}\", ask for that preset file" : "");
+                return Kind.QuestShadeSettings;
+            }
+            if (qs > 0) return Kind.QuestShade;
+            why = "not a ReShade or QuestShade preset";
+            return Kind.None;
+        }
+
+        // A QuestShade preset someone shared: copy it into Presets under its own name (spaces instead of underscores).
+        private static void CopyQuestShadePreset(string file)
+        {
+            string name = Path.GetFileNameWithoutExtension(file).Replace('_', ' ').Trim();
+            foreach (var c in Path.GetInvalidFileNameChars()) name = name.Replace(c, ' ');
+            if (name.EndsWith(Suffix)) name = name.Substring(0, name.Length - Suffix.Length).Trim();
+            string outFile = Path.Combine(Config.PresetDir, name + ".ini");
+            if (File.Exists(outFile) && File.GetLastWriteTimeUtc(outFile) >= File.GetLastWriteTimeUtc(file)) return;
+            File.WriteAllText(outFile, File.ReadAllText(file).Replace("\r\n", "\n"));
+            File.SetLastWriteTimeUtc(outFile, DateTime.UtcNow);
+            Mod.Log.Msg($"Presets import: added QuestShade preset \"{name}\" from {Path.GetFileName(file)}");
+        }
 
         public static void Run()
         {
@@ -33,17 +93,28 @@ namespace QuestShade
                 Directory.CreateDirectory(Dir);
                 MoveOldLuts();
                 var readme = Path.Combine(Dir, "README.txt");
-                const string text = "Put ReShade presets (.ini) here. If a preset comes with LUT pictures (.png / .cube), put them next to it, or drop the preset's whole folder in here.\n" +
+                const string text = "Put presets here (.ini or .txt): ReShade presets, or QuestShade presets someone shared with you.\n" +
+                    "If a ReShade preset comes with LUT pictures (.png / .cube), put them next to it, or drop the preset's whole folder in here.\n" +
                     "You don't need ReShade's .fx shader files: QuestShade rebuilds the effects it supports and lists the ones it skipped.\n" +
                     "prod80's Cinetools and Bonus LUT packs are built in.\n" +
-                    "Each preset shows up in the menu as \"<name> (ReShade)\".\n";
+                    "ReShade presets show up in the menu as \"<name> (ReShade)\", QuestShade presets under their own name.\n";
                 try { if (!File.Exists(readme) || File.ReadAllText(readme) != text) File.WriteAllText(readme, text); } catch { }
-                LastFound = 0; LastSkipped.Clear(); LastFailed.Clear();
-                foreach (var file in Directory.GetFiles(Dir, "*.ini", SearchOption.AllDirectories))
+                LastFound = 0; LastSkipped.Clear(); LastFailed.Clear(); LastCopied.Clear();
+                foreach (var file in Directory.GetFiles(Dir, "*.*", SearchOption.AllDirectories))
                 {
+                    string ext = Path.GetExtension(file).ToLowerInvariant();
+                    if (ext != ".ini" && ext != ".txt") continue;
+                    if (Path.GetFileName(file).Equals("README.txt", StringComparison.OrdinalIgnoreCase)) continue;
                     LastFound++;
-                    try { if (IsPreset(file)) ImportOne(file); else { LastSkipped.Add(Path.GetFileName(file)); Mod.Log.Msg($"ReShade: skipped {Path.GetFileName(file)} (no Techniques= line, so it isn't a ReShade preset)"); } }
-                    catch (Exception e) { LastFailed.Add(Path.GetFileName(file)); Mod.Log.Warning($"ReShade import of {Path.GetFileName(file)} failed: {e.Message}"); }
+                    string fname = Path.GetFileName(file);
+                    try
+                    {
+                        var kind = Classify(file, out string why);
+                        if (kind == Kind.ReShade) ImportOne(file);
+                        else if (kind == Kind.QuestShade) { CopyQuestShadePreset(file); LastCopied.Add(fname); }
+                        else { LastSkipped.Add($"{fname} ({why})"); Mod.Log.Msg($"Presets import: skipped {fname} ({why})"); }
+                    }
+                    catch (Exception e) { LastFailed.Add(fname); Mod.Log.Warning($"Preset import of {fname} failed: {e.Message}"); }
                 }
             }
             catch (Exception e) { Mod.Log.Warning("ReShade import folder unavailable: " + e.Message); }
@@ -501,14 +572,6 @@ namespace QuestShade
                             return part.Substring(eq + 1).Trim().Trim('"');
                     }
             return null;
-        }
-
-        private static bool IsPreset(string file)
-        {
-            if (Path.GetFileName(file).Equals("ReShade.ini", StringComparison.OrdinalIgnoreCase)) return false;
-            try { foreach (var l in File.ReadLines(file)) if (l.TrimStart().StartsWith("Techniques", StringComparison.OrdinalIgnoreCase)) return true; }
-            catch { }
-            return false;
         }
 
         private static IEnumerable<string> PresetDirs(string file, string name)
