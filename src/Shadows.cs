@@ -43,6 +43,7 @@ namespace QuestShade
 
         public static void OnLevel()
         {
+            WorldCasters.OnLevel();
             _skipRoots.Clear();
             _sun = null; _sunAt = Time.unscaledTime + 2f; _fade = 0f; _logged = false; _plane = false; _wall = false; _sunSeen = false;
             _wait = Time.unscaledTime + 4f;
@@ -95,6 +96,7 @@ namespace QuestShade
 
         private static void Show(bool on)
         {
+            WorldCasters.SetVisible(on);
             if (!on && _mapMode) ShadowMap.Off();
             if (_root != null && _root.activeSelf != on) _root.SetActive(on);
             if (_othersOn != on) { _othersOn = on; foreach (var g in _others) if (g != null && g.activeSelf != on) g.SetActive(on); }
@@ -755,6 +757,8 @@ namespace QuestShade
                 foreach (var g in _heldGroups) foreach (var r in g.Copies) if (r != null && !r.enabled) r.enabled = true;
             }
 
+            // Beta: walls, floors and fixed objects cast shadows too.
+            if (Mod.BetaOn) WorldCasters.Tick(head.transform.position, L); else WorldCasters.Clear();
             ShadowMap.Update(cfg, head, Lens, _dir, Mathf.Clamp01(cfg.ShadowDarkness) * 0.8f);
             if (!_mapLogged) { _mapLogged = true; Mod.Log.Msg($"Shadows: shadow map casters: {_skins.Count} body, {_parts.Count} held, {_others.Count} NPC/prop meshes"); }
         }
