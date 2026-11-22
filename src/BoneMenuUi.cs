@@ -33,6 +33,8 @@ namespace QuestShade
             view.CreateEnum("Mode", Color.white, cfg.DefaultMode, v => mod.SetCameraMode((CamMode)v));
             view.CreateFunction("Flip camera", Color.white, () => mod.FlipCamera());
             view.CreateFloat("Field of view", Color.white, cfg.Fov, 5f, 10f, 150f, v => cfg.Fov = v);
+            view.CreateBool("Zoom buttons (B in, Y out)", Color.white, cfg.ZoomButtons, v => { cfg.ZoomButtons = v; cfg.SaveMenuSettings(); });
+            view.CreateBool("Camcorder zoom (clicky + static)", Color.white, cfg.ZoomClicky, v => { cfg.ZoomClicky = v; cfg.SaveMenuSettings(); });
             view.CreateFloat("Fisheye", Color.white, cfg.Fisheye, 0.1f, 0f, 1f, v => { cfg.Fisheye = v; cfg.SaveMenuSettings(); });
             view.CreateEnum("Timestamp", Color.white, cfg.Timestamp, v => { cfg.Timestamp = (StampMode)v; cfg.SaveMenuSettings(); });
             view.CreateBool("Vertical (9:16) photos + video", Color.white, cfg.Vertical, v => { cfg.Vertical = v; cfg.SaveMenuSettings(); });

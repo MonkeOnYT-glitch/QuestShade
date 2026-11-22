@@ -71,7 +71,8 @@ namespace QuestShade
         private bool _keyboardOk = true;
         private bool _lGrip, _rGrip;
         public Vector2 LeftStick, RightStick;
-        public bool LeftClick, RightClick, LeftTouch, RightTouch; // stick capacitive touch sensor (raw)
+        public bool LeftClick, RightClick, LeftTouch, RightTouch;
+        public bool BHeld, YHeld, BPressed, YPressed; // B = right secondary, Y = left secondary (Pressed = went down this frame)
         public bool GripL => _lGrip;
         public bool GripR => _rGrip;
         private bool _lTrig, _rTrig;
@@ -106,6 +107,10 @@ namespace QuestShade
             if (_left.isValid) _left.TryGetFeatureValue(CommonUsages.primary2DAxisTouch, out lt);
             if (_right.isValid) _right.TryGetFeatureValue(CommonUsages.primary2DAxisTouch, out rt);
             LeftTouch = lt; RightTouch = rt;
+            bool b = false, y = false;
+            if (_right.isValid) _right.TryGetFeatureValue(CommonUsages.secondaryButton, out b);
+            if (_left.isValid) _left.TryGetFeatureValue(CommonUsages.secondaryButton, out y);
+            BPressed = b && !BHeld; YPressed = y && !YHeld; BHeld = b; YHeld = y;
             if (_l.Down && la.sqrMagnitude > 0.16f) _l.Consume();
             if (_r.Down && ra.sqrMagnitude > 0.16f) _r.Consume();
 

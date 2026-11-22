@@ -91,6 +91,19 @@ namespace QuestShade
             _depthForced = want;
         }
 
+        // Camcorder zoom: a short burst of static + glitch on the camera picture only (never the headset).
+        public void CameraStatic(float k)
+        {
+            if (_mat == null) return;
+            Vector4 n = _mat.GetVector(ID.Noise), g = _mat.GetVector(ID.Glitch);
+            if (k > 0f)
+            {
+                n.x = Mathf.Max(n.x, 0.55f * k);
+                g = new Vector4(Mathf.Max(g.x, 0.7f * k), g.y > 0f ? g.y : 40f, g.z > 0f ? g.z : 24f, g.w);
+            }
+            foreach (var m in new[] { _post, _matMono, _matPre }) if (m != null) { m.SetVector(ID.Noise, n); m.SetVector(ID.Glitch, g); }
+        }
+
         private void SetLive(Config cfg, Ini p)
         {
             bool live = cfg.HeadsetBloom && _bloomIntensity > 0f;

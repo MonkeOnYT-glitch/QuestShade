@@ -75,6 +75,7 @@ namespace QuestShade
         private InputDevice _headDev, _leftDev, _rightDev;
         public bool Hidden { get; private set; }
         public bool Held => _held >= 0;
+        public bool InHand => _held >= 0 || _propWasHeld; // held by its grip or as a prop
         private int _held = -1;
         private bool _pinned;
         private Vector3 _grabPos; private Quaternion _grabRot = Quaternion.identity;

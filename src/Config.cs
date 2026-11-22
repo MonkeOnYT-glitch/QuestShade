@@ -25,6 +25,8 @@ namespace QuestShade
         public bool MatchPreview = true;
         public float BloomStrength = 1f, BlurStrength = 1f, GripAngle = 0f;
         public bool HeadsetBloom = false;
+        public bool ZoomButtons = true, ZoomClicky = false; // camcorder zoom: B in / Y out while holding the camera (hand / selfie)
+        public float ZoomStep = 10f, ZoomSpeed = 35f;
         public bool MotionBlur = false;
         // Shadow map (test): world-space shadows on every surface. CpuMatrices / FlipY are test switches for the per-eye math.
         public bool FlashlightShadows = true, FlashlightWorldShadows = true; public float FlashShadowDarkness = 0.4f, FlashlightLight = 0.35f;
@@ -177,6 +179,10 @@ namespace QuestShade
             BloomStrength = Mathf.Clamp(ini.Float("General", "BloomStrength", 1f), 0f, 4f);
             HeadsetBloom = ini.Bool("General", "HeadsetBloomOn", false);
             MotionBlur = ini.Bool("General", "MotionBlur", false);
+            ZoomButtons = ini.Bool("Camera", "ZoomButtons", true);
+            ZoomClicky = ini.Bool("Camera", "ZoomClicky", false);
+            ZoomStep = Mathf.Clamp(ini.Float("Camera", "ZoomStep", 10f), 1f, 40f);
+            ZoomSpeed = Mathf.Clamp(ini.Float("Camera", "ZoomSpeed", 35f), 5f, 150f);
             MotionBlurStrength = Mathf.Clamp(ini.Float("General", "MotionBlurStrength", 0.5f), 0f, 1f);
             ControllerShortcuts = ini.Bool("Controls", "Shortcuts", true);
             LeftHanded = ini.Bool("Controls", "LeftHanded", false);
@@ -570,6 +576,8 @@ namespace QuestShade
             SetKey("General", "BlurStrength", BlurStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "HeadsetBloomOn", HeadsetBloom ? "true" : "false");
             SetKey("General", "MotionBlur", MotionBlur ? "true" : "false");
+            SetKey("Camera", "ZoomButtons", ZoomButtons ? "true" : "false");
+            SetKey("Camera", "ZoomClicky", ZoomClicky ? "true" : "false");
             SetKey("General", "MotionBlurStrength", MotionBlurStrength.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Controls", "Shortcuts", ControllerShortcuts ? "true" : "false");
             SetKey("Controls", "LeftHanded", LeftHanded ? "true" : "false");
