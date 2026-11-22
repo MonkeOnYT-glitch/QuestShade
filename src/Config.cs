@@ -42,6 +42,8 @@ namespace QuestShade
         public bool SlowMoZoom = true;                   // cinematic auto zoom on the camera while slow-mo is on
         public float TimelineSeconds = 3f;               // seconds between camera timeline keyframes
         public bool TimelineFilm = true, TimelineAutoRecord = true; // Timeline mod: follow its camera during playback, and record it
+        public float SlowFxFringe = 0.4f, SlowFxSaturation = -0.35f, SlowFxGrain = 0f, SlowFxVignette = 0.35f; // slow-mo effects (fade in and out)
+        public bool DirectorPreview;
 #if QS_SHADOW_DEBUG
         public const bool ShadowDebug = true;
 #else
@@ -236,6 +238,10 @@ namespace QuestShade
             TimelineSeconds = Mathf.Clamp(ini.Float("Camera", "TimelineSeconds", 3f), 0.5f, 30f);
             TimelineFilm = ini.Bool("Camera", "TimelineFilm", true);
             TimelineAutoRecord = ini.Bool("Camera", "TimelineAutoRecord", true);
+            SlowFxFringe = Mathf.Clamp01(ini.Float("Camera", "SlowFxFringe", 0.4f));
+            SlowFxSaturation = Mathf.Clamp(ini.Float("Camera", "SlowFxSaturation", -0.35f), -1f, 1f);
+            SlowFxGrain = Mathf.Clamp01(ini.Float("Camera", "SlowFxGrain", 0f));
+            SlowFxVignette = Mathf.Clamp01(ini.Float("Camera", "SlowFxVignette", 0.35f));
             RealLights = ini.Bool("Lighting", "RealLights", true);
             LessShine = Mathf.Clamp01(ini.Float("Lighting", "LessShine", 0.6f));
             FlashlightBeams = ini.Bool("Lighting", "FlashlightBeams", true);
@@ -636,6 +642,8 @@ namespace QuestShade
             SetKey("Camera", "TimelineSeconds", F(TimelineSeconds));
             SetKey("Camera", "TimelineFilm", TimelineFilm ? "true" : "false");
             SetKey("Camera", "TimelineAutoRecord", TimelineAutoRecord ? "true" : "false");
+            SetKey("Camera", "SlowFxFringe", F(SlowFxFringe)); SetKey("Camera", "SlowFxSaturation", F(SlowFxSaturation));
+            SetKey("Camera", "SlowFxGrain", F(SlowFxGrain)); SetKey("Camera", "SlowFxVignette", F(SlowFxVignette));
             SetKey("Lighting", "RealLights", RealLights ? "true" : "false");
             SetKey("Lighting", "FlashlightBeams", FlashlightBeams ? "true" : "false");
             SetKey("Lighting", "BodyShadow3", Shadows ? "true" : "false");

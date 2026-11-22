@@ -113,6 +113,12 @@ half3 QSStack(float2 uv, float2 pixelPos)
         col += c / (c + k * (1.0 - c) + 1e-5) - c;
     }
     UNITY_BRANCH if (_QS_LutParams.w > 0) col = ApplyLut(col);
+    // _QS_Tone.w: extra saturation on top of the preset (slow-mo effects): -1 = black and white, +1 = twice as vivid.
+    UNITY_BRANCH if (abs(_QS_Tone.w) > 0.001)
+    {
+        half sl = dot(col, half3(0.299, 0.587, 0.114));
+        col = max(lerp(sl.xxx, col, 1.0 + _QS_Tone.w), 0.0);
+    }
 
     UNITY_BRANCH if (_QS_Vignette.x > 0)
     {

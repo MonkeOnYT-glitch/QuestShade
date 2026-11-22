@@ -60,6 +60,9 @@ namespace QuestShade
             if (!_logged && slow > 0.2f) { _logged = true; Mod.Log.Msg($"Slow-mo running (time scale {Time.timeScale:0.00})"); }
         }
 
+        // How slowed the game is right now: 0 = normal speed, 1 = full slow-mo.
+        public static float Intensity => Time.timeScale == 0f ? 0f : Mathf.Clamp01((1f - Time.timeScale) / 0.85f);
+
         // Camera field of view multiplier: down to 0.7 at full slow-mo (a slow push in).
         public static float Zoom(Config cfg) => cfg.SlowMoZoom && Mod.BetaOn ? _zoom : 1f;
     }

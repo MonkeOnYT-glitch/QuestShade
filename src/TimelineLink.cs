@@ -84,7 +84,8 @@ namespace QuestShade
             catch (Exception e) { Mod.Log.Warning("Timeline support: pause failed: " + Inner(e)); }
         }
 
-        public static void ShowPeople()
+        public static void ShowPeople() => Scrub(0.01f); // going to the very start spawns the recorded people
+        private static void ShowPeopleOld()
         {
             if (PeopleShown) return;
             float t = PlayHead;

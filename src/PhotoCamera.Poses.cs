@@ -182,7 +182,7 @@ namespace QuestShade
             _lensRot = _hasLensPose ? Quaternion.Slerp(_lensRot, lr, lk) : lr;
             _hasLensPose = true;
             float pathFov = 0f;
-            _zoomNow = Mathf.Max(0.1f, SlowMo.Zoom(cfg));
+            _zoomNow = Mathf.Max(0.1f, _slowZoom); // the slow-mo zoom from last frame (kept out of recorded moves and shots)
             if (_moveRecording) SampleMove(_lensPos, _lensRot, (_appliedFov > 0f ? _appliedFov : _cam.fieldOfView) / _zoomNow);
             if (_pathPlaying) EvalPath(cfg, dt, ref _lensPos, ref _lensRot, ref pathFov);
             else if (_movePlaying) EvalMove(Time.unscaledDeltaTime, ref _lensPos, ref _lensRot, ref pathFov);
@@ -197,6 +197,7 @@ namespace QuestShade
                 try { var ft = FollowCamera.transform; _lensPos = ft.position; _lensRot = ft.rotation * (_vertical ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.identity); pathFov = FollowCamera.fieldOfView; }
                 catch { FollowCamera = null; }
             }
+            SlowAim(cfg, dt, ref _lensRot, _lensPos); // slow-mo: turn gently toward the NPC or object being framed
             _lensGo.transform.SetPositionAndRotation(_lensPos, _lensRot);
             if (_hoverMat != null && _hoverWanted)
             {
@@ -215,7 +216,7 @@ namespace QuestShade
             }
             float fov = Mode == CamMode.PoliceCam ? Mathf.Max(cfg.ChestFov, 115f) : BodyMode ? cfg.ChestFov : cfg.Fov;
             if (pathFov > 0f) fov = pathFov;             // timeline playback carries each keyframe's zoom
-            fov *= SlowMo.Zoom(cfg);                     // slow-mo: a slow cinematic push in
+            fov *= SlowZoom(cfg, dt, fov, _lensPos);     // slow-mo: zoom in to frame the NPC / object (or a slow push in)
             if (Mathf.Abs(fov - _appliedFov) > 0.01f) { _appliedFov = fov; _cam.fieldOfView = fov; }
             float near = BodyMode ? 0.05f : 0.015f;
             if (_handNear && BodyMode) near = 0.01f;

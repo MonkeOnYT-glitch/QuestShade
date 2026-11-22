@@ -631,6 +631,40 @@ namespace QuestShade
             if (_post != null) _post.SetVector(ID.Hurt, v);
         }
 
+        // ---- Slow-mo effects (beta): colour fringe, saturation, film grain and vignette fade in with slow-mo, then back out.
+        // Added on top of the preset (headset and camera), from the preset's own values saved when the fade starts.
+        private bool _slowBase; private float _slowApplied, _slowSat;
+        private readonly System.Collections.Generic.Dictionary<IntPtr, (Vector4 ca, Vector4 grain, Vector4 vig, Vector4 vigC)> _slowBases =
+            new System.Collections.Generic.Dictionary<IntPtr, (Vector4, Vector4, Vector4, Vector4)>();
+
+        public void SetSlowMoFx(float k, Config cfg)
+        {
+            if (k < 0.003f) k = 0f;
+            if (k == 0f && _slowApplied == 0f) return;
+            if (_slowBase && Mathf.Abs(k - _slowApplied) < 0.004f && k > 0f) return;
+            var mats = new[] { _mat, _matMono, _matPre, _post };
+            if (!_slowBase)
+            {
+                _slowBases.Clear();
+                foreach (var m in mats) if (m != null) _slowBases[m.Pointer] = (m.GetVector(ID.CA), m.GetVector(ID.Grain), m.GetVector(ID.Vignette), m.GetVector(ID.VignetteCenter));
+                _slowBase = true;
+            }
+            foreach (var m in mats)
+            {
+                if (m == null || !_slowBases.TryGetValue(m.Pointer, out var b)) continue;
+                var ca = b.ca; ca.x += k * cfg.SlowFxFringe * 1.5f; m.SetVector(ID.CA, ca);
+                var g = b.grain;
+                if (cfg.SlowFxGrain > 0f && k > 0f) { if (g.x <= 0f) g = new Vector4(0f, 0.8f, 1.5f, 0f); g.x += k * cfg.SlowFxGrain * 0.7f; }
+                m.SetVector(ID.Grain, g);
+                var v = b.vig; var vc = b.vigC;
+                if (cfg.SlowFxVignette > 0f && k > 0f) { if (v.x <= 0f) { v = new Vector4(0f, 1f, 1f, 0f); vc = new Vector4(0.5f, 0.5f, 0f, 0f); } v.x += k * cfg.SlowFxVignette * 2.4f; }
+                m.SetVector(ID.Vignette, v); m.SetVector(ID.VignetteCenter, vc);
+            }
+            _slowSat = k * cfg.SlowFxSaturation;
+            _appliedEv = float.NaN; // re-send the tone values (saturation rides along in them)
+            _slowApplied = k;
+        }
+
         private float _headHurtApplied = -1f, _headDeathApplied = -1f;
         // Headset (PCVR style): red pulse at the edges and the death fade, but no blur (z = 1).
         public void SetHeadsetHurt(float k, float death)
@@ -648,7 +682,7 @@ namespace QuestShade
             float lift = _adaptStrength == 0f ? 0f : 0.6f * cfg.DarkMaps * EyeAdaptation.DarkMap;
             if (!float.IsNaN(_appliedEv) && Mathf.Abs(ev - _appliedEv) < 0.004f && Mathf.Abs(lift - _appliedLift) < 0.004f) return;
             _appliedEv = ev; _appliedLift = lift;
-            var tone = new Vector4(MathF.Pow(2f, _baseExposure + ev), _tonemap, lift, 0);
+            var tone = new Vector4(MathF.Pow(2f, _baseExposure + ev), _tonemap, lift, _slowSat);
             _mat.SetVector(ID.Tone, tone);
             _matMono.SetVector(ID.Tone, tone);
             if (_matPre != null) _matPre.SetVector(ID.Tone, tone);
@@ -741,6 +775,7 @@ BokehIntensity = 0.3
                 tm = mode == "aces" ? 2 : mode == "none" ? 0 : 1;
             }
             _baseExposure = exposure; _tonemap = tm; _appliedEv = float.NaN;
+            _slowBase = false; // preset values changed: slow-mo effects re-read them next frame
             _adaptStrength = p.Has("EyeAdaptation") ? (p.Enabled("EyeAdaptation") ? Mathf.Clamp(p.Float("EyeAdaptation", "Strength", cfg.EyeAdaptStrength), 0f, 1.5f) : 0f) : -1f;
             EyeAdaptation.BrightenOnly = p.Bool("EyeAdaptation", "BrightenOnly", false);
             m.SetVector(ID.Tone, new Vector4(MathF.Pow(2f, exposure + EyeAdaptation.Ev), tm, 0, 0));

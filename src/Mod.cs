@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.92-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.93-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.91", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.92", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -39,8 +39,6 @@ namespace QuestShade
                 BetaOn = Beta; // before the saved camera mode is applied (beta-only modes)
                 if (_cfg._audioMigrated) { _cfg._audioMigrated = false; _cfg.SaveMenuSettings(); Log.Msg("Game audio + mic in recordings: on (new default)"); }
                 Sharing.Init(_cfg);
-                DirectorPanel.Notify = (m, s) => Notify(m, s); DirectorPanel.AddShot = DirectorAddShot;
-                DirectorPanel.RecordVideoOn = () => _cfg.TimelineAutoRecord; DirectorPanel.ToggleRecordVideo = () => { _cfg.TimelineAutoRecord = !_cfg.TimelineAutoRecord; _cfg.SaveMenuSettings(); };
                 PhotoSaver.ResolveFolder(_cfg.SaveFolder);
                 _cam.SetMode(_cfg.DefaultMode);
                 _cam.Fx = _fx;
@@ -63,7 +61,7 @@ namespace QuestShade
             if (_boneLib)
             {
                 try { BoneMenuUi.Build(this, _cfg); _cam.ChestProvider = BoneMenuUi.Chest; Focus.PlayerRoot = BoneMenuUi.PlayerRoot; _cam.HideHead = BoneMenuUi.HideHead; _cam.RestoreHead = BoneMenuUi.RestoreHead; _cam.UiLayerMask = BoneMenuUi.UiLayerMask; _cam.ActorPose = BoneMenuUi.ActorPose; _cam.HideHeadOf = BoneMenuUi.HideHeadOf; _cam.HeadToLayer = BoneMenuUi.HeadToLayer; Effects.LensHide = BoneMenuUi.LensHide; _cam.HeadRestore = BoneMenuUi.RestoreHeadLayer; _cam.OwnBodyToLayer = BoneMenuUi.OwnBodyToLayer;
-                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; FlashBeams.HeadsetLayer = () => _cam.LensHiddenLayer; FlashBeams.LensLayer = () => _cam.LensOnlyLayer; NullGlow.HeadsetLayer = () => _cam.LensHiddenLayer; DirectorPanel.HiddenLayer = () => _cam.LensHiddenLayer; Director.LiveHead = BoneMenuUi.LiveAvatarHead; _cam.BodyBone = BoneMenuUi.BodyBone; _cam.PlayerDying = () => _dyingNow; NullGlow.LensLayer = () => _cam.LensOnlyLayer; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Shadows.Avatar = BoneMenuUi.AvatarRoot; Shadows.PlayerRoot = BoneMenuUi.PlayerRoot; ControlsDebug.HandState = BoneMenuUi.HandState; ControlsDebug.GameStick = BoneMenuUi.GameStick; ControlsDebug.GameTouch = BoneMenuUi.GameStickTouch; Shadows.Held = BoneMenuUi.HeldObject; Shadows.ItemRoot = BoneMenuUi.ItemRoot; Shadows.PlayerLayers = BoneMenuUi.PlayerLayerMask; Log.Msg("BoneMenu page added"); }
+                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; FlashBeams.HeadsetLayer = () => _cam.LensHiddenLayer; FlashBeams.LensLayer = () => _cam.LensOnlyLayer; NullGlow.HeadsetLayer = () => _cam.LensHiddenLayer; Director.LiveHead = BoneMenuUi.LiveAvatarHead; _cam.BodyBone = BoneMenuUi.BodyBone; _cam.PlayerDying = () => _dyingNow; NullGlow.LensLayer = () => _cam.LensOnlyLayer; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Shadows.Avatar = BoneMenuUi.AvatarRoot; Shadows.PlayerRoot = BoneMenuUi.PlayerRoot; ControlsDebug.HandState = BoneMenuUi.HandState; ControlsDebug.GameStick = BoneMenuUi.GameStick; ControlsDebug.GameTouch = BoneMenuUi.GameStickTouch; Shadows.Held = BoneMenuUi.HeldObject; Shadows.ItemRoot = BoneMenuUi.ItemRoot; Shadows.PlayerLayers = BoneMenuUi.PlayerLayerMask; Log.Msg("BoneMenu page added"); }
                 catch (Exception e) { _boneLib = false; Log.Warning("BoneLib found but menu failed (gestures still work): " + e.Message); }
             }
             else Log.Msg("BoneLib not found - using controller gestures only");
@@ -82,7 +80,7 @@ namespace QuestShade
             Lighting.OnLevel();
             Shadows.OnLevel();
             NullGlow.OnLevel();
-            DirectorPanel.OnLevel(); Director.Clear();
+            Director.Clear(); _tlManual = _tlRender = false;
             SlowMo.OnLevel();
             _fx.ResetCalibration();
             if (_startNotice != null) _noticeAt = Time.unscaledTime + 6f;
@@ -117,6 +115,12 @@ namespace QuestShade
                 try { var hc = _fx.BoundCamera; if (hc != null) NullGlow.Tick(_cfg, hc.transform.position, BetaOn); } catch { }
                 BetaOn = Beta;
                 SlowMo.Tick(Time.unscaledDeltaTime);
+                {
+                    // Slow-mo effects: ease in as the game slows down, ease back out as it speeds up.
+                    float sfx = BetaOn ? SlowMo.Intensity : 0f;
+                    _slowFx += (sfx - _slowFx) * (1f - Mathf.Exp(-0.9f * Time.unscaledDeltaTime));
+                    try { _fx.SetSlowMoFx(_slowFx < 0.003f && sfx == 0f ? 0f : _slowFx, _cfg); } catch { }
+                }
                 _fx.SetFisheye(_cam.Mode == CamMode.PoliceCam ? Mathf.Max(0.35f, _cfg.Fisheye) : _cfg.Fisheye);
                 if (_boneLib) TickHurt();
                 _fx.TickHeadsetFocus(Time.unscaledDeltaTime);
@@ -455,6 +459,7 @@ namespace QuestShade
 
         // ---------- Livestream ----------
         // Beta features show for Testers: people running the test-builds updater, or with [Beta] Enabled = true.
+        private float _slowFx;
         internal static bool BetaOn; // beta-only features check this (beta build, test-builds updater, or [Beta] Enabled = true)
         private static bool? _testUpdater;
         internal bool Beta
@@ -633,21 +638,98 @@ namespace QuestShade
             _tlFilming ? (_cam.FollowCamera != null ? "Filming Timeline playback through its camera" : "Filming Timeline playback (no Timeline camera: QuestShade camera stays put)") :
             TimelineLink.Recording ? "Timeline is recording" : "Timeline found: press Play in Timeline and QuestShade films it";
 
-        // ---------- Timeline director (beta) ----------
-        internal void OpenDirector()
+        // ---------- Timeline (beta, needs the Timeline mod) ----------
+        // QuestShade steps through Timeline's recording itself (set the time, pose the scene) instead of pressing Timeline's
+        // Play, which spawned a fresh copy of the people every time. Show people, the time slider, Play preview and Render
+        // all work that way.
+        private bool _tlManual, _tlRender, _tlRenderRec;
+        private float _tlT;
+
+        private bool TimelineReady()
         {
-            if (!TimelineLink.Installed) { Notify("The director needs the Timeline mod installed", 2.5f); return; }
-            if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
-            DirectorPanel.Toggle(_fx.BoundCamera);
+            if (!TimelineLink.Installed) { Notify("Install the Timeline mod to use this", 2.5f); return false; }
+            if (!TimelineLink.CanDirect) { Notify("This Timeline version isn't supported yet (see log)", 2.5f); return false; }
+            return true;
         }
 
         internal void ShowTimelinePeople()
         {
-            if (!TimelineLink.Installed) { Notify("The Timeline mod isn't installed", 2f); return; }
-            TimelineLink.ShowPeople(); Notify("Showing the recorded people", 1.5f);
+            if (!TimelineReady()) return;
+            _tlManual = false;
+            TimelineLink.Scrub(0.01f);
+            Notify("Showing the recorded people (at the start)", 1.5f);
         }
 
-        private void DirectorAddShot(ShotKind kind)
+        internal void ScrubTo(float t)
+        {
+            if (BoneMenuUi.SettingTimeSlider || !TimelineReady()) return;
+            _tlManual = false;
+            TimelineLink.Scrub(Mathf.Max(0.01f, t));
+        }
+        internal void ScrubBy(float dt) { if (TimelineReady()) { _tlManual = false; TimelineLink.Scrub(Mathf.Max(0.01f, TimelineLink.PlayHead + dt)); } }
+
+        internal void TimelinePlayPause()
+        {
+            if (_tlManual) { _tlManual = false; Notify("Paused", 1f); return; }
+            if (!TimelineReady()) return;
+            float len = TimelineLink.Length;
+            if (len <= 0f) { Notify("Record something with the Timeline mod first", 2.5f); return; }
+            if (!TimelineLink.PeopleShown) TimelineLink.Scrub(0.01f);
+            _tlT = TimelineLink.PlayHead >= len - 0.05f ? 0.01f : TimelineLink.PlayHead;
+            if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+            _tlManual = true; _tlRender = false;
+            Notify("Playing the preview", 1f);
+        }
+
+        // Render: plays the whole clip from the start with your shots and records it, then stops on its own.
+        internal void TimelineRender()
+        {
+            if (!TimelineReady()) return;
+            float len = TimelineLink.Length;
+            if (len <= 0f) { Notify("Record something with the Timeline mod first", 2.5f); return; }
+            if (_tlRender) { FinishRender(false); return; }
+            if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+            TimelineLink.Scrub(0.01f);
+            _tlT = 0.01f; _tlManual = true; _tlRender = true; _tlRenderRec = false;
+            if (!_cam.Recording && !Streaming) { ToggleRecording(); _tlRenderRec = _cam.Recording; }
+            Log.Msg($"Timeline: rendering {len:0.0} s with {Director.Shots.Count} shot(s){(_tlRenderRec ? "" : " (not recording)")}");
+            Notify($"Rendering your clip ({len:0} s)...", 2f);
+        }
+
+        private void FinishRender(bool done)
+        {
+            _tlManual = false; _tlRender = false;
+            if (_tlRenderRec) { _tlRenderRec = false; if (_cam.Recording && !Streaming) ToggleRecording(); }
+            Notify(done ? "Clip rendered and saved to your gallery" : "Render stopped", 2.5f);
+        }
+
+        internal string TimelineLine
+        {
+            get
+            {
+                if (!TimelineLink.Installed) return "Timeline mod: not installed";
+                float len = TimelineLink.Length, t = TimelineLink.PlayHead;
+                if (len <= 0f) return "Record something with the Timeline mod";
+                string state = _tlRender ? "Rendering" : _tlManual ? "Playing" : TimelineLink.PeopleShown ? "Paused" : "Ready";
+                return $"{state}  {Director.Clock(t)} / {Director.Clock(len)}  ({Director.Shots.Count} shot{(Director.Shots.Count == 1 ? "" : "s")})";
+            }
+        }
+
+        internal string ShotList
+        {
+            get
+            {
+                if (Director.Shots.Count == 0) return "No shots yet: move the time slider, then add a shot";
+                var sb = new System.Text.StringBuilder();
+                foreach (var s in Director.Shots) { if (sb.Length > 0) sb.Append(",  "); sb.Append(Director.Clock(s.T)).Append(' ').Append(Director.KindName[(int)s.Kind]); }
+                return sb.ToString();
+            }
+        }
+
+        internal void DeleteShotHere() => Notify(Director.RemoveNear(TimelineLink.PlayHead) ? "Shot deleted" : "No shot at this time", 1.5f);
+        internal void ClearShots() { Director.Clear(); Notify("All shots deleted", 1.5f); }
+
+        internal void DirectorAddShot(ShotKind kind)
         {
             if (!TimelineLink.Installed) { Notify("The director needs the Timeline mod", 2f); return; }
             if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
@@ -670,17 +752,26 @@ namespace QuestShade
         {
             var head = _fx.BoundCamera;
             if (head != null) Director.LearnHeadFix(head.transform, _dyingNow || _cam.RagdollLocked);
-            DirectorPanel.Tick(_cam, head, _ctl.Trigger(false));
-            // Shots drive the camera while Timeline plays (or while previewing on the panel).
+            // Play preview / Render: step through the recording in real time.
+            if (_tlManual)
+            {
+                float len = TimelineLink.Length;
+                _tlT += Time.unscaledDeltaTime;
+                if (len <= 0f || _tlT >= len) { _tlT = Mathf.Max(0.01f, len); TimelineLink.Scrub(_tlT); if (_tlRender) FinishRender(true); else { _tlManual = false; Notify("End of the clip", 1.2f); } }
+                else TimelineLink.Scrub(_tlT);
+            }
+            // Shots drive the camera while the clip plays (preview, render, or the Timeline mod's own Play), or while
+            // scrubbing with "Preview shots while scrubbing" on.
             bool drive = Director.Shots.Count > 0 && TimelineLink.Installed && TimelineLink.PeopleShown
-                         && ((TimelineLink.Playing && !TimelineLink.Paused) || (DirectorPanel.Preview && DirectorPanel.IsOpen));
+                         && (_tlManual || (TimelineLink.Playing && !TimelineLink.Paused) || _cfg.DirectorPreview);
             _cam.ExternalLens = drive ? DirectorLens : null;
         }
 
         private void TimelineModTick()
         {
             if (BetaOn) DirectorTick();
-            bool play = BetaOn && _cfg.TimelineFilm && TimelineLink.Installed && TimelineLink.Playing;
+            // Only the Timeline mod's own, unpaused playback (Show people / the slider leave it paused; our preview and render step it ourselves).
+            bool play = BetaOn && _cfg.TimelineFilm && !_tlManual && TimelineLink.Installed && TimelineLink.Playing && !TimelineLink.Paused;
             if (play && !_tlFilming)
             {
                 _tlFilming = true;
@@ -709,8 +800,9 @@ namespace QuestShade
             // Keep the beta menu's highlights (active slow-mo / camera style, record button) in step, also after gestures.
             if (BetaOn && _boneLib && Time.unscaledTime >= _betaMarkAt)
             {
-                _betaMarkAt = Time.unscaledTime + 0.5f;
+                _betaMarkAt = Time.unscaledTime + 0.25f;
                 try { BoneMenuUi.MarkBeta(SlowMo.Level, _cam.Mode, _cam.MoveRecording, _cam.MoveRecordedSoFar); } catch { }
+                try { BoneMenuUi.MarkTimeline(TimelineLink.Installed ? TimelineLine : "Timeline mod: not installed", _tlManual, _tlRender, TimelineLink.Installed ? TimelineLink.PlayHead : 0f); } catch { }
             }
         }
 

@@ -109,25 +109,48 @@ namespace QuestShade
 
                 var slow = beta.CreatePage("Slow-mo", Color.white, 8, true);
                 for (int i = 0; i < 4; i++) { int lvl = i; _slowBtns[i] = slow.CreateFunction(SlowMo.Names[i], i == 0 ? Color.green : Color.white, () => mod.SetSlowMo(lvl)); }
-                slow.CreateBool("Cinematic zoom on the camera", Color.white, cfg.SlowMoZoom, v => { cfg.SlowMoZoom = v; cfg.SaveMenuSettings(); });
+                slow.CreateBool("Camera zooms in on NPCs / objects", Color.white, cfg.SlowMoZoom, v => { cfg.SlowMoZoom = v; cfg.SaveMenuSettings(); });
+                // Effects that fade in as the game slows down and fade back out as it speeds up (0 = off).
+                var sfx = slow.CreatePage("Slow-mo effects (fade in + out)", new Color(1f, 0.7f, 0.4f), 8, true);
+                sfx.CreateFunction("What's this?", info, () => Notify("These fade in slowly when slow-mo starts and fade out slowly when it ends. 0 = off. Saturation below 0 drains colour, above 0 boosts it.", 6f));
+                sfx.CreateFloat("Colour fringe", Color.white, cfg.SlowFxFringe, 0.1f, 0f, 1f, v => { cfg.SlowFxFringe = v; cfg.SaveMenuSettings(); });
+                sfx.CreateFloat("Saturation", Color.white, cfg.SlowFxSaturation, 0.1f, -1f, 1f, v => { cfg.SlowFxSaturation = v; cfg.SaveMenuSettings(); });
+                sfx.CreateFloat("Vignette (dark edges)", Color.white, cfg.SlowFxVignette, 0.1f, 0f, 1f, v => { cfg.SlowFxVignette = v; cfg.SaveMenuSettings(); });
+                sfx.CreateFloat("Film grain", Color.white, cfg.SlowFxGrain, 0.1f, 0f, 1f, v => { cfg.SlowFxGrain = v; cfg.SaveMenuSettings(); });
 
-                var tl = beta.CreatePage("Camera timeline", Color.white, 8, true);
-                // Timeline director: shots pinned to moments of a Timeline mod recording, controlled from a panel you can scrub.
-                tl.CreateFunction("Open / close Timeline director", new Color(1f, 0.62f, 0.15f), () => mod.OpenDirector());
-                tl.CreateFunction("Show people (Timeline)", new Color(0.45f, 0.9f, 1f), () => mod.ShowTimelinePeople());
-                var tlm = tl.CreatePage("Timeline mod settings", new Color(0.45f, 0.9f, 1f), 8, true);
-                tlm.CreateFunction("Status", Color.white, () => Notify(mod.TimelineModStatus, 4f));
-                tlm.CreateFunction("How it works", info, () => Notify("Record your scene with the Timeline mod. Open the director, scrub to a moment, add shots (free cam, first person, third person, chest or Timeline's camera). Press Play: QuestShade films each shot at exactly its time.", 9f));
-                tlm.CreateBool("Film Timeline playback", Color.green, cfg.TimelineFilm, v => { cfg.TimelineFilm = v; cfg.SaveMenuSettings(); });
-                tlm.CreateBool("Record video while Timeline plays", Color.white, cfg.TimelineAutoRecord, v => { cfg.TimelineAutoRecord = v; cfg.SaveMenuSettings(); });
-                tl.CreateFunction("How it works", info, () => Notify("Director: pin camera shots to moments of a Timeline recording. Record a move: press Record, move the camera around, Stop, then Play it back.", 7f));
-                var mv = tl.CreatePage("Record a camera move", Color.white, 8, true);
+                // Timeline: everything on one page, top to bottom in the order you use it.
+                var tl = beta.CreatePage("Timeline (needs the Timeline mod)", new Color(1f, 0.62f, 0.15f), 8, true);
+                tl.CreateFunction("How to use (press me)", info, () => Notify("1. Record your scene with the Timeline mod.  2. Show recorded people.  3. Move the Time slider to a moment and Add a shot.  4. Render: QuestShade films the whole clip with your shots and saves the video.", 10f));
+                _tlStatus = tl.CreateFunction("Status", Color.white, () => Notify(mod.TimelineLine, 3f));
+                tl.CreateFunction("Show recorded people", new Color(0.45f, 0.9f, 1f), () => mod.ShowTimelinePeople());
+                _tlPlay = tl.CreateFunction("Play preview", Color.green, () => mod.TimelinePlayPause());
+                _tlTime = tl.CreateFloat("Time (seconds)", Color.white, 0f, 0.5f, 0f, 600f, v => mod.ScrubTo(v));
+                tl.CreateFunction("Back 5 seconds", Color.white, () => mod.ScrubBy(-5f));
+                tl.CreateFunction("Forward 5 seconds", Color.white, () => mod.ScrubBy(5f));
+                var add = tl.CreatePage("Add a shot at this time", new Color(1f, 0.62f, 0.15f), 8, true);
+                add.CreateFunction("How shots work (press me)", info, () => Notify("A shot starts at the current time and lasts until the next one. Free cam shots in a row glide smoothly between their times.", 7f));
+                add.CreateFunction("Free cam (where your camera is now)", Director.KindColor[0], () => mod.DirectorAddShot(ShotKind.FreeCam));
+                add.CreateFunction("First person (the recorded you)", Director.KindColor[1], () => mod.DirectorAddShot(ShotKind.FirstPerson));
+                add.CreateFunction("Third person (behind the recorded you)", Director.KindColor[2], () => mod.DirectorAddShot(ShotKind.ThirdPerson));
+                add.CreateFunction("Chest cam (the recorded you)", Director.KindColor[3], () => mod.DirectorAddShot(ShotKind.Chest));
+                add.CreateFunction("Timeline mod's own camera", Director.KindColor[4], () => mod.DirectorAddShot(ShotKind.TimelineCam));
+                tl.CreateFunction("List my shots", Color.white, () => Notify(mod.ShotList, 6f));
+                tl.CreateFunction("Delete the shot at this time", new Color(1f, 0.5f, 0.5f), () => mod.DeleteShotHere());
+                tl.CreateFunction("Delete all shots", Color.yellow, () => mod.ClearShots());
+                _tlRender = tl.CreateFunction("RENDER the clip (saves a video)", Color.red, () => mod.TimelineRender());
+                var tls = tl.CreatePage("Timeline settings", Color.gray, 8, true);
+                tls.CreateBool("Preview shots while moving the time slider", Color.white, cfg.DirectorPreview, v => { cfg.DirectorPreview = v; });
+                tls.CreateBool("Follow the Timeline mod's own Play button", Color.white, cfg.TimelineFilm, v => { cfg.TimelineFilm = v; cfg.SaveMenuSettings(); });
+                tls.CreateBool("Record video when the Timeline mod plays", Color.white, cfg.TimelineAutoRecord, v => { cfg.TimelineAutoRecord = v; cfg.SaveMenuSettings(); });
+
+                // Camera move recorder: works anywhere, no Timeline mod needed.
+                var mv = beta.CreatePage("Camera move recorder", Color.white, 8, true);
+                mv.CreateFunction("How to use (press me)", info, () => Notify("Press Record move, move the camera around however you like, press it again to stop. Play move replays it exactly.", 6f));
                 _moveRecBtn = mv.CreateFunction("Record move", Color.red, () => mod.MoveRecord());
                 mv.CreateFunction("Play move", Color.cyan, () => mod.MovePlay(false));
                 mv.CreateFunction("Play move + record video", new Color(1f, 0.45f, 0.45f), () => mod.MovePlay(true));
                 mv.CreateFunction("Stop", Color.white, () => mod.TimelineStop());
-                // Zoom for the current camera mode, live: each shot and recorded move keeps the zoom it had.
-                tl.CreateFloat("Camera zoom (field of view)", Color.white, mod.LiveFov, 5f, 10f, 150f, v => mod.SetLiveFov(v));
+                mv.CreateFloat("Camera zoom (field of view)", Color.white, mod.LiveFov, 5f, 10f, 150f, v => mod.SetLiveFov(v));
 
                 var cams = beta.CreatePage("New camera styles", Color.white, 8, true);
                 _styleBtns[0] = cams.CreateFunction("Helmet cam (shows your helmet)", Color.white, () => { mod.SetCameraMode(CamMode.HelmetView); MarkStyles(CamMode.HelmetView); });
@@ -859,6 +882,29 @@ namespace QuestShade
         // Beta page highlights: the active slow-mo level and camera style are shown in green; the record button says what it does.
         private static readonly FunctionElement[] _slowBtns = new FunctionElement[4], _styleBtns = new FunctionElement[2];
         private static FunctionElement _moveRecBtn;
+        // Timeline page: live status, play / render labels and the time slider following the playhead.
+        private static FunctionElement _tlStatus, _tlPlay, _tlRender;
+        private static FloatElement _tlTime;
+        private static string _tlStatusShown, _tlPlayShown, _tlRenderShown; private static float _tlTimeShown = -1f;
+        public static bool SettingTimeSlider { get; private set; }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void MarkTimeline(string status, bool playing, bool rendering, float t)
+        {
+            if (_tlStatus != null && status != _tlStatusShown) { _tlStatusShown = status; _tlStatus.ElementName = status; }
+            string play = playing && !rendering ? "Pause preview" : "Play preview";
+            if (_tlPlay != null && play != _tlPlayShown) { _tlPlayShown = play; _tlPlay.ElementName = play; _tlPlay.ElementColor = playing && !rendering ? Color.yellow : Color.green; }
+            string render = rendering ? "Stop rendering" : "RENDER the clip (saves a video)";
+            if (_tlRender != null && render != _tlRenderShown) { _tlRenderShown = render; _tlRender.ElementName = render; _tlRender.ElementColor = rendering ? Color.yellow : Color.red; }
+            float rounded = Mathf.Round(t * 2f) / 2f; // the slider moves in half seconds
+            if (_tlTime != null && Mathf.Abs(rounded - _tlTimeShown) > 0.01f)
+            {
+                _tlTimeShown = rounded;
+                SettingTimeSlider = true;
+                try { _tlTime.Value = rounded; } catch { }
+                SettingTimeSlider = false;
+            }
+        }
         private static int _markedSlow = -1; private static CamMode _markedMode = (CamMode)(-1); private static string _markedRec;
 
         [MethodImpl(MethodImplOptions.NoInlining)]
