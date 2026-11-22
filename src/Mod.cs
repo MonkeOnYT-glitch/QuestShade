@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.77-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.78-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.76", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.77", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -786,6 +786,7 @@ namespace QuestShade
                         _cfg.Fov = Mathf.Clamp(Mathf.Round((_cfg.Fov + dir * step) / step) * step, 10f, 140f);
                         _zoomStaticUntil = now + 0.18f;
                         _ctl.Buzz(_cfg, dir > 0, 0.5f, 0.03f);
+                        try { var lc = _cam.LensCamera; ZoomSfx.Play(dir < 0, lc != null ? lc.transform.position : Vector3.zero, _cfg.ZoomSound); } catch { }
                         _zoomDirty = true;
                     }
                 }

@@ -26,7 +26,7 @@ namespace QuestShade
         public float BloomStrength = 1f, BlurStrength = 1f, GripAngle = 0f;
         public bool HeadsetBloom = false;
         public bool ZoomButtons = true, ZoomClicky = false; // camcorder zoom: B in / Y out while holding the camera (hand / selfie)
-        public float ZoomStep = 10f, ZoomSpeed = 35f;
+        public float ZoomStep = 10f, ZoomSpeed = 35f, ZoomSound = 0.7f; // camcorder whirr volume (clicky zoom only)
         public bool MotionBlur = false;
         // Shadow map (test): world-space shadows on every surface. CpuMatrices / FlipY are test switches for the per-eye math.
         public bool FlashlightShadows = true, FlashlightWorldShadows = true; public float FlashShadowDarkness = 0.4f, FlashlightLight = 0.35f;
@@ -183,6 +183,7 @@ namespace QuestShade
             ZoomClicky = ini.Bool("Camera", "ZoomClicky", false);
             ZoomStep = Mathf.Clamp(ini.Float("Camera", "ZoomStep", 10f), 1f, 40f);
             ZoomSpeed = Mathf.Clamp(ini.Float("Camera", "ZoomSpeed", 35f), 5f, 150f);
+            ZoomSound = Mathf.Clamp01(ini.Float("Camera", "ZoomSound", 0.7f));
             MotionBlurStrength = Mathf.Clamp(ini.Float("General", "MotionBlurStrength", 0.5f), 0f, 1f);
             ControllerShortcuts = ini.Bool("Controls", "Shortcuts", true);
             LeftHanded = ini.Bool("Controls", "LeftHanded", false);
