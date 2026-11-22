@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.83-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.84-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.82", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.83", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -439,7 +439,7 @@ namespace QuestShade
             else Log.Msg("Photo skipped (busy)");
         }
 
-        // ---------- Livestream (beta) ----------
+        // ---------- Livestream ----------
         // Beta features show for Testers: people running the test-builds updater, or with [Beta] Enabled = true.
         private static bool? _testUpdater;
         internal bool Beta
@@ -476,7 +476,7 @@ namespace QuestShade
 
         internal void ToggleStreaming()
         {
-            if (!Beta) return;
+
             if (Streaming)
             {
                 _cam.StopRecording(); _wasLive = false;

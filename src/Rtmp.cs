@@ -8,7 +8,7 @@ using System.Threading;
 
 namespace QuestShade
 {
-    // Livestream (beta): a small RTMP / RTMPS publisher, the same protocol OBS uses to stream to Twitch, YouTube and Kick.
+    // Livestream: a small RTMP / RTMPS publisher, the same protocol OBS uses to stream to Twitch, YouTube and Kick.
     // The video recorder hands it H.264 + AAC straight from the Quest's hardware encoders; this wraps them in FLV tags and
     // sends them on a background thread so the game never waits on the network.
     internal sealed class RtmpClient : IDisposable

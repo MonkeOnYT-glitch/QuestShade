@@ -75,7 +75,7 @@ namespace QuestShade
         public float GameVolume = 1f, MicVolume = 1f;
         internal bool _audioMigrated, _micMigrated;
         public int AudioBitrateKbps = 128;
-        // Livestream (beta, Testers only): RTMP server + stream key from Twitch / YouTube / Kick.
+        // Livestream: RTMP server + stream key from Twitch / YouTube / Kick.
         public string StreamServer = "rtmp://live.twitch.tv/app", StreamKey = "";
         public int StreamWidth = 1280, StreamHeight = 720, StreamFps = 30, StreamBitrateKbps = 4500; // landscape size; Vertical swaps it (1080x1920 etc.)
         public bool StreamVertical; // 9:16 stream for TikTok Live / YouTube Shorts
@@ -89,7 +89,7 @@ namespace QuestShade
                 if (File.Exists(MainIniPath) && File.ReadAllText(MainIniPath).IndexOf("[Stream]", StringComparison.OrdinalIgnoreCase) >= 0) return;
                 File.AppendAllText(MainIniPath,
                     "\n[Stream]\n" +
-                    "; Livestream (beta). Server + stream key from your streaming site:\n" +
+                    "; Livestream. Server + stream key from your streaming site:\n" +
                     ";   Twitch:  rtmp://live.twitch.tv/app            (key: dashboard.twitch.tv > Settings > Stream)\n" +
                     ";   YouTube: rtmp://a.rtmp.youtube.com/live2      (key: YouTube Studio > Go live > Stream)\n" +
                     ";   Kick:    the rtmps:// server from Kick > Settings > Stream\n" +

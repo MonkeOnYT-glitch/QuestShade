@@ -29,10 +29,9 @@ namespace QuestShade
             shoot.CreateFunction("Take photo", Color.cyan, () => mod.TakePhoto());
             shoot.CreateFunction("Record / stop", Color.red, () => mod.ToggleRecording());
             shoot.CreateInt("Photo timer (s)", Color.white, cfg.PhotoTimer, 1, 0, 10, v => cfg.PhotoTimer = v);
-            if (mod.Beta)
+            // Livestream: streams the camera view to Twitch / YouTube / Kick / TikTok over RTMP (out of beta in 1.7.83).
             {
-                // Livestream (beta, Testers only): streams the camera view to Twitch / YouTube / Kick over RTMP.
-                var live = cam.CreatePage("Livestream (beta)", new Color(1f, 0.3f, 0.35f), 8, true);
+                var live = cam.CreatePage("Livestream", new Color(1f, 0.3f, 0.35f), 8, true);
                 live.CreateFunction("Go live / end stream", Color.red, () => mod.ToggleStreaming());
                 live.CreateFunction("Stream status", Color.white, () => Notify(mod.StreamStatus, 3f));
                 live.CreateFunction(string.IsNullOrWhiteSpace(cfg.StreamKey) ? "Stream key: NOT SET (press for how)" : "Stream key: set", string.IsNullOrWhiteSpace(cfg.StreamKey) ? Color.yellow : Color.green,

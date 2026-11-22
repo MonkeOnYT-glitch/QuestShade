@@ -14,7 +14,7 @@ namespace QuestShade
         public bool Streaming => _rec.Streaming;
         public RtmpClient Stream => _rec.Stream;
 
-        // Livestream (beta): the same pipeline as recording, but the encoded picture goes to RTMP instead of a file.
+        // Livestream: the same pipeline as recording, but the encoded picture goes to RTMP instead of a file.
         public bool StartStreaming(Config cfg, out string error)
         {
             error = null;

@@ -15,7 +15,7 @@ namespace QuestShade
         public int Rotation;
         public string FilePath { get; private set; }
         public float Seconds => Recording ? Time.realtimeSinceStartup - _t0 : 0f;
-        // Livestream (beta): set before Start() and the encoded video/audio go to this RTMP client instead of an MP4 file.
+        // Livestream: set before Start() and the encoded video/audio go to this RTMP client instead of an MP4 file.
         public RtmpClient Stream;
         public bool Streaming => Recording && Stream != null;
         public bool PortraitStream; // vertical stream: the sideways-rendered picture is turned upright during the NV12 conversion
