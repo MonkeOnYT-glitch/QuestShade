@@ -263,7 +263,8 @@ Shader "Hidden/QuestShade/FinalBlit"
                 half2 f = QSFlash(w, nrm);
                 // Where the flashlight reaches, it lights up the sun shadow (a flashlight pointed into a shadow brightens it);
                 // things blocking the beam still throw their own flashlight shadow.
-                s = lerp(s, 1, saturate(f.y * 1.5));
+                // _QS_FLParams2.y = 1 for a map lamp: it only throws shadows, it doesn't light up the sun's shadows.
+                s = lerp(s, 1, saturate(f.y * 1.5) * (1 - _QS_FLParams2.y));
                 // QuestShade's own flashlight light on top: BONELAB's flashlight only lights materials that take extra lights, so whole
                 // walls and floors stayed dark. This brightens every surface the beam actually reaches (not through blockers).
                 return s * f.x * (1 + f.y * _QS_FLParams2.x);

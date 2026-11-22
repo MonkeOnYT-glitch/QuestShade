@@ -101,6 +101,37 @@ namespace QuestShade
             PresetEditorUi.Build(presets, mod, cfg);
             _importPage = presets.CreatePage("ReShade imports", Color.cyan, 8, true);
 
+            if (mod.Beta)
+            {
+                // Beta features (Testers only): everything new from the roadmap, in one place to try out.
+                var beta = root.CreatePage("Beta features", new Color(0.45f, 0.9f, 1f), 8, true);
+                beta.CreateFunction("New in this beta: try them and tell us!", info, () => Notify("Slow-mo, camera timeline, helmet + shoulder cams, hurt/death effects, glowing Nullbodies and lamp shadows. Feedback in #public-feedback.", 6f));
+
+                var slow = beta.CreatePage("Slow-mo", Color.white, 8, true);
+                slow.CreateFunction("Off", Color.green, () => mod.SetSlowMo(0));
+                slow.CreateFunction("A little", Color.white, () => mod.SetSlowMo(1));
+                slow.CreateFunction("More", Color.white, () => mod.SetSlowMo(2));
+                slow.CreateFunction("Full", new Color(1f, 0.6f, 0.3f), () => mod.SetSlowMo(3));
+                slow.CreateBool("Cinematic zoom on the camera", Color.white, cfg.SlowMoZoom, v => { cfg.SlowMoZoom = v; cfg.SaveMenuSettings(); });
+
+                var tl = beta.CreatePage("Camera timeline", Color.white, 8, true);
+                tl.CreateFunction("How it works", info, () => Notify("Aim the camera at a shot, Add keyframe. Move it, add another. Play flies the camera smoothly through them all.", 6f));
+                tl.CreateFunction("Add keyframe (camera's current view)", Color.green, () => mod.TimelineAdd());
+                tl.CreateFunction("Play", Color.cyan, () => mod.TimelinePlay(false));
+                tl.CreateFunction("Play + record", Color.red, () => mod.TimelinePlay(true));
+                tl.CreateFunction("Stop", Color.white, () => mod.TimelineStop());
+                tl.CreateFunction("Remove last keyframe", Color.white, () => mod.TimelineUndo());
+                tl.CreateFunction("Clear keyframes", Color.yellow, () => mod.TimelineClear());
+                tl.CreateFloat("Seconds between keyframes", Color.white, cfg.TimelineSeconds, 0.5f, 0.5f, 30f, v => { cfg.TimelineSeconds = v; cfg.SaveMenuSettings(); });
+
+                var cams = beta.CreatePage("New camera styles", Color.white, 8, true);
+                cams.CreateFunction("Helmet cam (shows your helmet)", Color.white, () => mod.SetCameraMode(CamMode.HelmetView));
+                cams.CreateFunction("Shoulder bodycam", Color.white, () => mod.SetCameraMode(CamMode.Shoulder));
+
+                beta.CreateBool("Hurt + death effects in headset", new Color(1f, 0.5f, 0.5f), cfg.HeadsetHurt, v => { cfg.HeadsetHurt = v; cfg.SaveMenuSettings(); });
+                beta.CreateBool("Glowing Nullbodies", new Color(0.75f, 0.45f, 1f), cfg.NullbodyGlow, v => { cfg.NullbodyGlow = v; cfg.SaveMenuSettings(); });
+                beta.CreateBool("Lamp shadows", new Color(1f, 0.85f, 0.5f), cfg.LampShadows, v => { cfg.LampShadows = v; cfg.SaveMenuSettings(); });
+            }
             var look = root.CreatePage("Look", Color.white, 8, true);
             look.CreateFunction("These apply on top of every preset", info, () => Notify("Presets set the colours. These are your own extras on top, whatever preset is on.", 4f));
             var bloom = look.CreatePage("Bloom + blur", Color.white, 8, true);

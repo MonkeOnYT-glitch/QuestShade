@@ -128,6 +128,23 @@ namespace QuestShade
                     lr = ht.rotation;
                     break;
                 }
+                case CamMode.HelmetView:
+                {
+                    // Side-mounted helmet cam: high on the right of the head, angled slightly in, so the edge of your
+                    // helmet / head sits at the left of the frame (your head stays visible in this mode).
+                    lp = ht.position + ht.right * 0.135f + ht.up * 0.115f + ht.forward * 0.035f;
+                    lr = ht.rotation * Quaternion.Euler(9f, -6f, 0f);
+                    break;
+                }
+                case CamMode.Shoulder:
+                {
+                    // Shoulder-mounted bodycam: rides your right shoulder and turns with your body, looking ahead.
+                    ChestPose(cfg, head, out var cp, out var cr, out var pivot, _following ? ht : null);
+                    lp = cp + cr * new Vector3(0.17f, 0.15f, -0.05f);
+                    lr = cr * Quaternion.Euler(5f, 0f, 0f);
+                    lp = AvoidWalls(pivot, lp);
+                    break;
+                }
                 case CamMode.Chest:
                 case CamMode.PoliceCam:
                     ChestPose(cfg, head, out lp, out lr, out var chestPivot, _following ? ht : null);
@@ -163,6 +180,8 @@ namespace QuestShade
             _lensPos = _hasLensPose && !bodyLocked ? Vector3.Lerp(_lensPos, lp, lk) : lp;
             _lensRot = _hasLensPose ? Quaternion.Slerp(_lensRot, lr, lk) : lr;
             _hasLensPose = true;
+            float pathFov = 0f;
+            if (_pathPlaying) EvalPath(cfg, dt, ref _lensPos, ref _lensRot, ref pathFov);
             _lensGo.transform.SetPositionAndRotation(_lensPos, _lensRot);
             if (_hoverMat != null && _hoverWanted)
             {
@@ -180,7 +199,9 @@ namespace QuestShade
                 if (_hoverMat != null) _hoverMat.SetVector(PortraitId, portrait);
             }
             float fov = Mode == CamMode.PoliceCam ? Mathf.Max(cfg.ChestFov, 115f) : BodyMode ? cfg.ChestFov : cfg.Fov;
-            if (fov != _appliedFov) { _appliedFov = fov; _cam.fieldOfView = fov; }
+            if (pathFov > 0f) fov = pathFov;             // timeline playback carries each keyframe's zoom
+            fov *= SlowMo.Zoom(cfg);                     // slow-mo: a slow cinematic push in
+            if (Mathf.Abs(fov - _appliedFov) > 0.01f) { _appliedFov = fov; _cam.fieldOfView = fov; }
             float near = BodyMode ? 0.05f : 0.015f;
             if (_handNear && BodyMode) near = 0.01f;
             if (near != _appliedNear) { _appliedNear = near; _cam.nearClipPlane = near; }

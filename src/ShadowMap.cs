@@ -243,8 +243,11 @@ namespace QuestShade
         {
             Light l = null;
             if (cfg.FlashlightShadows) { try { l = Flashlights.ActiveSpot(); } catch { } }
+            // No flashlight on: the nearest map lamp throws the shadows instead (only shadows, no extra light).
+            bool lamp = false;
+            if (l == null && cfg.LampShadows && Mod.BetaOn && _head != null) { l = PickLamp(_head.transform.position); lamp = l != null; }
             if (l == null) { _flStrength = 0f; Shader.SetGlobalVector(FLPosId, Vector4.zero); if (_flCam != null) _flCam.enabled = false; UrpOff(); return; }
-            UrpFlash(l, cfg.FlashlightWorldShadows);
+            if (lamp) UrpOff(); else UrpFlash(l, cfg.FlashlightWorldShadows);
             int res = 1024;
             if (_flRt == null)
             {
@@ -276,27 +279,68 @@ namespace QuestShade
             }
             var t = l.transform;
             float spot = Mathf.Clamp(l.spotAngle, 10f, 150f), range = Mathf.Clamp(l.range, 2f, 25f);
+            Vector3 lpos = t.position, fwd = t.forward;
+            if (lamp && l.type == LightType.Point)
+            {
+                // A point lamp shines everywhere; aim a wide cone at the player (straight down for ceiling lamps).
+                Vector3 hp = _head.transform.position;
+                fwd = lpos.y > hp.y + 0.3f ? Vector3.down : (hp - lpos).normalized;
+                spot = 150f;
+            }
+            var lrot = Quaternion.LookRotation(fwd, Mathf.Abs(fwd.y) > 0.99f ? Vector3.forward : Vector3.up);
             _flCam.cullingMask = bit;
-            _flCam.transform.SetPositionAndRotation(t.position, t.rotation);
+            _flCam.transform.SetPositionAndRotation(lpos, lrot);
             _flCam.fieldOfView = spot + 4f;
-            _flCam.nearClipPlane = 0.25f;
+            _flCam.nearClipPlane = lamp ? 0.1f : 0.25f;
             _flCam.farClipPlane = range;
-            _flPos = t.position;
-            var fwd = t.forward;
+            _flPos = lpos;
             Shader.SetGlobalVector(OriginId, new Vector4(_flPos.x, _flPos.y, _flPos.z, 0f));
             Shader.SetGlobalVector(DirId, new Vector4(fwd.x, fwd.y, fwd.z, 0f));
             Shader.SetGlobalFloat(ModeId, 1f);
             try { _flCam.Render(); } catch { _flStrength = 0f; return; }
-            float inner = l.innerSpotAngle > 1f ? l.innerSpotAngle : spot * 0.6f;
+            float inner = lamp && l.type == LightType.Point ? spot * 0.8f : l.innerSpotAngle > 1f ? l.innerSpotAngle : spot * 0.6f;
             Shader.SetGlobalTexture(FLTexId, _flRt);
             Shader.SetGlobalMatrix(FLMId, _flCam.projectionMatrix * _flCam.worldToCameraMatrix);
             Shader.SetGlobalVector(FLDirId, new Vector4(fwd.x, fwd.y, fwd.z, Mathf.Cos(spot * 0.5f * Mathf.Deg2Rad)));
             Shader.SetGlobalVector(FLParamsId, new Vector4(range, 1f / res, Mathf.Cos(inner * 0.5f * Mathf.Deg2Rad), 0.06f));
-            _flStrength = Mathf.Clamp01(cfg.FlashShadowDarkness);
-            Shader.SetGlobalVector(FLParams2Id, new Vector4(Mathf.Clamp(cfg.FlashlightLight, 0f, 3f), 0f, 0f, 0f));
-            if (!_flLogged) { _flLogged = true; Mod.Log.Msg($"Flashlight shadows on ({spot:0} deg, {range:0} m)"); }
+            _flStrength = Mathf.Clamp01(cfg.FlashShadowDarkness) * (lamp ? 0.85f : 1f);
+            // y = 1: a lamp only throws shadows (no extra light, and it doesn't brighten the sun's shadows).
+            Shader.SetGlobalVector(FLParams2Id, lamp ? new Vector4(0f, 1f, 0f, 0f) : new Vector4(Mathf.Clamp(cfg.FlashlightLight, 0f, 3f), 0f, 0f, 0f));
+            if (lamp && !_lampLogged) { _lampLogged = true; Mod.Log.Msg($"Lamp shadows on: '{l.gameObject.name}' ({l.type}, {range:0} m)"); }
+            if (!lamp && !_flLogged) { _flLogged = true; Mod.Log.Msg($"Flashlight shadows on ({spot:0} deg, {range:0} m)"); }
         }
-        private static bool _flLogged;
+        private static bool _flLogged, _lampLogged;
+
+        // The map light that matters most where you stand: bright, in range, close. Re-picked every 1.5 s.
+        private static Light _lamp; private static float _nextLampPick;
+        private static Light PickLamp(Vector3 at)
+        {
+            float now = Time.unscaledTime;
+            if (now < _nextLampPick)
+            {
+                bool ok; try { ok = _lamp != null && _lamp.isActiveAndEnabled; } catch { ok = false; }
+                return ok ? _lamp : null;
+            }
+            _nextLampPick = now + 1.5f;
+            Light best = null; float bestScore = 0f;
+            try
+            {
+                foreach (var x in UnityEngine.Object.FindObjectsOfType<Light>())
+                {
+                    if (x == null || !x.isActiveAndEnabled || x.type == LightType.Directional || x.intensity < 0.3f) continue;
+                    if (x.type != LightType.Point && x.type != LightType.Spot) continue;
+                    if (x.gameObject.name.StartsWith("QuestShade")) continue;
+                    float d = Vector3.Distance(x.transform.position, at);
+                    if (d > 9f || d > x.range * 0.9f) continue;
+                    if (x.type == LightType.Spot && Vector3.Dot(x.transform.forward, (at - x.transform.position).normalized) < Mathf.Cos(x.spotAngle * 0.5f * Mathf.Deg2Rad)) continue;
+                    float score = x.intensity / (d * d + 0.5f);
+                    if (score > bestScore) { bestScore = score; best = x; }
+                }
+            }
+            catch { }
+            _lamp = best;
+            return best;
+        }
 
         private static void Ensure(int res)
         {

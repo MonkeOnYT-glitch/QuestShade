@@ -9,7 +9,7 @@ using InputDevice = UnityEngine.XR.InputDevice;
 
 namespace QuestShade
 {
-    public enum CamMode { Hand, Selfie, FirstPerson, Helmet, Chest, PoliceCam, ThirdPerson }
+    public enum CamMode { Hand, Selfie, FirstPerson, Helmet, Chest, PoliceCam, ThirdPerson, HelmetView, Shoulder }
 
     internal sealed partial class PhotoCamera
     {
@@ -96,6 +96,8 @@ namespace QuestShade
 
         public void SetMode(CamMode m)
         {
+            // The helmet-view and shoulder cams are beta-only for now.
+            if (!Mod.BetaOn && (m == CamMode.HelmetView || m == CamMode.Shoulder)) m = m == CamMode.HelmetView ? CamMode.Helmet : CamMode.Chest;
             if (m == Mode) return;
             Mode = m;
             _hasLensPose = false;
@@ -217,7 +219,7 @@ namespace QuestShade
 
         private static string ModeName(CamMode m) => m switch
         {
-            CamMode.ThirdPerson => "mode: third person", CamMode.Chest => "mode: chest (bodycam)", CamMode.FirstPerson => "mode: first person (head cam)", CamMode.Helmet => "mode: helmet cam", CamMode.PoliceCam => "mode: police bodycam",
+            CamMode.ThirdPerson => "mode: third person", CamMode.Chest => "mode: chest (bodycam)", CamMode.FirstPerson => "mode: first person (head cam)", CamMode.Helmet => "mode: helmet cam", CamMode.PoliceCam => "mode: police bodycam", CamMode.HelmetView => "mode: helmet cam (shows helmet)", CamMode.Shoulder => "mode: shoulder bodycam",
             _ => "mode: " + m.ToString().ToLowerInvariant()
         };
 
@@ -316,7 +318,7 @@ namespace QuestShade
         private bool _headOnLayer, _headWasActor; private float _headLayerAt;
         private void UpdateHeadLayer()
         {
-            bool want = Open && _screenLayer >= 0 && BodyMode && HeadToLayer != null;
+            bool want = Open && _screenLayer >= 0 && HidesHead && HeadToLayer != null;
             if (!want)
             {
                 if (_headOnLayer) { try { HeadRestore?.Invoke(); } catch { } _headOnLayer = false; }
@@ -327,11 +329,22 @@ namespace QuestShade
             _headWasActor = _following;
             try { HeadToLayer(_following, _screenLayer); _headOnLayer = true; } catch { }
         }
-        private static readonly CamMode[] CycleOrder = { CamMode.Hand, CamMode.Selfie, CamMode.FirstPerson, CamMode.Helmet, CamMode.Chest, CamMode.PoliceCam, CamMode.ThirdPerson };
-        public void CycleMode() => SetMode(CycleOrder[(Array.IndexOf(CycleOrder, Mode) + 1) % CycleOrder.Length]);
+        private static readonly CamMode[] CycleOrder = { CamMode.Hand, CamMode.Selfie, CamMode.FirstPerson, CamMode.Helmet, CamMode.HelmetView, CamMode.Chest, CamMode.Shoulder, CamMode.PoliceCam, CamMode.ThirdPerson };
+        public void CycleMode()
+        {
+            int i = Array.IndexOf(CycleOrder, Mode);
+            for (int k = 1; k <= CycleOrder.Length; k++)
+            {
+                var next = CycleOrder[(i + k + CycleOrder.Length) % CycleOrder.Length];
+                if (!Mod.BetaOn && (next == CamMode.HelmetView || next == CamMode.Shoulder)) continue;
+                SetMode(next); return;
+            }
+        }
 
         private bool Detached => Mode == CamMode.ThirdPerson || BodyMode;
-        private bool BodyMode => Mode == CamMode.Chest || Mode == CamMode.PoliceCam || Mode == CamMode.FirstPerson || Mode == CamMode.Helmet;
+        private bool BodyMode => Mode == CamMode.Chest || Mode == CamMode.PoliceCam || Mode == CamMode.FirstPerson || Mode == CamMode.Helmet || Mode == CamMode.HelmetView || Mode == CamMode.Shoulder;
+        // Helmet view keeps your head drawn so the edge of your helmet shows in the shot, like a real side-mounted helmet cam.
+        private bool HidesHead => BodyMode && Mode != CamMode.HelmetView;
 
         public Func<Transform> ChestProvider;
         private bool _chestLogged;
@@ -509,6 +522,7 @@ namespace QuestShade
             SchedulePrewarm();
             _hasDevicePose = _hasLensPose = false;
             _prop = null; _propSpawning = false; _propRetryAt = Time.unscaledTime + 2f;
+            _keys.Clear(); _pathPlaying = false; // timeline keyframes belong to the old level
         }
 
         public void Refresh(Config cfg, Camera head) { if (_device != null && head != null) Build(cfg, head); }

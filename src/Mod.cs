@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.87-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.88-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.86", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.87", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -36,6 +36,7 @@ namespace QuestShade
             {
                 Config.InitPaths();
                 _cfg.LoadAll();
+                BetaOn = Beta; // before the saved camera mode is applied (beta-only modes)
                 if (_cfg._audioMigrated) { _cfg._audioMigrated = false; _cfg.SaveMenuSettings(); Log.Msg("Game audio + mic in recordings: on (new default)"); }
                 Sharing.Init(_cfg);
                 PhotoSaver.ResolveFolder(_cfg.SaveFolder);
@@ -60,7 +61,7 @@ namespace QuestShade
             if (_boneLib)
             {
                 try { BoneMenuUi.Build(this, _cfg); _cam.ChestProvider = BoneMenuUi.Chest; Focus.PlayerRoot = BoneMenuUi.PlayerRoot; _cam.HideHead = BoneMenuUi.HideHead; _cam.RestoreHead = BoneMenuUi.RestoreHead; _cam.UiLayerMask = BoneMenuUi.UiLayerMask; _cam.ActorPose = BoneMenuUi.ActorPose; _cam.HideHeadOf = BoneMenuUi.HideHeadOf; _cam.HeadToLayer = BoneMenuUi.HeadToLayer; Effects.LensHide = BoneMenuUi.LensHide; _cam.HeadRestore = BoneMenuUi.RestoreHeadLayer; _cam.OwnBodyToLayer = BoneMenuUi.OwnBodyToLayer;
-                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; FlashBeams.HeadsetLayer = () => _cam.LensHiddenLayer; FlashBeams.LensLayer = () => _cam.LensOnlyLayer; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Shadows.Avatar = BoneMenuUi.AvatarRoot; Shadows.PlayerRoot = BoneMenuUi.PlayerRoot; ControlsDebug.HandState = BoneMenuUi.HandState; ControlsDebug.GameStick = BoneMenuUi.GameStick; ControlsDebug.GameTouch = BoneMenuUi.GameStickTouch; Shadows.Held = BoneMenuUi.HeldObject; Shadows.ItemRoot = BoneMenuUi.ItemRoot; Shadows.PlayerLayers = BoneMenuUi.PlayerLayerMask; Log.Msg("BoneMenu page added"); }
+                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; FlashBeams.HeadsetLayer = () => _cam.LensHiddenLayer; FlashBeams.LensLayer = () => _cam.LensOnlyLayer; NullGlow.HeadsetLayer = () => _cam.LensHiddenLayer; NullGlow.LensLayer = () => _cam.LensOnlyLayer; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Shadows.Avatar = BoneMenuUi.AvatarRoot; Shadows.PlayerRoot = BoneMenuUi.PlayerRoot; ControlsDebug.HandState = BoneMenuUi.HandState; ControlsDebug.GameStick = BoneMenuUi.GameStick; ControlsDebug.GameTouch = BoneMenuUi.GameStickTouch; Shadows.Held = BoneMenuUi.HeldObject; Shadows.ItemRoot = BoneMenuUi.ItemRoot; Shadows.PlayerLayers = BoneMenuUi.PlayerLayerMask; Log.Msg("BoneMenu page added"); }
                 catch (Exception e) { _boneLib = false; Log.Warning("BoneLib found but menu failed (gestures still work): " + e.Message); }
             }
             else Log.Msg("BoneLib not found - using controller gestures only");
@@ -78,6 +79,8 @@ namespace QuestShade
             Flashlights.Reset();
             Lighting.OnLevel();
             Shadows.OnLevel();
+            NullGlow.OnLevel();
+            SlowMo.OnLevel();
             _fx.ResetCalibration();
             if (_startNotice != null) _noticeAt = Time.unscaledTime + 6f;
             Perf.OnSceneLoaded();
@@ -108,6 +111,9 @@ namespace QuestShade
                 Flashlights.Scale = ownLight ? 0.25f : 1f;
                 Flashlights.Tick(_cfg.FlashlightBoost, _cfg.FlashlightBeams);
                 Lighting.Tick(_cfg);
+                try { var hc = _fx.BoundCamera; if (hc != null) NullGlow.Tick(_cfg, hc.transform.position, BetaOn); } catch { }
+                BetaOn = Beta;
+                SlowMo.Tick(Time.unscaledDeltaTime);
                 _fx.SetFisheye(_cam.Mode == CamMode.PoliceCam ? Mathf.Max(0.35f, _cfg.Fisheye) : _cfg.Fisheye);
                 if (_boneLib) TickHurt();
                 _fx.TickHeadsetFocus(Time.unscaledDeltaTime);
@@ -173,6 +179,7 @@ namespace QuestShade
                 _fx.PhotoCamera = _cam.Open ? _cam.LensCamera : null;
                 _cam.LateTick(_cfg, head, Time.unscaledDeltaTime, _ctl.GripL, _ctl.GripR);
                 StreamTick();
+                TimelineTick();
                 if (!_cam.Open)
                 {
                     _cam.PrewarmTick(_cfg, head);
@@ -445,6 +452,7 @@ namespace QuestShade
 
         // ---------- Livestream ----------
         // Beta features show for Testers: people running the test-builds updater, or with [Beta] Enabled = true.
+        internal static bool BetaOn; // beta-only features check this (beta build, test-builds updater, or [Beta] Enabled = true)
         private static bool? _testUpdater;
         internal bool Beta
         {
@@ -558,6 +566,36 @@ namespace QuestShade
             if (s.Live && !_wasLive) { _wasLive = true; _liveSince = Time.unscaledTime; _ctl.Buzz(_cfg, true, 0.8f, 0.15f); Notify("You're LIVE!", 2.5f); }
         }
 
+        // ---------- Camera timeline (beta) ----------
+        private bool _timelineRec;
+        internal void TimelineAdd()
+        {
+            if (!_cam.Open) { Notify("Open the camera first, then aim it at your first shot", 2f); return; }
+            if (_cam.TimelinePlaying) { Notify("Wait for the timeline to finish", 1.5f); return; }
+            if (_cam.TimelineAdd()) { _ctl.Buzz(_cfg, true, 0.5f, 0.05f); Notify($"Keyframe {_cam.TimelineCount} added" + (_cam.TimelineCount >= 2 ? $" ({_cam.TimelineLength(_cfg):0} s move)" : ": move the camera and add another"), 1.6f); }
+        }
+        internal void TimelineUndo() { _cam.TimelineUndo(); Notify($"{_cam.TimelineCount} keyframe(s)", 1.2f); }
+        internal void TimelineClear() { _cam.TimelineClear(); Notify("Timeline cleared", 1.2f); }
+        internal void TimelinePlay(bool record)
+        {
+            if (_cam.TimelineCount < 2) { Notify("Add at least 2 keyframes first", 2f); return; }
+            if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+            if (record && !_cam.Recording)
+            {
+                if (Streaming) { Notify("You're streaming: the move plays on the stream", 2f); record = false; }
+                else { ToggleRecording(); _timelineRec = _cam.Recording; }
+            }
+            if (_cam.TimelinePlay()) { Log.Msg($"Timeline: playing {_cam.TimelineCount} keyframes ({_cam.TimelineLength(_cfg):0.0} s){(_timelineRec ? ", recording" : "")}"); Notify($"Playing timeline ({_cam.TimelineLength(_cfg):0} s)", 1.5f); }
+        }
+        internal void TimelineStop() { _cam.TimelineStop(); }
+        private void TimelineTick()
+        {
+            // "Play + record": stop the recording when the move ends.
+            if (_timelineRec && !_cam.TimelinePlaying) { _timelineRec = false; if (_cam.Recording && !Streaming) ToggleRecording(); }
+        }
+
+        internal void SetSlowMo(int level) { SlowMo.Set(level); Notify("Slow-mo: " + SlowMo.Names[SlowMo.Level], 1.2f); }
+
         internal void ToggleRecording()
         {
             if (Streaming) { Notify("You're streaming: stop it in BoneMenu > Camera > Livestream", 2.5f); return; }
@@ -648,18 +686,27 @@ namespace QuestShade
         }
 
         private float _hurt, _hurtNext; private float _hurtTarget; private IntPtr _overlayPtr; private bool _hurtLogged, _hurtErrLogged;
+        // PCVR-style headset effects: a red pulse that grows as health drops, a quick flash on every hit, colour drains on death.
+        private float _headHurt, _headHurtTarget, _death, _deathTarget, _hitFlash, _lastHp = 1f;
         private void TickHurt()
         {
             float now = Time.unscaledTime;
             if (now >= _hurtNext)
             {
                 _hurtNext = now + 0.1f;
-                _hurtTarget = 0f;
+                _hurtTarget = 0f; _headHurtTarget = 0f; _deathTarget = 0f;
                 try
                 {
                     if (BoneMenuUi.PlayerHurt(out float hp, out bool dying, out GameObject overlay))
                     {
                         if (_cfg.HurtEffect) _hurtTarget = dying ? 0.8f : Mathf.Clamp01((0.55f - hp) / 0.5f) * 0.8f;
+                        if (_cfg.HeadsetHurt && BetaOn)
+                        {
+                            _headHurtTarget = dying ? 0.9f : Mathf.Clamp01((0.6f - hp) / 0.5f) * 0.7f;
+                            if (!dying && hp < _lastHp - 0.02f) _hitFlash = Mathf.Min(1f, _hitFlash + 0.35f + (_lastHp - hp) * 2f);
+                        }
+                        if (dying && BetaOn && (_cfg.HeadsetHurt || _cfg.HurtEffect)) _deathTarget = 1f;
+                        _lastHp = hp;
                         if (!_hurtLogged && _hurtTarget > 0.2f) { _hurtLogged = true; Log.Msg($"Hurt effect on (health {hp * 100f:0}%, dying {dying})"); }
                         int layer = _cam.LensHiddenLayer;
                         if (overlay != null && layer >= 0 && (overlay.Pointer != _overlayPtr || overlay.layer != layer))
@@ -674,7 +721,13 @@ namespace QuestShade
             }
             float dt = Time.unscaledDeltaTime;
             _hurt += (_hurtTarget - _hurt) * (1f - Mathf.Exp(-(_hurtTarget > _hurt ? 6f : 1.5f) * dt));
-            _fx.SetHurt(_hurt < 0.01f ? 0f : _hurt);
+            _headHurt += (_headHurtTarget - _headHurt) * (1f - Mathf.Exp(-(_headHurtTarget > _headHurt ? 5f : 1.2f) * dt));
+            _death += (_deathTarget - _death) * (1f - Mathf.Exp(-(_deathTarget > _death ? 1.4f : 3f) * dt)); // drains slowly, comes back quicker
+            _hitFlash *= Mathf.Exp(-3.5f * dt);
+            float capDeath = _cfg.HurtEffect && BetaOn ? _death : 0f;
+            _fx.SetHurt(_hurt < 0.01f ? 0f : _hurt, capDeath < 0.01f ? 0f : capDeath);
+            float head = Mathf.Clamp01(_headHurt + _hitFlash * 0.6f), headDeath = _cfg.HeadsetHurt && BetaOn ? _death : 0f;
+            _fx.SetHeadsetHurt(head < 0.01f ? 0f : head, headDeath < 0.01f ? 0f : headDeath);
         }
 
         internal void SetMic(bool on)
@@ -702,7 +755,7 @@ namespace QuestShade
 
         private static string Pretty(CamMode m) => m switch
         {
-            CamMode.ThirdPerson => "Third person", CamMode.Chest => "Chest (bodycam)", CamMode.FirstPerson => "First person (head cam)", CamMode.Helmet => "Helmet cam", CamMode.PoliceCam => "Police bodycam", _ => m.ToString()
+            CamMode.ThirdPerson => "Third person", CamMode.Chest => "Chest (bodycam)", CamMode.FirstPerson => "First person (head cam)", CamMode.Helmet => "Helmet cam", CamMode.PoliceCam => "Police bodycam", CamMode.HelmetView => "Helmet cam (shows your helmet)", CamMode.Shoulder => "Shoulder bodycam", _ => m.ToString()
         };
 
         private void RefreshPresetMenu()

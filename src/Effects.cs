@@ -370,7 +370,7 @@ namespace QuestShade
             _mat.SetVector(ID.Dof, dofV); _mat.SetVector(ID.DofAF, afV);
 
             foreach (var id in ID.Stack) _post.SetVector(id, _mat.GetVector(id));
-            _hurtApplied = -1f; _fisheyeApplied = -1f;
+            _hurtApplied = -1f; _deathApplied = -1f; _headHurtApplied = -1f; _headDeathApplied = -1f; _fisheyeApplied = -1f;
             if (_lut != null) _post.SetTexture(ID.Lut, _lut);
             if (_bloomIntensity > 0f || _dofStrength > 0f || LensFx || MotionBlurOn)
                 Mod.Log.Msg($"Photo/video extras: bloom {_bloomIntensity:0.##}, depth of field {_dofStrength:0.##} (focus {(focus > 0 ? focus.ToString("0.0") + " m" : "auto")}), lens flare {_flareVec.x:0.##}, lens dirt {_dirtAmt:0.##}, motion blur {(MotionBlurOn ? _cfg.MotionBlurStrength.ToString("0.##") : "off")}");
@@ -619,15 +619,25 @@ namespace QuestShade
             if (_matPre != null) _matPre.SetVector(ID.Distort, v);
             if (_post != null) _post.SetVector(ID.Distort, v);
         }
-        private float _hurtApplied = -1f;
-        public void SetHurt(float k)
+        private float _hurtApplied = -1f, _deathApplied = -1f;
+        // Photos / videos: x = hurt (blur + red), y = death fade.
+        public void SetHurt(float k, float death = 0f)
         {
-            if (_matMono == null || Mathf.Abs(k - _hurtApplied) < 0.005f) return;
-            _hurtApplied = k;
-            var v = new Vector4(k, 0, 0, 0);
+            if (_matMono == null || (Mathf.Abs(k - _hurtApplied) < 0.005f && Mathf.Abs(death - _deathApplied) < 0.005f)) return;
+            _hurtApplied = k; _deathApplied = death;
+            var v = new Vector4(k, death, 0, 0);
             _matMono.SetVector(ID.Hurt, v);
             if (_matPre != null) _matPre.SetVector(ID.Hurt, v);
             if (_post != null) _post.SetVector(ID.Hurt, v);
+        }
+
+        private float _headHurtApplied = -1f, _headDeathApplied = -1f;
+        // Headset (PCVR style): red pulse at the edges and the death fade, but no blur (z = 1).
+        public void SetHeadsetHurt(float k, float death)
+        {
+            if (_mat == null || (Mathf.Abs(k - _headHurtApplied) < 0.005f && Mathf.Abs(death - _headDeathApplied) < 0.005f)) return;
+            _headHurtApplied = k; _headDeathApplied = death;
+            _mat.SetVector(ID.Hurt, new Vector4(k, death, 1, 0));
         }
 
         private void TickEyeAdaptation(Config cfg)
@@ -772,7 +782,7 @@ BokehIntensity = 0.3
 
             _matMono.CopyPropertiesFromMaterial(_mat);
             _matMono.SetVector(ID.God, Vector4.zero);
-            _hurtApplied = -1f; _fisheyeApplied = -1f; _presetDistort = _mat.GetVector(ID.Distort);
+            _hurtApplied = -1f; _deathApplied = -1f; _headHurtApplied = -1f; _headDeathApplied = -1f; _fisheyeApplied = -1f; _presetDistort = _mat.GetVector(ID.Distort);
             ShaderPack.SetStereo(_matMono, false);
             SetTexel();
 

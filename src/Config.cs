@@ -36,6 +36,11 @@ namespace QuestShade
         public float DarkMaps = 0.8f, FlashlightBoost = 1f;
         public bool LeftHanded;
         public bool HurtEffect = true;
+        public bool HeadsetHurt = true;                  // PCVR-style hurt (red pulse) and death (colour drains) in your headset
+        public bool NullbodyGlow = true; public Color NullbodyColor = new Color(0.72f, 0.32f, 1f, 1f);
+        public bool LampShadows = true;                  // the nearest map lamp casts shadows of you, props and NPCs
+        public bool SlowMoZoom = true;                   // cinematic auto zoom on the camera while slow-mo is on
+        public float TimelineSeconds = 3f;               // seconds between camera timeline keyframes
 #if QS_SHADOW_DEBUG
         public const bool ShadowDebug = true;
 #else
@@ -222,6 +227,12 @@ namespace QuestShade
             DarkMaps = Mathf.Clamp(ini.Float("General", "DarkMaps", 0.8f), 0f, 1f);
             FlashlightBoost = Mathf.Clamp(ini.Float("General", "FlashlightBoost", 1f), 0f, 2f);
             HurtEffect = ini.Bool("Camera", "HurtEffect", true);
+            HeadsetHurt = ini.Bool("General", "HeadsetHurt", true);
+            NullbodyGlow = ini.Bool("Lighting", "NullbodyGlow", true);
+            if (ColorUtility.TryParseHtmlString((ini.Str("Lighting", "NullbodyGlowColor", "#B852FF") ?? "").Trim(), out var nbc)) NullbodyColor = nbc;
+            LampShadows = ini.Bool("Lighting", "LampShadows", true);
+            SlowMoZoom = ini.Bool("Camera", "SlowMoZoom", true);
+            TimelineSeconds = Mathf.Clamp(ini.Float("Camera", "TimelineSeconds", 3f), 0.5f, 30f);
             RealLights = ini.Bool("Lighting", "RealLights", true);
             LessShine = Mathf.Clamp01(ini.Float("Lighting", "LessShine", 0.6f));
             FlashlightBeams = ini.Bool("Lighting", "FlashlightBeams", true);
@@ -615,6 +626,11 @@ namespace QuestShade
             SetKey("General", "DarkMaps", DarkMaps.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("General", "FlashlightBoost", FlashlightBoost.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
             SetKey("Camera", "HurtEffect", HurtEffect ? "true" : "false");
+            SetKey("General", "HeadsetHurt", HeadsetHurt ? "true" : "false");
+            SetKey("Lighting", "NullbodyGlow", NullbodyGlow ? "true" : "false");
+            SetKey("Lighting", "LampShadows", LampShadows ? "true" : "false");
+            SetKey("Camera", "SlowMoZoom", SlowMoZoom ? "true" : "false");
+            SetKey("Camera", "TimelineSeconds", F(TimelineSeconds));
             SetKey("Lighting", "RealLights", RealLights ? "true" : "false");
             SetKey("Lighting", "FlashlightBeams", FlashlightBeams ? "true" : "false");
             SetKey("Lighting", "BodyShadow3", Shadows ? "true" : "false");

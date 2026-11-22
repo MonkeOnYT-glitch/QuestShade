@@ -77,7 +77,8 @@ half3 QSStack(float2 uv, float2 pixelPos)
     }
     else col = QS_FETCH_MAIN_FROM(QS_FETCH(suv), suv);
 
-    UNITY_BRANCH if (_QS_Hurt.x > 0.001)
+    // _QS_Hurt: x = hurt amount, y = death fade, z = 1 skips the hurt blur (headset: blur in VR makes people sick).
+    UNITY_BRANCH if (_QS_Hurt.x > 0.001 && _QS_Hurt.z < 0.5)
     {
         float r = _QS_Hurt.x * 0.006 * (0.85 + 0.15 * sin(_QS_Time.x * 3.1));
         half3 acc = col;
@@ -137,6 +138,16 @@ half3 QSStack(float2 uv, float2 pixelPos)
         half k = saturate(_QS_Hurt.x * (0.3 + edge * 1.3) * beat);
         half3 red = col * half3(1.0, 0.22, 0.18) + half3(0.22, 0.0, 0.0) * edge;
         col = lerp(col, red, k);
+    }
+
+    // Death (PCVR style): colour drains out and the edges close in.
+    UNITY_BRANCH if (_QS_Hurt.y > 0.001)
+    {
+        float2 dd = (uv - 0.5) * float2(1.25, 1.0);
+        half de = saturate(dot(dd, dd) * 2.6);
+        half lum = dot(col, half3(0.299, 0.587, 0.114));
+        col = lerp(col, lum.xxx * half3(0.92, 0.84, 0.84), _QS_Hurt.y * 0.92);
+        col *= 1.0 - _QS_Hurt.y * (0.2 + de * 0.65);
     }
 
     UNITY_BRANCH if (_QS_Scan.x > 0)
