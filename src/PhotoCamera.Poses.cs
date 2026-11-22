@@ -181,7 +181,10 @@ namespace QuestShade
             _lensRot = _hasLensPose ? Quaternion.Slerp(_lensRot, lr, lk) : lr;
             _hasLensPose = true;
             float pathFov = 0f;
+            _zoomNow = Mathf.Max(0.1f, SlowMo.Zoom(cfg));
+            if (_moveRecording) SampleMove(_lensPos, _lensRot, (_appliedFov > 0f ? _appliedFov : _cam.fieldOfView) / _zoomNow);
             if (_pathPlaying) EvalPath(cfg, dt, ref _lensPos, ref _lensRot, ref pathFov);
+            else if (_movePlaying) EvalMove(Time.unscaledDeltaTime, ref _lensPos, ref _lensRot, ref pathFov);
             _lensGo.transform.SetPositionAndRotation(_lensPos, _lensRot);
             if (_hoverMat != null && _hoverWanted)
             {

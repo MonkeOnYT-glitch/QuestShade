@@ -108,25 +108,30 @@ namespace QuestShade
                 beta.CreateFunction("New in this beta: try them and tell us!", info, () => Notify("Slow-mo, camera timeline, helmet + shoulder cams, hurt/death effects, glowing Nullbodies and lamp shadows. Feedback in #public-feedback.", 6f));
 
                 var slow = beta.CreatePage("Slow-mo", Color.white, 8, true);
-                slow.CreateFunction("Off", Color.green, () => mod.SetSlowMo(0));
-                slow.CreateFunction("A little", Color.white, () => mod.SetSlowMo(1));
-                slow.CreateFunction("More", Color.white, () => mod.SetSlowMo(2));
-                slow.CreateFunction("Full", new Color(1f, 0.6f, 0.3f), () => mod.SetSlowMo(3));
+                for (int i = 0; i < 4; i++) { int lvl = i; _slowBtns[i] = slow.CreateFunction(SlowMo.Names[i], i == 0 ? Color.green : Color.white, () => mod.SetSlowMo(lvl)); }
                 slow.CreateBool("Cinematic zoom on the camera", Color.white, cfg.SlowMoZoom, v => { cfg.SlowMoZoom = v; cfg.SaveMenuSettings(); });
 
                 var tl = beta.CreatePage("Camera timeline", Color.white, 8, true);
-                tl.CreateFunction("How it works", info, () => Notify("Aim the camera at a shot, Add keyframe. Move it, add another. Play flies the camera smoothly through them all.", 6f));
-                tl.CreateFunction("Add keyframe (camera's current view)", Color.green, () => mod.TimelineAdd());
-                tl.CreateFunction("Play", Color.cyan, () => mod.TimelinePlay(false));
-                tl.CreateFunction("Play + record", Color.red, () => mod.TimelinePlay(true));
-                tl.CreateFunction("Stop", Color.white, () => mod.TimelineStop());
-                tl.CreateFunction("Remove last keyframe", Color.white, () => mod.TimelineUndo());
-                tl.CreateFunction("Clear keyframes", Color.yellow, () => mod.TimelineClear());
-                tl.CreateFloat("Seconds between keyframes", Color.white, cfg.TimelineSeconds, 0.5f, 0.5f, 30f, v => { cfg.TimelineSeconds = v; cfg.SaveMenuSettings(); });
+                tl.CreateFunction("How it works", info, () => Notify("Record a move: press Record, move the camera around, Stop, then Play it back. Or add keyframes and the camera flies smoothly between them.", 7f));
+                var mv = tl.CreatePage("Record a camera move", Color.white, 8, true);
+                _moveRecBtn = mv.CreateFunction("Record move", Color.red, () => mod.MoveRecord());
+                mv.CreateFunction("Play move", Color.cyan, () => mod.MovePlay(false));
+                mv.CreateFunction("Play move + record video", new Color(1f, 0.45f, 0.45f), () => mod.MovePlay(true));
+                mv.CreateFunction("Stop", Color.white, () => mod.TimelineStop());
+                var kf = tl.CreatePage("Keyframes", Color.white, 8, true);
+                kf.CreateFunction("Add keyframe (camera's current view)", Color.green, () => mod.TimelineAdd());
+                kf.CreateFunction("Play", Color.cyan, () => mod.TimelinePlay(false));
+                kf.CreateFunction("Play + record video", new Color(1f, 0.45f, 0.45f), () => mod.TimelinePlay(true));
+                kf.CreateFunction("Stop", Color.white, () => mod.TimelineStop());
+                kf.CreateFunction("Remove last keyframe", Color.white, () => mod.TimelineUndo());
+                kf.CreateFunction("Clear keyframes", Color.yellow, () => mod.TimelineClear());
+                kf.CreateFloat("Seconds between keyframes", Color.white, cfg.TimelineSeconds, 0.5f, 0.5f, 30f, v => { cfg.TimelineSeconds = v; cfg.SaveMenuSettings(); });
+                // Zoom for the current camera mode, live: each keyframe and recorded move keeps the zoom it had.
+                tl.CreateFloat("Camera zoom (field of view)", Color.white, mod.LiveFov, 5f, 10f, 150f, v => mod.SetLiveFov(v));
 
                 var cams = beta.CreatePage("New camera styles", Color.white, 8, true);
-                cams.CreateFunction("Helmet cam (shows your helmet)", Color.white, () => mod.SetCameraMode(CamMode.HelmetView));
-                cams.CreateFunction("Shoulder bodycam", Color.white, () => mod.SetCameraMode(CamMode.Shoulder));
+                _styleBtns[0] = cams.CreateFunction("Helmet cam (shows your helmet)", Color.white, () => { mod.SetCameraMode(CamMode.HelmetView); MarkStyles(CamMode.HelmetView); });
+                _styleBtns[1] = cams.CreateFunction("Shoulder bodycam", Color.white, () => { mod.SetCameraMode(CamMode.Shoulder); MarkStyles(CamMode.Shoulder); });
 
                 beta.CreateBool("Hurt + death effects in headset", new Color(1f, 0.5f, 0.5f), cfg.HeadsetHurt, v => { cfg.HeadsetHurt = v; cfg.SaveMenuSettings(); });
                 beta.CreateBool("Glowing Nullbodies", new Color(0.75f, 0.45f, 1f), cfg.NullbodyGlow, v => { cfg.NullbodyGlow = v; cfg.SaveMenuSettings(); });
@@ -830,6 +835,35 @@ namespace QuestShade
                 page.CreateFunction(name, name.Equals(cfg.PresetName, StringComparison.OrdinalIgnoreCase) ? Color.green : Color.white,
                     () => _mod.SelectPreset(name));
             }
+        }
+
+        // Beta page highlights: the active slow-mo level and camera style are shown in green; the record button says what it does.
+        private static readonly FunctionElement[] _slowBtns = new FunctionElement[4], _styleBtns = new FunctionElement[2];
+        private static FunctionElement _moveRecBtn;
+        private static int _markedSlow = -1; private static CamMode _markedMode = (CamMode)(-1); private static string _markedRec;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void MarkBeta(int slowLevel, CamMode mode, bool recordingMove, float seconds)
+        {
+            if (slowLevel != _markedSlow)
+            {
+                _markedSlow = slowLevel;
+                for (int i = 0; i < _slowBtns.Length; i++) if (_slowBtns[i] != null) _slowBtns[i].ElementColor = i == slowLevel ? Color.green : Color.white;
+            }
+            if (mode != _markedMode) MarkStyles(mode);
+            if (_moveRecBtn != null)
+            {
+                string label = recordingMove ? $"Stop recording ({(int)seconds / 60}:{(int)seconds % 60:00})" : "Record move";
+                if (label != _markedRec) { _markedRec = label; _moveRecBtn.ElementName = label; _moveRecBtn.ElementColor = recordingMove ? Color.yellow : Color.red; }
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void MarkStyles(CamMode mode)
+        {
+            _markedMode = mode;
+            if (_styleBtns[0] != null) _styleBtns[0].ElementColor = mode == CamMode.HelmetView ? Color.green : Color.white;
+            if (_styleBtns[1] != null) _styleBtns[1].ElementColor = mode == CamMode.Shoulder ? Color.green : Color.white;
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

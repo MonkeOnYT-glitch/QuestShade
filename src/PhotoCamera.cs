@@ -522,7 +522,7 @@ namespace QuestShade
             SchedulePrewarm();
             _hasDevicePose = _hasLensPose = false;
             _prop = null; _propSpawning = false; _propRetryAt = Time.unscaledTime + 2f;
-            _keys.Clear(); _pathPlaying = false; // timeline keyframes belong to the old level
+            _keys.Clear(); _pathPlaying = false; _move.Clear(); _moveRecording = _movePlaying = false; // timeline keyframes and moves belong to the old level
         }
 
         public void Refresh(Config cfg, Camera head) { if (_device != null && head != null) Build(cfg, head); }

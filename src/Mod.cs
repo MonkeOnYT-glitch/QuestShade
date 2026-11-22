@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.89-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.90-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.88", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.89", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -587,14 +587,56 @@ namespace QuestShade
             }
             if (_cam.TimelinePlay()) { Log.Msg($"Timeline: playing {_cam.TimelineCount} keyframes ({_cam.TimelineLength(_cfg):0.0} s){(_timelineRec ? ", recording" : "")}"); Notify($"Playing timeline ({_cam.TimelineLength(_cfg):0} s)", 1.5f); }
         }
-        internal void TimelineStop() { _cam.TimelineStop(); }
+        internal void TimelineStop()
+        {
+            bool wasRec = _cam.MoveRecording;
+            _cam.TimelineStop();
+            if (wasRec) Notify($"Move recorded ({_cam.MoveLength:0.0} s). Press Play move to watch it back", 2.5f);
+        }
+
+        // Record the camera's real movement while you move it, then play it back exactly.
+        internal void MoveRecord()
+        {
+            if (_cam.MoveRecording) { TimelineStop(); return; }
+            if (!_cam.Open) { Notify("Open the camera first", 1.5f); return; }
+            if (_cam.MoveRecordStart()) { _ctl.Buzz(_cfg, false, 0.6f, 0.08f); Log.Msg("Timeline: recording camera move"); Notify("Recording the camera's movement... move it around, then press Stop", 2.5f); }
+            else Notify("Stop the playback first", 1.5f);
+        }
+        internal void MovePlay(bool record)
+        {
+            if (_cam.MoveRecording) TimelineStop();
+            if (_cam.MoveLength <= 0f) { Notify("Record a camera move first", 2f); return; }
+            if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+            if (record && !_cam.Recording)
+            {
+                if (Streaming) { Notify("You're streaming: the move plays on the stream", 2f); record = false; }
+                else { ToggleRecording(); _timelineRec = _cam.Recording; }
+            }
+            if (_cam.MovePlay()) { Log.Msg($"Timeline: playing recorded move ({_cam.MoveLength:0.0} s){(_timelineRec ? ", recording" : "")}"); Notify($"Playing your move ({_cam.MoveLength:0} s)", 1.5f); }
+        }
+
+        // The timeline page's zoom slider: changes the field of view the current camera mode uses, live.
+        internal float LiveFov => _cam.UsesBodyFov ? _cfg.ChestFov : _cfg.Fov;
+        internal void SetLiveFov(float v)
+        {
+            if (_cam.UsesBodyFov) _cfg.ChestFov = v; else _cfg.Fov = v;
+            _cfg.SaveMenuSettings();
+        }
+
+        private float _betaMarkAt;
         private void TimelineTick()
         {
             // "Play + record": stop the recording when the move ends.
-            if (_timelineRec && !_cam.TimelinePlaying) { _timelineRec = false; if (_cam.Recording && !Streaming) ToggleRecording(); }
+            if (_timelineRec && !_cam.AnyPlayback) { _timelineRec = false; if (_cam.Recording && !Streaming) ToggleRecording(); }
+            // Keep the beta menu's highlights (active slow-mo / camera style, record button) in step, also after gestures.
+            if (BetaOn && _boneLib && Time.unscaledTime >= _betaMarkAt)
+            {
+                _betaMarkAt = Time.unscaledTime + 0.5f;
+                try { BoneMenuUi.MarkBeta(SlowMo.Level, _cam.Mode, _cam.MoveRecording, _cam.MoveRecordedSoFar); } catch { }
+            }
         }
 
-        internal void SetSlowMo(int level) { SlowMo.Set(level); Notify("Slow-mo: " + SlowMo.Names[SlowMo.Level], 1.2f); }
+        internal void SetSlowMo(int level) { SlowMo.Set(level); Notify("Slow-mo: " + SlowMo.Names[SlowMo.Level], 1.2f); _betaMarkAt = 0f; }
 
         internal void ToggleRecording()
         {
