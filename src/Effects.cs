@@ -82,7 +82,12 @@ namespace QuestShade
         {
             bool want = Active && _liveDof && _data != null;
             if (want == _depthForced) return;
-            DepthRequest.Set(_data, DepthRequest.DepthOfField, want);
+            try
+            {
+                if (want) { _origDepth = _data.requiresDepthTexture; _data.requiresDepthTexture = true; }
+                else if (_data != null) _data.requiresDepthTexture = _origDepth;
+            }
+            catch { }
             _depthForced = want;
         }
 
@@ -512,7 +517,7 @@ namespace QuestShade
                 Mod.Log.Msg("Final blit restored to the game's original");
             }
             if (_postChanged && _data != null) { try { _data.renderPostProcessing = _origPost; } catch { } }
-            if (_depthForced && _data != null) DepthRequest.Set(_data, DepthRequest.DepthOfField, false);
+            if (_depthForced && _data != null) { try { _data.requiresDepthTexture = _origDepth; } catch { } }
             _depthForced = false;
             _postChanged = false;
             _hooked = false; _renderer = null; _origBlit = null;

@@ -83,8 +83,6 @@ namespace QuestShade
         {
             bool want = cfg.Shadows && cfg.Enabled && !_failed && ShaderPack.Shadow != null && head != null && Avatar != null;
             if (want && DiedLastTime()) want = false;
-            // Game too slow (load level 3): hide the caster copies too, so they cost nothing; they come back by themselves.
-            if (want && _mapMode && !Perf.ShadowsAllowed) want = false;
             if (!want) { Show(false); return; }
             try { Run(cfg, head); }
             catch (Exception e)
