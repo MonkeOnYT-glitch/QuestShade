@@ -27,6 +27,7 @@ namespace QuestShade
         public bool HeadsetBloom = false;
         public bool ZoomButtons = true, ZoomClicky = false; // camcorder zoom: B in / Y out while holding the camera (hand / selfie)
         public float ZoomStep = 10f, ZoomSpeed = 35f, ZoomSound = 0.7f; // camcorder whirr volume (clicky zoom only)
+        public bool ZoomedChest; // this session: zoom buttons moved the chest FOV, so police cam stops forcing its wide 115
         public bool MotionBlur = false;
         // Shadow map (test): world-space shadows on every surface. CpuMatrices / FlipY are test switches for the per-eye math.
         public bool FlashlightShadows = true, FlashlightWorldShadows = true; public float FlashShadowDarkness = 0.4f, FlashlightLight = 0.35f;

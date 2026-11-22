@@ -178,7 +178,7 @@ namespace QuestShade
                 _screenMat.SetVector(PortraitId, portrait);
                 if (_hoverMat != null) _hoverMat.SetVector(PortraitId, portrait);
             }
-            float fov = Mode == CamMode.PoliceCam ? Mathf.Max(cfg.ChestFov, 115f) : BodyMode ? cfg.ChestFov : cfg.Fov;
+            float fov = Mode == CamMode.PoliceCam ? Mathf.Max(cfg.ChestFov, cfg.ZoomedChest ? 10f : 115f) : BodyMode ? cfg.ChestFov : cfg.Fov;
             if (fov != _appliedFov) { _appliedFov = fov; _cam.fieldOfView = fov; }
             float near = BodyMode ? 0.05f : 0.015f;
             if (_handNear && BodyMode) near = 0.01f;
