@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.79-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.80-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.78", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.79", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -774,7 +774,7 @@ namespace QuestShade
         private bool _zoomDirty; private float _zoomStaticUntil, _staticApplied;
         private void ZoomTick(float now, float dt)
         {
-            // Works whenever the camera is yours to aim (held, floating on your hand, or worn) and changes the FOV the mode uses.
+            // Works only while you grip the camera; changes the FOV the current mode uses.
             bool can = _cfg.ZoomButtons && _cam.Zoomable;
             if (can && (_ctl.BPressed || _ctl.YPressed)) Log.Msg($"Zoom {(_ctl.BPressed ? "in" : "out")} ({(_cfg.ZoomClicky ? "clicky" : "smooth")}, mode {_cam.Mode})");
             if (can)

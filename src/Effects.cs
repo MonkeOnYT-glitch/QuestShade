@@ -95,14 +95,25 @@ namespace QuestShade
         public void CameraStatic(float k)
         {
             if (_mat == null) return;
-            Vector4 n = _mat.GetVector(ID.Noise), g = _mat.GetVector(ID.Glitch);
+            Vector4 n, g;
             if (k > 0f)
             {
+                // Remember the preset's own noise/glitch the first time, so turning the static off puts them back.
+                if (!_staticOn) { _staticN = _mat.GetVector(ID.Noise); _staticG = _mat.GetVector(ID.Glitch); _staticOn = true; }
+                n = _staticN; g = _staticG;
                 n.x = Mathf.Max(n.x, 0.55f * k);
                 g = new Vector4(Mathf.Max(g.x, 0.7f * k), g.y > 0f ? g.y : 40f, g.z > 0f ? g.z : 24f, g.w);
             }
-            foreach (var m in new[] { _post, _matMono, _matPre }) if (m != null) { m.SetVector(ID.Noise, n); m.SetVector(ID.Glitch, g); }
+            else
+            {
+                if (!_staticOn) return;
+                _staticOn = false; n = _staticN; g = _staticG;
+            }
+            if (_post != null) { _post.SetVector(ID.Noise, n); _post.SetVector(ID.Glitch, g); }
+            if (_matMono != null) { _matMono.SetVector(ID.Noise, n); _matMono.SetVector(ID.Glitch, g); }
+            if (_matPre != null) { _matPre.SetVector(ID.Noise, n); _matPre.SetVector(ID.Glitch, g); }
         }
+        private bool _staticOn; private Vector4 _staticN, _staticG;
 
         private void SetLive(Config cfg, Ini p)
         {

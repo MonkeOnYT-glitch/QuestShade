@@ -12,29 +12,43 @@ namespace QuestShade
         private static AudioClip _in, _out;
         private static bool _failed;
 
+        // Crash latch: written before the sound is first set up, deleted once it plays. If the game dies in between,
+        // the file is still there next launch and the zoom sound stays off instead of crashing again.
+        private static string LatchPath => System.IO.Path.Combine(Config.Root ?? "", "zoom_sound_crashed.txt");
+        private static bool _checked, _ready;
+
         public static void Play(bool zoomIn, Vector3 at, float volume)
         {
             if (_failed || volume <= 0f) return;
+            if (!_checked)
+            {
+                _checked = true;
+                try { if (System.IO.File.Exists(LatchPath)) { _failed = true; Mod.Log.Warning("Zoom sound: off (it crashed the game last time; delete zoom_sound_crashed.txt to try again)"); return; } } catch { }
+            }
             try
             {
-                if (_src == null)
+                if (!_ready)
                 {
+                    try { System.IO.File.WriteAllText(LatchPath, "zoom sound setup started"); } catch { }
+                    Mod.Log.Msg("Zoom sound: making audio source");
                     var go = new GameObject("QuestShade_ZoomSfx");
                     UnityEngine.Object.DontDestroyOnLoad(go);
-                    go.hideFlags = HideFlags.HideAndDontSave;
                     _src = go.AddComponent<AudioSource>();
                     _src.playOnAwake = false;
                     _src.spatialBlend = 0.6f; // mostly from the camera, still clearly audible
                     _src.minDistance = 0.5f;
                     _src.maxDistance = 6f;
                     _src.rolloffMode = AudioRolloffMode.Linear;
+                    Mod.Log.Msg("Zoom sound: making clips");
+                    _in = Make("QuestShade_ZoomIn", 1f);
+                    _out = Make("QuestShade_ZoomOut", 0.86f); // zooming out runs the motor a little lower
+                    Mod.Log.Msg("Zoom sound: first play");
                 }
-                _in ??= Make("QuestShade_ZoomIn", 1f);
-                _out ??= Make("QuestShade_ZoomOut", 0.86f); // zooming out runs the motor a little lower
                 _src.transform.position = at;
                 _src.PlayOneShot(zoomIn ? _in : _out, Mathf.Clamp01(volume));
+                if (!_ready) { _ready = true; try { System.IO.File.Delete(LatchPath); } catch { } Mod.Log.Msg("Zoom sound: ready"); }
             }
-            catch (Exception e) { _failed = true; Mod.Log.Warning("Zoom sound unavailable: " + e.Message); }
+            catch (Exception e) { _failed = true; try { System.IO.File.Delete(LatchPath); } catch { } Mod.Log.Warning("Zoom sound unavailable: " + e.Message); }
         }
 
         private static AudioClip Make(string name, float pitch)
