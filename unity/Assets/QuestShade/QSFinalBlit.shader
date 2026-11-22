@@ -189,24 +189,26 @@ Shader "Hidden/QuestShade/FinalBlit"
             float4 _QS_FLPos;     // xyz: flashlight position, w: strength (0 = off)
             float4 _QS_FLDir;     // xyz: beam direction, w: cos(outer half-angle)
             float4 _QS_FLParams;  // x: range, y: 1/res, z: cos(inner half-angle), w: bias (m)
+            float4 _QS_FLParams2; // x: extra flashlight light on every surface (0 = off)
 
-            half QSFlashShadow(float3 w, float3 nrm)
+            // x: flashlight shadow (1 = not blocked), y: how strongly the flashlight lights this spot (0..1)
+            half2 QSFlash(float3 w, float3 nrm)
             {
-                UNITY_BRANCH if (_QS_FLPos.w <= 0) return 1;
+                UNITY_BRANCH if (_QS_FLPos.w <= 0) return half2(1, 0);
                 float3 v = w - _QS_FLPos.xyz;
                 float dist = length(v);
-                if (dist < 0.3 || dist > _QS_FLParams.x) return 1;
+                if (dist < 0.3 || dist > _QS_FLParams.x) return half2(1, 0);
                 float3 l = v / dist;
                 float cosA = dot(l, _QS_FLDir.xyz);
-                if (cosA <= _QS_FLDir.w) return 1; // outside the beam
+                if (cosA <= _QS_FLDir.w) return half2(1, 0); // outside the beam
                 half face = saturate((dot(nrm, -l) - 0.05) * 4);
-                if (face <= 0) return 1;
+                if (face <= 0) return half2(1, 0);
                 float3 wo = w + nrm * (0.004 * dist + 0.01); // off the surface, more further away (texels grow with distance)
                 float4 c = mul(_QS_FLM, float4(wo, 1));
-                if (c.w <= 0) return 1;
+                if (c.w <= 0) return half2(1, 0);
                 float2 fuv = c.xy / c.w * 0.5 + 0.5;
                 float2 edge = min(fuv, 1 - fuv);
-                if (edge.x <= 0 || edge.y <= 0) return 1;
+                if (edge.x <= 0 || edge.y <= 0) return half2(1, 0);
                 float d = length(wo - _QS_FLPos.xyz) - _QS_FLParams.w;
                 float t = _QS_FLParams.y * 1.2;
                 half lit = ((SAMPLE_TEXTURE2D_LOD(_QS_FLTex, sampler_QS_FLTex, fuv + float2(-t, -t), 0).r >= d ? 1 : 0)
@@ -216,7 +218,8 @@ Shader "Hidden/QuestShade/FinalBlit"
                 // Strongest in the middle of the beam and close to the light, like the flashlight's own falloff.
                 half cone = saturate((cosA - _QS_FLDir.w) / max(_QS_FLParams.z - _QS_FLDir.w, 1e-3));
                 half near = saturate(1 - dist / _QS_FLParams.x);
-                return 1 - (1 - lit) * face * cone * near * _QS_FLPos.w;
+                half beam = face * cone * near;
+                return half2(1 - (1 - lit) * beam * _QS_FLPos.w, lit * beam);
             }
 
             half QSShadow(float2 uv)
@@ -235,7 +238,13 @@ Shader "Hidden/QuestShade/FinalBlit"
                 if (Linear01Depth(raw, _ZBufferParams) > 0.995) return 1; // sky / nothing there
                 half s = 1;
                 UNITY_BRANCH if (_QS_SMOrigin.w > 0) s = QSSunShadow(w, nrm);
-                return s * QSFlashShadow(w, nrm);
+                half2 f = QSFlash(w, nrm);
+                // Where the flashlight reaches, it lights up the sun shadow (a flashlight pointed into a shadow brightens it);
+                // things blocking the beam still throw their own flashlight shadow.
+                s = lerp(s, 1, saturate(f.y * 1.5));
+                // QuestShade's own flashlight light on top: BONELAB's flashlight only lights materials that take extra lights, so whole
+                // walls and floors stayed dark. This brightens every surface the beam actually reaches (not through blockers).
+                return s * f.x * (1 + f.y * _QS_FLParams2.x);
             }
             float FocusDist()
             {

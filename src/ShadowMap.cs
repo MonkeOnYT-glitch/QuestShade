@@ -26,7 +26,7 @@ namespace QuestShade
             OriginId = Shader.PropertyToID("_QS_SMOrigin"), DirId = Shader.PropertyToID("_QS_SMDir"), OptsId = Shader.PropertyToID("_QS_SMOpts"),
             InvVP0Id = Shader.PropertyToID("_QS_InvVP0"), InvVP1Id = Shader.PropertyToID("_QS_InvVP1"), ParamsId = Shader.PropertyToID("_QS_SMParams"),
             ModeId = Shader.PropertyToID("_QS_SMMode"), FLTexId = Shader.PropertyToID("_QS_FLTex"), FLMId = Shader.PropertyToID("_QS_FLM"),
-            FLPosId = Shader.PropertyToID("_QS_FLPos"), FLDirId = Shader.PropertyToID("_QS_FLDir"), FLParamsId = Shader.PropertyToID("_QS_FLParams");
+            FLPosId = Shader.PropertyToID("_QS_FLPos"), FLDirId = Shader.PropertyToID("_QS_FLDir"), FLParamsId = Shader.PropertyToID("_QS_FLParams"), FLParams2Id = Shader.PropertyToID("_QS_FLParams2");
         private static Camera _flCam;
         private static RenderTexture _flRt;
         private static float _flStrength;
@@ -217,6 +217,7 @@ namespace QuestShade
             Shader.SetGlobalVector(FLDirId, new Vector4(fwd.x, fwd.y, fwd.z, Mathf.Cos(spot * 0.5f * Mathf.Deg2Rad)));
             Shader.SetGlobalVector(FLParamsId, new Vector4(range, 1f / res, Mathf.Cos(inner * 0.5f * Mathf.Deg2Rad), 0.03f));
             _flStrength = Mathf.Clamp01(cfg.FlashShadowDarkness);
+            Shader.SetGlobalVector(FLParams2Id, new Vector4(Mathf.Clamp(cfg.FlashlightLight, 0f, 3f), 0f, 0f, 0f));
             if (!_flLogged) { _flLogged = true; Mod.Log.Msg($"Flashlight shadows on ({spot:0} deg, {range:0} m)"); }
         }
         private static bool _flLogged;
