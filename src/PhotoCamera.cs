@@ -75,10 +75,6 @@ namespace QuestShade
         private InputDevice _headDev, _leftDev, _rightDev;
         public bool Hidden { get; private set; }
         public bool Held => _held >= 0;
-        public bool InHand => _held >= 0 || _propWasHeld; // held by its grip or as a prop
-        // Zoom buttons work only while you grip the camera.
-        public bool Zoomable => Open && !Hidden && InHand; // only while you grip the camera (any mode)
-        public bool UsesChestFov => BodyMode;
         private int _held = -1;
         private bool _pinned;
         private Vector3 _grabPos; private Quaternion _grabRot = Quaternion.identity;

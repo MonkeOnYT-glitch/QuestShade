@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.80-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.81-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.79", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.80", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -168,7 +168,6 @@ namespace QuestShade
                 var head = _fx.BoundCamera;
                 _fx.PhotoCamera = _cam.Open ? _cam.LensCamera : null;
                 _cam.LateTick(_cfg, head, Time.unscaledDeltaTime, _ctl.GripL, _ctl.GripR);
-                ZoomTick(Time.unscaledTime, Time.unscaledDeltaTime);
                 if (!_cam.Open)
                 {
                     _cam.PrewarmTick(_cfg, head);
@@ -769,45 +768,5 @@ namespace QuestShade
             _handWanted = 0;
         }
 
-        // Camcorder zoom while holding the camera in hand / selfie mode: B zooms in, Y zooms out.
-        // Smooth ("clear"): hold to glide. Clicky ("camcorder"): one step per press with a buzz and a flash of static.
-        private bool _zoomDirty; private float _zoomStaticUntil, _staticApplied;
-        private void ZoomTick(float now, float dt)
-        {
-            // Works only while you grip the camera; changes the FOV the current mode uses.
-            bool can = _cfg.ZoomButtons && _cam.Zoomable;
-            if (can && (_ctl.BPressed || _ctl.YPressed)) Log.Msg($"Zoom {(_ctl.BPressed ? "in" : "out")} ({(_cfg.ZoomClicky ? "clicky" : "smooth")}, mode {_cam.Mode})");
-            if (can)
-            {
-                bool chest = _cam.UsesChestFov;
-                float fov = chest ? (_cam.Mode == CamMode.PoliceCam && !_cfg.ZoomedChest ? Mathf.Max(_cfg.ChestFov, 115f) : _cfg.ChestFov) : _cfg.Fov;
-                float before = fov;
-                if (_cfg.ZoomClicky)
-                {
-                    int dir = _ctl.BPressed ? -1 : _ctl.YPressed ? 1 : 0;
-                    if (dir != 0)
-                    {
-                        float step = Mathf.Max(1f, _cfg.ZoomStep);
-                        fov = Mathf.Clamp(Mathf.Round((fov + dir * step) / step) * step, 10f, 140f);
-                        _zoomStaticUntil = now + 0.18f;
-                        _ctl.Buzz(_cfg, dir > 0, 0.5f, 0.03f);
-                        try { var lc = _cam.LensCamera; ZoomSfx.Play(dir < 0, lc != null ? lc.transform.position : Vector3.zero, _cfg.ZoomSound); } catch { }
-                    }
-                }
-                else
-                {
-                    float d = (_ctl.YHeld ? 1f : 0f) - (_ctl.BHeld ? 1f : 0f);
-                    if (d != 0f) fov = Mathf.Clamp(fov + d * _cfg.ZoomSpeed * dt, 10f, 140f);
-                }
-                if (fov != before)
-                {
-                    if (chest) { _cfg.ChestFov = fov; _cfg.ZoomedChest = true; } else _cfg.Fov = fov;
-                    _zoomDirty = true;
-                }
-            }
-            if (_zoomDirty && !_ctl.BHeld && !_ctl.YHeld) { _zoomDirty = false; try { _cfg.SaveMenuSettings(); } catch { } }
-            float st = now < _zoomStaticUntil ? 1f : 0f;
-            if (st != _staticApplied) { _staticApplied = st; try { _fx.CameraStatic(st); } catch { } }
-        }
     }
 }
