@@ -165,6 +165,14 @@ namespace QuestShade
             return 0;
         }
 
+        // Controls debug: the stick as BONELAB itself sees it (vs. the raw controller), to tell "input ignored" from "body stuck".
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static Vector2 GameStick(int hand)
+        {
+            var c = hand == 1 ? BoneLib.Player.LeftController : BoneLib.Player.RightController;
+            return c != null ? c.GetThumbStickAxis() : new Vector2(float.NaN, float.NaN);
+        }
+
         // Controls debug: what a hand holds and how it's attached.
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static string HandState(int hand)
