@@ -18,6 +18,7 @@ namespace QuestShade
         private static IntPtr _lastL, _lastR;
         private static float _next, _applied = -1f;
         private static bool _logged, _diag;
+        public static float Scale = 1f; // extra multiplier on the flashlight brightness (turned down while QuestShade's own flashlight light is on)
         public static bool AnyOn { get; private set; }
 
         // The held flashlight that is on right now (a spot light), for flashlight shadows.
@@ -35,9 +36,9 @@ namespace QuestShade
             if (now < _next) return;
             _next = now + 0.25f;
             try { FlashBeams.Tick(beams); } catch { }
-            if (!Mathf.Approximately(boost, _applied))
+            if (!Mathf.Approximately(boost + Scale * 1000f, _applied))
             {
-                _applied = boost;
+                _applied = boost + Scale * 1000f;
                 var dead = new List<IntPtr>();
                 foreach (var kv in _lights) { if (kv.Value.L == null) dead.Add(kv.Key); else Apply(kv.Value, boost); }
                 foreach (var k in dead) _lights.Remove(k);
@@ -118,7 +119,7 @@ namespace QuestShade
             try
             {
                 b = Mathf.Max(0f, b);
-                o.L.intensity = o.I * (1f + 1.0f * b) * (_dim.TryGetValue(o.L.Pointer, out var k) && k > 0f ? k : 1f);
+                o.L.intensity = o.I * (1f + 1.0f * b) * Scale * (_dim.TryGetValue(o.L.Pointer, out var k) && k > 0f ? k : 1f);
                 o.L.range = o.R * (1f + 0.6f * b);
                 o.L.spotAngle = Mathf.Min(o.A * (1f + 0.15f * b), 130f);
                 o.L.innerSpotAngle = Mathf.Min(o.IA * (1f + 0.15f * b), o.L.spotAngle);

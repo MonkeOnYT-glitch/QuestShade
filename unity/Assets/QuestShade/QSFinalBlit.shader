@@ -152,7 +152,7 @@ Shader "Hidden/QuestShade/FinalBlit"
             float4 _QS_SMParams; // x: world size of one shadow-map texel (m)
 
             // Sun: world-space map along the light direction.
-            half QSSunShadow(float3 w, float3 nrm)
+            half QSSunShadow(float3 w, float3 nrm, float vd)
             {
                 // Only surfaces that face the light get a cast shadow; it fades out on sides lit at a glancing angle, so a
                 // hand over the edge of a crate doesn't smear a long shadow down its side.
@@ -160,13 +160,16 @@ Shader "Hidden/QuestShade/FinalBlit"
                 half face = saturate((ndl - 0.08) * 4);
                 if (face <= 0) return 1;
                 // Push the lookup off the surface along its normal: stops the surface shadowing itself (light/dark stripes on guns).
-                w += nrm * (_QS_SMParams.x * 1.5);
+                // Close to your eyes (your own body, held items) a shadow-map texel covers many screen pixels and the body copy
+                // shadows the body: push further off the surface and blur wider there, so it looks smooth instead of pixely.
+                float close = lerp(3.0, 1.0, saturate((vd - 0.4) / 1.6));
+                w += nrm * (_QS_SMParams.x * 1.5 * close);
                 float2 suv = mul(_QS_SM, float4(w, 1)).xy;
                 float2 edge = min(suv, 1 - suv);
                 if (edge.x <= 0 || edge.y <= 0) return 1;
-                float d = dot(w - _QS_SMOrigin.xyz, _QS_SMDir.xyz) - _QS_SMOpts.z;
+                float d = dot(w - _QS_SMOrigin.xyz, _QS_SMDir.xyz) - _QS_SMOpts.z * close;
                 float t = _QS_SMDir.w;
-                float r = max(_QS_SMOpts.w, 0.5) * t;
+                float r = max(_QS_SMOpts.w, 0.5) * t * close;
                 // Cheap first: 4 single samples. If they agree (fully lit or fully in shadow, i.e. most of the screen) we're done.
                 half q = (SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2(-r, -r), 0).r >= d ? 1 : 0)
                        + (SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2( r, -r), 0).r >= d ? 1 : 0)
@@ -192,6 +195,18 @@ Shader "Hidden/QuestShade/FinalBlit"
             float4 _QS_FLParams2; // x: extra flashlight light on every surface (0 = off)
 
             // x: flashlight shadow (1 = not blocked), y: how strongly the flashlight lights this spot (0..1)
+            half QSLitFL(float2 uv, float d, float t)
+            {
+                float2 p = uv / t - 0.5;
+                float2 f = frac(p);
+                float2 b = (floor(p) + 0.5) * t;
+                half a0 = SAMPLE_TEXTURE2D_LOD(_QS_FLTex, sampler_QS_FLTex, b, 0).r >= d ? 1 : 0;
+                half a1 = SAMPLE_TEXTURE2D_LOD(_QS_FLTex, sampler_QS_FLTex, b + float2(t, 0), 0).r >= d ? 1 : 0;
+                half a2 = SAMPLE_TEXTURE2D_LOD(_QS_FLTex, sampler_QS_FLTex, b + float2(0, t), 0).r >= d ? 1 : 0;
+                half a3 = SAMPLE_TEXTURE2D_LOD(_QS_FLTex, sampler_QS_FLTex, b + float2(t, t), 0).r >= d ? 1 : 0;
+                return lerp(lerp(a0, a1, f.x), lerp(a2, a3, f.x), f.y);
+            }
+
             half2 QSFlash(float3 w, float3 nrm)
             {
                 UNITY_BRANCH if (_QS_FLPos.w <= 0) return half2(1, 0);
@@ -201,7 +216,8 @@ Shader "Hidden/QuestShade/FinalBlit"
                 float3 l = v / dist;
                 float cosA = dot(l, _QS_FLDir.xyz);
                 if (cosA <= _QS_FLDir.w) return half2(1, 0); // outside the beam
-                half face = saturate((dot(nrm, -l) - 0.05) * 4);
+                // Gentle angle term: screen-space normals are noisy along edges, a hard cut made the light blotchy.
+                half face = saturate(dot(nrm, -l) * 1.2 + 0.15);
                 if (face <= 0) return half2(1, 0);
                 float3 wo = w + nrm * (0.004 * dist + 0.01); // off the surface, more further away (texels grow with distance)
                 float4 c = mul(_QS_FLM, float4(wo, 1));
@@ -210,14 +226,16 @@ Shader "Hidden/QuestShade/FinalBlit"
                 float2 edge = min(fuv, 1 - fuv);
                 if (edge.x <= 0 || edge.y <= 0) return half2(1, 0);
                 float d = length(wo - _QS_FLPos.xyz) - _QS_FLParams.w;
-                float t = _QS_FLParams.y * 1.2;
-                half lit = ((SAMPLE_TEXTURE2D_LOD(_QS_FLTex, sampler_QS_FLTex, fuv + float2(-t, -t), 0).r >= d ? 1 : 0)
-                          + (SAMPLE_TEXTURE2D_LOD(_QS_FLTex, sampler_QS_FLTex, fuv + float2( t, -t), 0).r >= d ? 1 : 0)
-                          + (SAMPLE_TEXTURE2D_LOD(_QS_FLTex, sampler_QS_FLTex, fuv + float2(-t,  t), 0).r >= d ? 1 : 0)
-                          + (SAMPLE_TEXTURE2D_LOD(_QS_FLTex, sampler_QS_FLTex, fuv + float2( t,  t), 0).r >= d ? 1 : 0)) * 0.25;
-                // Strongest in the middle of the beam and close to the light, like the flashlight's own falloff.
-                half cone = saturate((cosA - _QS_FLDir.w) / max(_QS_FLParams.z - _QS_FLDir.w, 1e-3));
-                half near = saturate(1 - dist / _QS_FLParams.x);
+                float t = _QS_FLParams.y;
+                // Soft shadow edges: 4 bilinear comparisons (same filter as the sun) instead of 4 single samples.
+                float r = t * 1.5;
+                half lit = (QSLitFL(fuv + float2(-r, -r), d, t) + QSLitFL(fuv + float2(r, -r), d, t)
+                          + QSLitFL(fuv + float2(-r,  r), d, t) + QSLitFL(fuv + float2(r,  r), d, t)) * 0.25;
+                // Smooth falloffs: soft beam edge and a light-like fade with distance (bright close, long gentle tail),
+                // instead of straight lines that left bright bands and dark patches.
+                half cone = smoothstep(_QS_FLDir.w, _QS_FLParams.z, cosA);
+                float k = dist / (_QS_FLParams.x * 0.3);
+                half near = saturate(1 / (1 + k * k) - 0.05 * dist / _QS_FLParams.x);
                 half beam = face * cone * near;
                 return half2(1 - (1 - lit) * beam * _QS_FLPos.w, lit * beam);
             }
@@ -237,7 +255,7 @@ Shader "Hidden/QuestShade/FinalBlit"
                 nrm = dot(nrm, wn - w) < 0 ? -nrm : nrm; // face the viewer
                 if (Linear01Depth(raw, _ZBufferParams) > 0.995) return 1; // sky / nothing there
                 half s = 1;
-                UNITY_BRANCH if (_QS_SMOrigin.w > 0) s = QSSunShadow(w, nrm);
+                UNITY_BRANCH if (_QS_SMOrigin.w > 0) s = QSSunShadow(w, nrm, distance(w, wn));
                 half2 f = QSFlash(w, nrm);
                 // Where the flashlight reaches, it lights up the sun shadow (a flashlight pointed into a shadow brightens it);
                 // things blocking the beam still throw their own flashlight shadow.

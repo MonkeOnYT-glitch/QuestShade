@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.67-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.68-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.66", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.67", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -99,6 +99,10 @@ namespace QuestShade
                 }
                 if (now >= _nextCamCheck) { _nextCamCheck = now + 1f; _fx.EnsureCamera(_cfg); }
                 _fx.Tick(_cfg);
+                // With QuestShade's own flashlight light on, BONELAB's flashlight is turned down: it only lights some materials, and the two
+                // stacked made those surfaces blow out to white next to dull ones. QuestShade's light treats every surface the same.
+                bool ownLight = _cfg.ShadowMap && _cfg.FlashlightShadows && _cfg.FlashlightLight > 0.01f && ShadowMap.Available;
+                Flashlights.Scale = ownLight ? 0.35f : 1f;
                 Flashlights.Tick(_cfg.FlashlightBoost, _cfg.FlashlightBeams);
                 Lighting.Tick(_cfg);
                 _fx.SetFisheye(_cam.Mode == CamMode.PoliceCam ? Mathf.Max(0.35f, _cfg.Fisheye) : _cfg.Fisheye);

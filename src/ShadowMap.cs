@@ -134,6 +134,9 @@ namespace QuestShade
         public static void BeginCamera(Camera cam)
         {
             if (!_on || cam == null || _cfg == null) return;
+            // Our own shadow cameras: leave their globals alone (this used to overwrite the flashlight's position with the sun's
+            // right before the flashlight map was drawn, so flashlight shadows never lined up).
+            if ((_cam != null && cam.Pointer == _cam.Pointer) || (_flCam != null && cam.Pointer == _flCam.Pointer)) return;
             bool head = _head != null && cam.Pointer == _head.Pointer;
             bool lens = !head && _lens != null && _cfg.ShadowMapCamera && cam.Pointer == _lens.Pointer;
             Shader.SetGlobalVector(OriginId, new Vector4(_originXYZ.x, _originXYZ.y, _originXYZ.z, head || lens ? _dark : 0f));
