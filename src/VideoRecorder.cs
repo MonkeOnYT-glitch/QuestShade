@@ -436,6 +436,19 @@ namespace QuestShade
             fixed (byte* p = data) Ndk.AMediaMuxer_writeSampleData(_muxer, (UIntPtr)(video ? _vTrack : _aTrack), (IntPtr)p, ref info);
         }
 
+        // Level change while live: stop and free the encoders, but keep the stream connection open and hand it back.
+        public RtmpClient DetachStream()
+        {
+            if (!Recording || Stream == null) return null;
+            var s = Stream;
+            Stream = null; // so Release() doesn't hang up
+            Recording = false;
+            s.Park();
+            Mod.Log.Msg($"Stream: encoders stopped for the level change ({_frames} frames so far), connection kept open");
+            Release();
+            return s;
+        }
+
         public string Stop()
         {
             if (!Recording) return null;

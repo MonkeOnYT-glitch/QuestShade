@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.86-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.87-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.85", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.86", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -69,7 +69,10 @@ namespace QuestShade
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
             if (!_ready) return;
-            if (_cam.Recording) { var f = _cam.StopRecording(); if (f != null) Log.Msg("Recording stopped by level change: " + f); }
+            // Livestreams carry on through level changes (the picture holds while it loads); recordings stop and save.
+            if (_cam.Streaming) ParkStreamForLevel();
+            else if (_cam.Recording) { var f = _cam.StopRecording(); if (f != null) Log.Msg("Recording stopped by level change: " + f); }
+            if (_parked != null) { _parkedSince = Time.unscaledTime; _resumeAt = Time.unscaledTime + 3f; } // loading screen then the level: wait for the last one
             if (_boneLib) { try { BoneMenuUi.OutlineSelected(false); } catch { } }
             _cam.OnSceneLoaded();
             Flashlights.Reset();
@@ -152,6 +155,7 @@ namespace QuestShade
         public override void OnApplicationQuit()
         {
             try { if (_ready && _cam.Recording) { var f = _cam.StopRecording(); Log.Msg("Recording saved on quit: " + (f ?? "nothing to save")); } } catch { }
+            try { _parked?.Dispose(); _parked = null; } catch { }
         }
 
         private readonly System.Diagnostics.Stopwatch _sw = new System.Diagnostics.Stopwatch();
@@ -460,23 +464,47 @@ namespace QuestShade
             }
         }
 
-        internal bool Streaming => _cam != null && _cam.Streaming;
+        // A stream kept connected while a level loads (the encoders restart once the new level is up).
+        private RtmpClient _parked;
+        private float _resumeAt, _parkedSince, _liveSince;
+
+        internal bool Streaming => _parked != null || (_cam != null && _cam.Streaming);
         internal string StreamStatus
         {
             get
             {
                 if (!Streaming) return "Not streaming";
+                float t = Time.unscaledTime - _liveSince;
+                string clock = $"{(int)t / 60}:{(int)t % 60:00}";
+                if (_parked != null) return $"LIVE {clock}, changing level: viewers see a held picture until it loads";
                 var s = _cam.Stream;
-                if (s.Live) return $"LIVE {(int)_cam.RecordSeconds / 60}:{(int)_cam.RecordSeconds % 60:00}{(s.SecondsBehind > 1f ? $", {s.SecondsBehind:0}s behind (slow Wi-Fi)" : "")}";
+                if (s.Live) return $"LIVE {clock}{(s.SecondsBehind > 1f ? $", {s.SecondsBehind:0}s behind (slow Wi-Fi)" : "")}";
                 return "Connecting: " + s.Status;
             }
         }
 
         private bool _wasLive;
 
+        // Called when a level starts loading: keep the connection, stop the encoders, carry on once the level is up.
+        private void ParkStreamForLevel()
+        {
+            if (_parked != null || !_cam.Streaming) return;
+            _parked = _cam.DetachStream();
+            if (_parked == null) return;
+            _parkedSince = Time.unscaledTime;
+            _resumeAt = Time.unscaledTime + 3f;
+        }
+
+        private void EndParked(string why)
+        {
+            try { _parked?.Dispose(); } catch { }
+            _parked = null; _wasLive = false;
+            if (why != null) { _ctl.Buzz(_cfg, false, 1f, 0.3f); Notify(why, 5f); }
+        }
+
         internal void ToggleStreaming()
         {
-
+            if (_parked != null) { EndParked(null); _ctl.Buzz(_cfg, false, 0.6f, 0.1f); Notify("Stream ended", 2f); return; }
             if (Streaming)
             {
                 _cam.StopRecording(); _wasLive = false;
@@ -497,6 +525,26 @@ namespace QuestShade
 
         private void StreamTick()
         {
+            if (_parked != null)
+            {
+                float now = Time.unscaledTime;
+                if (_parked.Failed) { EndParked("Stream stopped: " + (_parked.Error ?? "lost connection") ); return; }
+                if (now - _parkedSince > 120f) { EndParked("Stream stopped: the level took too long to load"); return; }
+                if (now < _resumeAt) return;
+                _resumeAt = now + 2f; // try again shortly if the camera isn't ready yet
+                if (_cam.Recording) return;
+                try
+                {
+                    if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+                    if (!_cam.Open) return;
+                    var p = _parked;
+                    _parked = null;
+                    if (_cam.StartStreaming(_cfg, out var err, p)) { Log.Msg("Stream: back on after the level change"); Notify("Stream back on", 1.5f); }
+                    else { _parked = p; Log.Msg("Stream: not ready to resume yet (" + (err ?? "camera not ready") + ")"); }
+                }
+                catch (Exception e) { Log.Warning("Stream resume failed, retrying: " + e.Message); }
+                return;
+            }
             if (!Streaming) { _wasLive = false; return; }
             var s = _cam.Stream;
             if (s.Failed)
@@ -507,7 +555,7 @@ namespace QuestShade
                 Notify("Stream stopped: " + why, 5f);
                 return;
             }
-            if (s.Live && !_wasLive) { _wasLive = true; _ctl.Buzz(_cfg, true, 0.8f, 0.15f); Notify("You're LIVE!", 2.5f); }
+            if (s.Live && !_wasLive) { _wasLive = true; _liveSince = Time.unscaledTime; _ctl.Buzz(_cfg, true, 0.8f, 0.15f); Notify("You're LIVE!", 2.5f); }
         }
 
         internal void ToggleRecording()

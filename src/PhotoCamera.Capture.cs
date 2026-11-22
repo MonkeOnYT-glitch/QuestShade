@@ -15,21 +15,33 @@ namespace QuestShade
         public RtmpClient Stream => _rec.Stream;
 
         // Livestream: the same pipeline as recording, but the encoded picture goes to RTMP instead of a file.
-        public bool StartStreaming(Config cfg, out string error)
+        // reuse: a stream kept connected through a level change; its timestamps carry on so the site sees one stream.
+        public bool StartStreaming(Config cfg, out string error, RtmpClient reuse = null)
         {
             error = null;
             if (Recording) { error = Streaming ? null : "Stop recording first"; return Streaming; }
-            if (string.IsNullOrWhiteSpace(cfg.StreamKey)) { error = "Add your stream key in QuestShade.ini under [Stream] first"; return false; }
-            _rec.Stream = new RtmpClient(cfg.StreamServer, cfg.StreamKey);
+            if (reuse == null && string.IsNullOrWhiteSpace(cfg.StreamKey)) { error = "Add your stream key in QuestShade.ini under [Stream] first"; return false; }
+            if (reuse != null) { reuse.Resume(); _rec.Stream = reuse; }
+            else _rec.Stream = new RtmpClient(cfg.StreamServer, cfg.StreamKey);
             // Vertical streams render sideways exactly like vertical recordings (same preview, timestamp and framing);
             // the NV12 conversion turns the picture upright since RTMP can't carry a rotation flag.
             _rec.PortraitStream = cfg.StreamVertical;
             _orientOverride = cfg.StreamVertical ? 2 : 1;
             _vertical = cfg.StreamVertical;
             if (StartRecording(cfg, out error, true)) return true;
-            try { _rec.Stream?.Dispose(); } catch { }
+            if (reuse != null) reuse.Park(); // still connected: the caller tries again shortly
+            else { try { _rec.Stream?.Dispose(); } catch { } }
             _rec.Stream = null; _rec.PortraitStream = false; _orientOverride = 0;
             return false;
+        }
+
+        // Level change while live: stop the encoders but hand back the open connection instead of hanging up.
+        public RtmpClient DetachStream()
+        {
+            if (!Streaming) return null;
+            var s = _rec.DetachStream();
+            AfterRecording();
+            return s;
         }
 
         public bool StartRecording(Config cfg, out string error) => StartRecording(cfg, out error, false);
@@ -87,8 +99,14 @@ namespace QuestShade
         {
             if (!Recording) return null;
             var file = _rec.Stop();
-            _rec.PortraitStream = false; _orientOverride = 0;
             PhotoSaver.PublishVideo(file);
+            AfterRecording();
+            return file;
+        }
+
+        private void AfterRecording()
+        {
+            _rec.PortraitStream = false; _orientOverride = 0;
             if (_cam != null) { _cam.targetTexture = _previewRT; _cam.enabled = false; }
             if (_camData != null) _camData.renderShadows = false;
             if (_screenMat != null) _screenMat.mainTexture = _previewOn ? _previewRT : Texture2D.blackTexture;
@@ -99,7 +117,6 @@ namespace QuestShade
             _recSS = _recExtras = false;
             Free(ref _rawRecRT);
             Free(ref _gradeRT);
-            return file;
         }
 
         public bool RequestPhoto(Config cfg)

@@ -34,6 +34,20 @@ namespace QuestShade
         private int _outChunk = 128, _inChunk = 128;
         private long _inBytes, _inAcked; private int _ackWindow = 2_500_000;
         private uint _streamId;
+        // Level changes: the connection stays open while the encoders restart. Timestamps carry on from where they were,
+        // and the last key frame is re-sent twice a second meanwhile so viewers see a held picture instead of the stream ending.
+        private long _tsBase; private uint _lastTs; private byte[] _lastKey;
+        private bool _parked; private long _nextHold;
+        public bool Parked { get { lock (_qlock) return _parked; } }
+
+        public void Park() { lock (_qlock) { _parked = true; _nextHold = 0; Monitor.Pulse(_qlock); } Mod.Log.Msg("Stream: level change, holding the picture"); }
+
+        // Call before the new encoders start: their timestamps begin at 0 again, so shift them past everything already sent.
+        public void Resume()
+        {
+            lock (_qlock) { _tsBase = (long)_lastTs + 100; _parked = false; _waitKey = true; }
+            Mod.Log.Msg("Stream: resuming after the level change");
+        }
 
         private struct Packet { public byte Type; public uint Ts; public byte[] Body; }
 
@@ -45,6 +59,7 @@ namespace QuestShade
 
         public void Start()
         {
+            if (_thread != null) return; // already connected (resumed after a level change)
             _thread = new Thread(Run) { IsBackground = true, Name = "QuestShade RTMP" };
             _thread.Start();
         }
@@ -105,7 +120,7 @@ namespace QuestShade
             Enqueue(new Packet { Type = 8, Ts = Ms(ptsUs), Body = b }, false, false);
         }
 
-        private static uint Ms(long us) => (uint)Math.Max(0, us / 1000);
+        private uint Ms(long us) => (uint)Math.Max(0, us / 1000 + _tsBase);
 
         private void Enqueue(Packet p, bool video, bool key)
         {
@@ -119,6 +134,8 @@ namespace QuestShade
                     if (key) _waitKey = false;
                 }
                 else if (_qBytes > max * 2) { Dropped++; return; }
+                if (p.Ts > _lastTs) _lastTs = p.Ts;
+                if (video && key) _lastKey = p.Body;
                 _q.Enqueue(p); _qBytes += p.Body.Length;
                 Monitor.Pulse(_qlock);
             }
@@ -135,12 +152,21 @@ namespace QuestShade
                 Mod.Log.Msg("Stream: live");
                 while (!_stop)
                 {
-                    Packet p; byte[] avc = null, aac = null;
+                    Packet p = default; byte[] avc = null, aac = null; bool hold = false;
                     lock (_qlock)
                     {
-                        while (_q.Count == 0 && !_stop) Monitor.Wait(_qlock, 500);
+                        while (_q.Count == 0 && !_stop)
+                        {
+                            // Parked for a level change: keep the site fed with the last picture.
+                            if (_parked && _lastKey != null && _sentAvcSeq)
+                            {
+                                long nowMs = Environment.TickCount64;
+                                if (nowMs >= _nextHold) { _nextHold = nowMs + 500; _lastTs += 500; p = new Packet { Type = 9, Ts = _lastTs, Body = _lastKey }; hold = true; break; }
+                            }
+                            Monitor.Wait(_qlock, 250);
+                        }
                         if (_stop) break;
-                        p = _q.Dequeue(); _qBytes -= p.Body.Length;
+                        if (!hold) { p = _q.Dequeue(); _qBytes -= p.Body.Length; }
                         if (p.Type == 9 && !_sentAvcSeq && _avcSeq != null) { avc = _avcSeq; _sentAvcSeq = true; }
                         if (p.Type == 8 && !_sentAacSeq && _aacSeq != null) { aac = _aacSeq; _sentAacSeq = true; }
                     }
