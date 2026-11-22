@@ -49,9 +49,13 @@ namespace QuestShade
 
         public static void Off()
         {
+            // Give the scene-depth pass back as well: it doubles the game's draw calls and only shadows needed it.
+            if (_headData != null && DepthRequest.Wanted(DepthRequest.Shadows)) DepthRequest.Set(_headData, DepthRequest.Shadows, false);
             if (!_on) return;
             _on = false;
             if (_cam != null) _cam.enabled = false;
+            if (_flCam != null) _flCam.enabled = false;
+            UrpOff();
             Shader.SetGlobalVector(OriginId, Vector4.zero);
             _flStrength = 0f; Shader.SetGlobalVector(FLPosId, Vector4.zero);
         }
@@ -60,8 +64,8 @@ namespace QuestShade
         {
             _cfg = cfg; _head = head; _lens = lens; _dark = Mathf.Clamp01(darkness);
             int L = Layer;
-            if (L < 0 || head == null) { Off(); return; }
-            int res = Mathf.ClosestPowerOfTwo(Mathf.Clamp(cfg.ShadowMapRes, 256, 2048));
+            if (L < 0 || head == null || !Perf.ShadowsAllowed) { Off(); return; }
+            int res = Perf.ShadowRes(Mathf.ClosestPowerOfTwo(Mathf.Clamp(cfg.ShadowMapRes, 256, 2048)));
             float range = Mathf.Clamp(cfg.ShadowMapRange, 3f, 20f), depth = range * 4f;
             Ensure(res);
             if (_cam == null || _rt == null) { Off(); return; }
@@ -76,7 +80,7 @@ namespace QuestShade
             try
             {
                 if (_headData == null || _headData.gameObject != head.gameObject) _headData = head.GetComponent<UniversalAdditionalCameraData>();
-                if (_headData != null && !_headData.requiresDepthTexture) _headData.requiresDepthTexture = true;
+                DepthRequest.Set(_headData, DepthRequest.Shadows, true);
             }
             catch { }
             // So does the in-game camera, for shadows in its photos and videos.
@@ -89,6 +93,10 @@ namespace QuestShade
                 }
                 catch { }
             }
+
+            // Game running behind: redraw the shadow maps every other frame. The last frame's maps and matrices stay bound
+            // together, so shadows stay put; they just update at half rate.
+            if (Perf.ShadowEveryOtherFrame && _on && (Time.frameCount & 1) == 1) return;
 
             // Place the sun camera around the player and snap it to whole shadow-map texels, so edges don't shimmer as you walk.
             dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.down;
@@ -206,7 +214,11 @@ namespace QuestShade
                 {
                     RestoreLight();
                     _urpLight = l; _oLightShadows = l.shadows; _oNear = l.shadowNearPlane;
+                    _nextLightScan = 0f;
                 }
+                // Turning the engine's extra-light shadows on also turns them on for every map light set to cast them.
+                // Custom maps can have dozens, each re-drawing the level, so only the flashlight keeps its shadow.
+                if (Time.unscaledTime >= _nextLightScan) { _nextLightScan = Time.unscaledTime + 3f; QuietOtherLights(l); }
                 if (l.shadows != LightShadows.Hard) l.shadows = LightShadows.Hard;
                 l.shadowNearPlane = 0.25f; // past the flashlight body and the hand holding it
                 Shader.SetGlobalFloat(FLURPId, 1f);
@@ -220,12 +232,39 @@ namespace QuestShade
             _urpLight = null;
         }
 
+        private static float _nextLightScan;
+        private static readonly System.Collections.Generic.List<(Light light, LightShadows was)> _quieted = new System.Collections.Generic.List<(Light, LightShadows)>();
+        private static readonly System.Collections.Generic.HashSet<System.IntPtr> _quietedIds = new System.Collections.Generic.HashSet<System.IntPtr>();
+
+        private static void QuietOtherLights(Light keep)
+        {
+            try
+            {
+                int n = 0;
+                foreach (var x in UnityEngine.Object.FindObjectsOfType<Light>())
+                {
+                    if (x == null || x.Pointer == keep.Pointer || x.type == LightType.Directional || x.shadows == LightShadows.None) continue;
+                    if (_quietedIds.Add(x.Pointer)) _quieted.Add((x, x.shadows));
+                    x.shadows = LightShadows.None; n++;
+                }
+                if (n > 0) Mod.Log.Msg($"Flashlight shadows: kept {n} map light(s) from casting engine shadows while your flashlight is on");
+            }
+            catch { }
+        }
+
+        private static void RestoreOtherLights()
+        {
+            foreach (var (x, was) in _quieted) { try { if (x != null) x.shadows = was; } catch { } }
+            _quieted.Clear(); _quietedIds.Clear();
+        }
+
         private static void UrpOff()
         {
             Shader.SetGlobalFloat(FLURPId, 0f);
             if (!_urpOn) return;
             _urpOn = false;
             RestoreLight();
+            RestoreOtherLights();
             try
             {
                 if (_urp != null)
@@ -242,9 +281,9 @@ namespace QuestShade
         private static void RenderFlash(Config cfg, int bit)
         {
             Light l = null;
-            if (cfg.FlashlightShadows) { try { l = Flashlights.ActiveSpot(); } catch { } }
+            if (cfg.FlashlightShadows && Perf.FlashShadowMap) { try { l = Flashlights.ActiveSpot(); } catch { } }
             if (l == null) { _flStrength = 0f; Shader.SetGlobalVector(FLPosId, Vector4.zero); if (_flCam != null) _flCam.enabled = false; UrpOff(); return; }
-            UrpFlash(l, cfg.FlashlightWorldShadows);
+            UrpFlash(l, cfg.FlashlightWorldShadows && Perf.FlashEngineShadows);
             int res = 1024;
             if (_flRt == null)
             {
