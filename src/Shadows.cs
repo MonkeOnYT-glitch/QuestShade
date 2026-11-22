@@ -232,7 +232,7 @@ namespace QuestShade
             S("copy body: set root bone");
             var rb = src.rootBone;
             copy.rootBone = rb != null ? rb : src.transform;
-            copy.quality = SkinQuality.Bone2;
+            copy.quality = src.quality; // same skinning as the original: cheaper skinning put the copy slightly off the real body, which shadowed itself in stripes
             copy.updateWhenOffscreen = false;
             S("copy body: set bounds");
             var lb = src.localBounds;

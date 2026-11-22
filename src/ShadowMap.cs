@@ -165,13 +165,86 @@ namespace QuestShade
 
         private static Matrix4x4 Inv(Matrix4x4 proj, Matrix4x4 view) => (GL.GetGPUProjectionMatrix(proj, true) * view).inverse;
 
+        // ---- The engine's own shadow map for the flashlight: every shadow-casting object in the level (walls, floors...),
+        // so its light and shadows stop at walls. Only while a flashlight is on; everything is put back afterwards.
+        private static readonly int FLURPId = Shader.PropertyToID("_QS_FLURP");
+        private static UniversalRenderPipelineAsset _urp;
+        private static bool _urpOn, _urpSaved, _oAddShadows;
+        private static int _oTierL, _oTierM, _oTierH;
+        private static UnityEngine.Rendering.Universal.ShadowResolution _oAtlas;
+        private static Light _urpLight;
+        private static LightShadows _oLightShadows;
+        private static float _oNear;
+
+        private static void UrpFlash(Light l, bool want)
+        {
+            if (!want || l == null) { UrpOff(); return; }
+            try
+            {
+                if (_urp == null)
+                {
+                    var rp = QualitySettings.renderPipeline ?? GraphicsSettings.currentRenderPipeline;
+                    _urp = rp != null ? rp.TryCast<UniversalRenderPipelineAsset>() : null;
+                    if (_urp == null) return;
+                }
+                if (!_urpSaved)
+                {
+                    _urpSaved = true;
+                    _oAddShadows = _urp.m_AdditionalLightShadowsSupported; _oAtlas = _urp.m_AdditionalLightsShadowmapResolution;
+                    _oTierL = _urp.m_AdditionalLightsShadowResolutionTierLow; _oTierM = _urp.m_AdditionalLightsShadowResolutionTierMedium; _oTierH = _urp.m_AdditionalLightsShadowResolutionTierHigh;
+                }
+                if (!_urpOn)
+                {
+                    // One slice that fills the whole atlas, so the shader can read slice 0 with the full texture.
+                    _urp.m_AdditionalLightShadowsSupported = true;
+                    _urp.m_AdditionalLightsShadowmapResolution = UnityEngine.Rendering.Universal.ShadowResolution._1024;
+                    _urp.m_AdditionalLightsShadowResolutionTierLow = 1024; _urp.m_AdditionalLightsShadowResolutionTierMedium = 1024; _urp.m_AdditionalLightsShadowResolutionTierHigh = 1024;
+                    _urpOn = true;
+                    Mod.Log.Msg("Flashlight shadows: engine shadow map on (walls and level geometry block the beam)");
+                }
+                if (_urpLight != l)
+                {
+                    RestoreLight();
+                    _urpLight = l; _oLightShadows = l.shadows; _oNear = l.shadowNearPlane;
+                }
+                if (l.shadows != LightShadows.Hard) l.shadows = LightShadows.Hard;
+                l.shadowNearPlane = 0.25f; // past the flashlight body and the hand holding it
+                Shader.SetGlobalFloat(FLURPId, 1f);
+            }
+            catch (Exception e) { Mod.Log.Warning("Flashlight engine shadows unavailable: " + e.Message); Shader.SetGlobalFloat(FLURPId, 0f); }
+        }
+
+        private static void RestoreLight()
+        {
+            try { if (_urpLight != null) { _urpLight.shadows = _oLightShadows; _urpLight.shadowNearPlane = _oNear; } } catch { }
+            _urpLight = null;
+        }
+
+        private static void UrpOff()
+        {
+            Shader.SetGlobalFloat(FLURPId, 0f);
+            if (!_urpOn) return;
+            _urpOn = false;
+            RestoreLight();
+            try
+            {
+                if (_urp != null)
+                {
+                    _urp.m_AdditionalLightShadowsSupported = _oAddShadows; _urp.m_AdditionalLightsShadowmapResolution = _oAtlas;
+                    _urp.m_AdditionalLightsShadowResolutionTierLow = _oTierL; _urp.m_AdditionalLightsShadowResolutionTierMedium = _oTierM; _urp.m_AdditionalLightsShadowResolutionTierHigh = _oTierH;
+                }
+            }
+            catch { }
+        }
+
         // Flashlight shadows: a perspective map from the held flashlight (only while one is on). Drawn with the same caster
         // copies; the near clip starts past the flashlight and the hand holding it so they don't block the whole beam.
         private static void RenderFlash(Config cfg, int bit)
         {
             Light l = null;
             if (cfg.FlashlightShadows) { try { l = Flashlights.ActiveSpot(); } catch { } }
-            if (l == null) { _flStrength = 0f; Shader.SetGlobalVector(FLPosId, Vector4.zero); if (_flCam != null) _flCam.enabled = false; return; }
+            if (l == null) { _flStrength = 0f; Shader.SetGlobalVector(FLPosId, Vector4.zero); if (_flCam != null) _flCam.enabled = false; UrpOff(); return; }
+            UrpFlash(l, cfg.FlashlightWorldShadows);
             int res = 1024;
             if (_flRt == null)
             {
@@ -218,7 +291,7 @@ namespace QuestShade
             Shader.SetGlobalTexture(FLTexId, _flRt);
             Shader.SetGlobalMatrix(FLMId, _flCam.projectionMatrix * _flCam.worldToCameraMatrix);
             Shader.SetGlobalVector(FLDirId, new Vector4(fwd.x, fwd.y, fwd.z, Mathf.Cos(spot * 0.5f * Mathf.Deg2Rad)));
-            Shader.SetGlobalVector(FLParamsId, new Vector4(range, 1f / res, Mathf.Cos(inner * 0.5f * Mathf.Deg2Rad), 0.03f));
+            Shader.SetGlobalVector(FLParamsId, new Vector4(range, 1f / res, Mathf.Cos(inner * 0.5f * Mathf.Deg2Rad), 0.06f));
             _flStrength = Mathf.Clamp01(cfg.FlashShadowDarkness);
             Shader.SetGlobalVector(FLParams2Id, new Vector4(Mathf.Clamp(cfg.FlashlightLight, 0f, 3f), 0f, 0f, 0f));
             if (!_flLogged) { _flLogged = true; Mod.Log.Msg($"Flashlight shadows on ({spot:0} deg, {range:0} m)"); }

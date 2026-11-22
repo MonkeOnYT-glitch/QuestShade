@@ -79,6 +79,10 @@ namespace QuestShade
             if (!go.activeSelf) go.SetActive(true);
             if (go.layer != layer) go.layer = layer;
             float len = Mathf.Clamp(l.range, 1f, 8f);
+            // Stop the beam where it hits something instead of running through walls (start just past the flashlight itself).
+            var lt = l.transform;
+            if (Physics.Raycast(lt.position + lt.forward * 0.15f, lt.forward, out var bh, len, ~(1 << 2), QueryTriggerInteraction.Ignore))
+                len = Mathf.Max(0.3f, bh.distance + 0.15f);
             float rad = len * Mathf.Tan(Mathf.Clamp(l.spotAngle, 5f, 120f) * 0.5f * Mathf.Deg2Rad) * 0.85f;
             var s = l.transform.lossyScale;
             go.transform.localPosition = Vector3.zero;

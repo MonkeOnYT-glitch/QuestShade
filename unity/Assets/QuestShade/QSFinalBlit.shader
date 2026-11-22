@@ -170,18 +170,9 @@ Shader "Hidden/QuestShade/FinalBlit"
                 float d = dot(w - _QS_SMOrigin.xyz, _QS_SMDir.xyz) - _QS_SMOpts.z * close;
                 float t = _QS_SMDir.w;
                 float r = max(_QS_SMOpts.w, 0.5) * t * close;
-                // Cheap first: 4 single samples. If they agree (fully lit or fully in shadow, i.e. most of the screen) we're done.
-                half q = (SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2(-r, -r), 0).r >= d ? 1 : 0)
-                       + (SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2( r, -r), 0).r >= d ? 1 : 0)
-                       + (SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2(-r,  r), 0).r >= d ? 1 : 0)
-                       + (SAMPLE_TEXTURE2D_LOD(_QS_SMTex, sampler_QS_SMTex, suv + float2( r,  r), 0).r >= d ? 1 : 0);
-                half lit = q * 0.25;
-                UNITY_BRANCH if (q > 0 && q < 4)
-                {
-                    // Near a shadow edge: smooth it with 4 bilinear-filtered comparisons (16 texels).
-                    lit = (QSLit(suv + float2(-r, -r), d, t) + QSLit(suv + float2(r, -r), d, t)
-                         + QSLit(suv + float2(-r,  r), d, t) + QSLit(suv + float2(r,  r), d, t)) * 0.25;
-                }
+                // One bilinear-filtered comparison (4 texels): a crisp edge one shadow-map texel wide. The old "4 quick samples,
+                // then blur near edges" left a sharp edge with a second, lighter ring around it; this is sharper and 4x cheaper.
+                half lit = QSLit(suv, d, t);
                 half shade = (1 - lit) * face * saturate(min(edge.x, edge.y) * 10); // fade out near the edge of the map
                 return 1 - shade * _QS_SMOrigin.w;
             }
@@ -193,6 +184,9 @@ Shader "Hidden/QuestShade/FinalBlit"
             float4 _QS_FLDir;     // xyz: beam direction, w: cos(outer half-angle)
             float4 _QS_FLParams;  // x: range, y: 1/res, z: cos(inner half-angle), w: bias (m)
             float4 _QS_FLParams2; // x: extra flashlight light on every surface (0 = off)
+            float _QS_FLURP;      // 1 = the engine is drawing a shadow map for the flashlight (slice 0)
+            TEXTURE2D_SHADOW(_AdditionalLightsShadowmapTexture); SAMPLER_CMP(sampler_AdditionalLightsShadowmapTexture);
+            float4x4 _AdditionalLightsWorldToShadow[4];
 
             // x: flashlight shadow (1 = not blocked), y: how strongly the flashlight lights this spot (0..1)
             half QSLitFL(float2 uv, float d, float t)
@@ -219,7 +213,7 @@ Shader "Hidden/QuestShade/FinalBlit"
                 // Gentle angle term: screen-space normals are noisy along edges, a hard cut made the light blotchy.
                 half face = saturate(dot(nrm, -l) * 1.2 + 0.15);
                 if (face <= 0) return half2(1, 0);
-                float3 wo = w + nrm * (0.004 * dist + 0.01); // off the surface, more further away (texels grow with distance)
+                float3 wo = w + nrm * (0.008 * dist + 0.02); // off the surface (more further away, texels grow with distance): no self-shadow stripes on hands
                 float4 c = mul(_QS_FLM, float4(wo, 1));
                 if (c.w <= 0) return half2(1, 0);
                 float2 fuv = c.xy / c.w * 0.5 + 0.5;
@@ -227,10 +221,20 @@ Shader "Hidden/QuestShade/FinalBlit"
                 if (edge.x <= 0 || edge.y <= 0) return half2(1, 0);
                 float d = length(wo - _QS_FLPos.xyz) - _QS_FLParams.w;
                 float t = _QS_FLParams.y;
-                // Soft shadow edges: 4 bilinear comparisons (same filter as the sun) instead of 4 single samples.
-                float r = t * 1.5;
-                half lit = (QSLitFL(fuv + float2(-r, -r), d, t) + QSLitFL(fuv + float2(r, -r), d, t)
-                          + QSLitFL(fuv + float2(-r,  r), d, t) + QSLitFL(fuv + float2(r,  r), d, t)) * 0.25;
+                // One bilinear-filtered comparison: crisp edges, no ring, cheap.
+                half lit = QSLitFL(fuv, d, t);
+                // Level geometry (walls, floors...) from the engine's own shadow map for this flashlight, so light and shadows
+                // don't pass through walls. Our map above covers you, held items and props.
+                UNITY_BRANCH if (_QS_FLURP > 0.5)
+                {
+                    float4 sc = mul(_AdditionalLightsWorldToShadow[0], float4(wo, 1));
+                    if (sc.w > 0)
+                    {
+                        sc.xyz /= sc.w;
+                        if (sc.x > 0 && sc.x < 1 && sc.y > 0 && sc.y < 1)
+                            lit *= SAMPLE_TEXTURE2D_SHADOW(_AdditionalLightsShadowmapTexture, sampler_AdditionalLightsShadowmapTexture, sc.xyz);
+                    }
+                }
                 // Smooth falloffs: soft beam edge and a light-like fade with distance (bright close, long gentle tail),
                 // instead of straight lines that left bright bands and dark patches.
                 half cone = smoothstep(_QS_FLDir.w, _QS_FLParams.z, cosA);
