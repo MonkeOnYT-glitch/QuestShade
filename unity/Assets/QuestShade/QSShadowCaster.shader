@@ -26,6 +26,7 @@ Shader "Hidden/QuestShade/ShadowCaster"
             TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
             float4 _QS_SMOrigin;   // xyz: shadow map origin (light-side end of the box)
             float4 _QS_SMDir;      // xyz: light direction (normalized)
+            float _QS_SMMode;       // 0: distance along the light direction (sun), 1: distance from the light (flashlight)
             struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float dist : TEXCOORD1; };
             Varyings Vert(Attributes i)
@@ -34,7 +35,7 @@ Shader "Hidden/QuestShade/ShadowCaster"
                 float3 w = TransformObjectToWorld(i.positionOS.xyz);
                 o.positionCS = TransformWorldToHClip(w);
                 o.uv = i.uv * _MainTex_ST.xy + _MainTex_ST.zw;
-                o.dist = dot(w - _QS_SMOrigin.xyz, _QS_SMDir.xyz);
+                o.dist = _QS_SMMode > 0.5 ? length(w - _QS_SMOrigin.xyz) : dot(w - _QS_SMOrigin.xyz, _QS_SMDir.xyz);
                 return o;
             }
             float4 Frag(Varyings i) : SV_Target

@@ -16,7 +16,7 @@ namespace QuestShade
         public static Camera Lens;
         public static Transform CameraProp; // the QuestShade camera prop: never a shadow caster (it shadowed its own handle/screen)
         private static bool _mapMode, _mapDecided, _mapLogged;
-        private static int _skinApplied = -1;
+        private static int _skinApplied = -1, _mapState = int.MinValue;
 
         private const int MaxParts = 12;
         private const float Reach = 40f, Lift = 0.012f;
@@ -471,6 +471,10 @@ namespace QuestShade
             // Incremental: keep copies for things still nearby, drop the ones that left, build only newcomers.
             _keepRoots.Clear();
             foreach (var e in _near) _keepRoots.Add(e.t.GetInstanceID());
+            // Hysteresis: a prop that already has a shadow keeps it until it is 3 m past the search edge, so things near the edge
+            // don't lose and regain their shadow every second as your head moves.
+            float keepR = (OthersReach + 3f) * (OthersReach + 3f);
+            foreach (var g in _groups) if (g.Root != null && g.Root.gameObject.activeInHierarchy && (g.Root.position - at).sqrMagnitude < keepR) _keepRoots.Add(g.RootId);
             bool changed = false;
             for (int i = _groups.Count - 1; i >= 0; i--)
             {
@@ -728,22 +732,28 @@ namespace QuestShade
             _dir = Vector3.Slerp(_dir, dir, 1f - Mathf.Exp(-Time.unscaledDeltaTime * 2f));
 
             int L = ShadowMap.Layer;
-            if (_sheet != null && _sheet.activeSelf) _sheet.SetActive(false);
-            if (_sheetWall != null && _sheetWall.activeSelf) _sheetWall.SetActive(false);
-            if (_sheetLens != null && _sheetLens.activeSelf) _sheetLens.SetActive(false);
-            if (_sheetWallLens != null && _sheetWallLens.activeSelf) _sheetWallLens.SetActive(false);
-            SetList(_skinsLens, false); SetList(_skinsWall, false); SetList(_skinsWallLens, false);
-            SetList(_partsLens, false); SetList(_partsWall, false); SetList(_partsWallLens, false);
-            SetList(_othersLens, false);
-            SetLayer(_skins, L); SetLayer(_parts, L); SetLayer(_others, L);
-            // Unity skips animating skinned meshes it thinks no camera sees; the sun camera alone didn't count, so shadows only
-            // appeared after you looked down at your body. Always update the caster copies.
-            int sk = _skins.Count * 1000 + _others.Count + (_othersKey & 0xFFFF) * 7 + _avatarId * 31;
-            if (sk != _skinApplied) { _skinApplied = sk; AlwaysSkin(_skins); AlwaysSkin(_others); }
-            Show(true);
-            SetList(_skins, true);
-            foreach (var g in _groups) foreach (var r in g.Copies) if (r != null && !r.enabled) r.enabled = true;
-            foreach (var g in _heldGroups) foreach (var r in g.Copies) if (r != null && !r.enabled) r.enabled = true;
+            // Setting layers / active / enabled on every copy every frame is hundreds of calls into the game that change
+            // nothing. Only redo it when the set of copies changed (new avatar, held items, nearby props).
+            int state = (((_skins.Count * 397 ^ _parts.Count) * 397 ^ _others.Count) * 397 ^ _othersKey) * 397 ^ _itemsKey ^ (_avatarId * 31);
+            if (state != _mapState || !_othersOn)
+            {
+                _mapState = state;
+                if (_sheet != null && _sheet.activeSelf) _sheet.SetActive(false);
+                if (_sheetWall != null && _sheetWall.activeSelf) _sheetWall.SetActive(false);
+                if (_sheetLens != null && _sheetLens.activeSelf) _sheetLens.SetActive(false);
+                if (_sheetWallLens != null && _sheetWallLens.activeSelf) _sheetWallLens.SetActive(false);
+                SetList(_skinsLens, false); SetList(_skinsWall, false); SetList(_skinsWallLens, false);
+                SetList(_partsLens, false); SetList(_partsWall, false); SetList(_partsWallLens, false);
+                SetList(_othersLens, false);
+                SetLayer(_skins, L); SetLayer(_parts, L); SetLayer(_others, L);
+                // Unity skips animating skinned meshes it thinks no camera sees; the sun camera alone didn't count, so shadows
+                // only appeared after you looked down at your body. Always update the caster copies.
+                AlwaysSkin(_skins); AlwaysSkin(_others);
+                Show(true);
+                SetList(_skins, true);
+                foreach (var g in _groups) foreach (var r in g.Copies) if (r != null && !r.enabled) r.enabled = true;
+                foreach (var g in _heldGroups) foreach (var r in g.Copies) if (r != null && !r.enabled) r.enabled = true;
+            }
 
             ShadowMap.Update(cfg, head, Lens, _dir, Mathf.Clamp01(cfg.ShadowDarkness) * 0.8f);
             if (!_mapLogged) { _mapLogged = true; Mod.Log.Msg($"Shadows: shadow map casters: {_skins.Count} body, {_parts.Count} held, {_others.Count} NPC/prop meshes"); }

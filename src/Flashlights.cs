@@ -20,6 +20,13 @@ namespace QuestShade
         private static bool _logged, _diag;
         public static bool AnyOn { get; private set; }
 
+        // The held flashlight that is on right now (a spot light), for flashlight shadows.
+        public static Light ActiveSpot()
+        {
+            foreach (var kv in _lights) { var l = kv.Value.L; if (l != null && l.isActiveAndEnabled && l.type == LightType.Spot && l.intensity > 0.01f) return l; }
+            return null;
+        }
+
         public static void Tick(float boost, bool beams)
         {
             if (Held == null) return;

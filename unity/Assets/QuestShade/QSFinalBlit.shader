@@ -151,20 +151,9 @@ Shader "Hidden/QuestShade/FinalBlit"
 
             float4 _QS_SMParams; // x: world size of one shadow-map texel (m)
 
-            half QSShadow(float2 uv)
+            // Sun: world-space map along the light direction.
+            half QSSunShadow(float3 w, float3 nrm)
             {
-                UNITY_BRANCH if (_QS_SMOrigin.w <= 0) return 1;
-                // World position and surface direction first (screen derivatives must come before any per-pixel branch).
-                float raw = SampleSceneDepth(uv);
-                float3 w = QSWorldFromDepth(uv, raw);
-            #if UNITY_REVERSED_Z
-                float3 wn = QSWorldFromDepth(uv, 1);
-            #else
-                float3 wn = QSWorldFromDepth(uv, 0);
-            #endif
-                float3 nrm = normalize(cross(ddy(w), ddx(w)));
-                nrm = dot(nrm, wn - w) < 0 ? -nrm : nrm; // face the viewer
-                if (Linear01Depth(raw, _ZBufferParams) > 0.995) return 1; // sky / nothing there
                 // Only surfaces that face the light get a cast shadow; it fades out on sides lit at a glancing angle, so a
                 // hand over the edge of a crate doesn't smear a long shadow down its side.
                 float ndl = dot(nrm, -_QS_SMDir.xyz);
@@ -192,6 +181,61 @@ Shader "Hidden/QuestShade/FinalBlit"
                 }
                 half shade = (1 - lit) * face * saturate(min(edge.x, edge.y) * 10); // fade out near the edge of the map
                 return 1 - shade * _QS_SMOrigin.w;
+            }
+
+            // Flashlight: a perspective map from the held flashlight, storing distance from the light.
+            TEXTURE2D(_QS_FLTex); SAMPLER(sampler_QS_FLTex);
+            float4x4 _QS_FLM;     // world -> flashlight clip
+            float4 _QS_FLPos;     // xyz: flashlight position, w: strength (0 = off)
+            float4 _QS_FLDir;     // xyz: beam direction, w: cos(outer half-angle)
+            float4 _QS_FLParams;  // x: range, y: 1/res, z: cos(inner half-angle), w: bias (m)
+
+            half QSFlashShadow(float3 w, float3 nrm)
+            {
+                UNITY_BRANCH if (_QS_FLPos.w <= 0) return 1;
+                float3 v = w - _QS_FLPos.xyz;
+                float dist = length(v);
+                if (dist < 0.3 || dist > _QS_FLParams.x) return 1;
+                float3 l = v / dist;
+                float cosA = dot(l, _QS_FLDir.xyz);
+                if (cosA <= _QS_FLDir.w) return 1; // outside the beam
+                half face = saturate((dot(nrm, -l) - 0.05) * 4);
+                if (face <= 0) return 1;
+                float3 wo = w + nrm * (0.004 * dist + 0.01); // off the surface, more further away (texels grow with distance)
+                float4 c = mul(_QS_FLM, float4(wo, 1));
+                if (c.w <= 0) return 1;
+                float2 fuv = c.xy / c.w * 0.5 + 0.5;
+                float2 edge = min(fuv, 1 - fuv);
+                if (edge.x <= 0 || edge.y <= 0) return 1;
+                float d = length(wo - _QS_FLPos.xyz) - _QS_FLParams.w;
+                float t = _QS_FLParams.y * 1.2;
+                half lit = ((SAMPLE_TEXTURE2D_LOD(_QS_FLTex, sampler_QS_FLTex, fuv + float2(-t, -t), 0).r >= d ? 1 : 0)
+                          + (SAMPLE_TEXTURE2D_LOD(_QS_FLTex, sampler_QS_FLTex, fuv + float2( t, -t), 0).r >= d ? 1 : 0)
+                          + (SAMPLE_TEXTURE2D_LOD(_QS_FLTex, sampler_QS_FLTex, fuv + float2(-t,  t), 0).r >= d ? 1 : 0)
+                          + (SAMPLE_TEXTURE2D_LOD(_QS_FLTex, sampler_QS_FLTex, fuv + float2( t,  t), 0).r >= d ? 1 : 0)) * 0.25;
+                // Strongest in the middle of the beam and close to the light, like the flashlight's own falloff.
+                half cone = saturate((cosA - _QS_FLDir.w) / max(_QS_FLParams.z - _QS_FLDir.w, 1e-3));
+                half near = saturate(1 - dist / _QS_FLParams.x);
+                return 1 - (1 - lit) * face * cone * near * _QS_FLPos.w;
+            }
+
+            half QSShadow(float2 uv)
+            {
+                UNITY_BRANCH if (_QS_SMOrigin.w <= 0 && _QS_FLPos.w <= 0) return 1;
+                // World position and surface direction first (screen derivatives must come before any per-pixel branch).
+                float raw = SampleSceneDepth(uv);
+                float3 w = QSWorldFromDepth(uv, raw);
+            #if UNITY_REVERSED_Z
+                float3 wn = QSWorldFromDepth(uv, 1);
+            #else
+                float3 wn = QSWorldFromDepth(uv, 0);
+            #endif
+                float3 nrm = normalize(cross(ddy(w), ddx(w)));
+                nrm = dot(nrm, wn - w) < 0 ? -nrm : nrm; // face the viewer
+                if (Linear01Depth(raw, _ZBufferParams) > 0.995) return 1; // sky / nothing there
+                half s = 1;
+                UNITY_BRANCH if (_QS_SMOrigin.w > 0) s = QSSunShadow(w, nrm);
+                return s * QSFlashShadow(w, nrm);
             }
             float FocusDist()
             {

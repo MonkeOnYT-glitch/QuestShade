@@ -24,7 +24,13 @@ namespace QuestShade
 
         private static readonly int SMTexId = Shader.PropertyToID("_QS_SMTex"), SMId = Shader.PropertyToID("_QS_SM"),
             OriginId = Shader.PropertyToID("_QS_SMOrigin"), DirId = Shader.PropertyToID("_QS_SMDir"), OptsId = Shader.PropertyToID("_QS_SMOpts"),
-            InvVP0Id = Shader.PropertyToID("_QS_InvVP0"), InvVP1Id = Shader.PropertyToID("_QS_InvVP1"), ParamsId = Shader.PropertyToID("_QS_SMParams");
+            InvVP0Id = Shader.PropertyToID("_QS_InvVP0"), InvVP1Id = Shader.PropertyToID("_QS_InvVP1"), ParamsId = Shader.PropertyToID("_QS_SMParams"),
+            ModeId = Shader.PropertyToID("_QS_SMMode"), FLTexId = Shader.PropertyToID("_QS_FLTex"), FLMId = Shader.PropertyToID("_QS_FLM"),
+            FLPosId = Shader.PropertyToID("_QS_FLPos"), FLDirId = Shader.PropertyToID("_QS_FLDir"), FLParamsId = Shader.PropertyToID("_QS_FLParams");
+        private static Camera _flCam;
+        private static RenderTexture _flRt;
+        private static float _flStrength;
+        private static Vector3 _flPos;
 
         // The lowest free layer (the camera's lens-only layer takes the highest one).
         public static int Layer
@@ -47,6 +53,7 @@ namespace QuestShade
             _on = false;
             if (_cam != null) _cam.enabled = false;
             Shader.SetGlobalVector(OriginId, Vector4.zero);
+            _flStrength = 0f; Shader.SetGlobalVector(FLPosId, Vector4.zero);
         }
 
         public static void Update(Config cfg, Camera head, Camera lens, Vector3 dir, float darkness)
@@ -98,6 +105,8 @@ namespace QuestShade
             _cam.nearClipPlane = 0.02f;
             _cam.farClipPlane = depth;
 
+            RenderFlash(cfg, bit);
+            Shader.SetGlobalFloat(ModeId, 0f);
             var scaleBias = Matrix4x4.TRS(new Vector3(0.5f, 0.5f, 0f), Quaternion.identity, new Vector3(0.5f, 0.5f, 1f));
             Shader.SetGlobalMatrix(SMId, scaleBias * _cam.projectionMatrix * _cam.worldToCameraMatrix);
             Shader.SetGlobalTexture(SMTexId, _rt);
@@ -128,6 +137,7 @@ namespace QuestShade
             bool head = _head != null && cam.Pointer == _head.Pointer;
             bool lens = !head && _lens != null && _cfg.ShadowMapCamera && cam.Pointer == _lens.Pointer;
             Shader.SetGlobalVector(OriginId, new Vector4(_originXYZ.x, _originXYZ.y, _originXYZ.z, head || lens ? _dark : 0f));
+            Shader.SetGlobalVector(FLPosId, new Vector4(_flPos.x, _flPos.y, _flPos.z, head || lens ? _flStrength : 0f));
             if (!head && !lens) return;
             // The in-game camera always uses its own (CPU) matrices; the headset uses the built-in eye matrices unless switched.
             bool cpu = lens || _cfg.ShadowMapCpuMatrices;
@@ -151,6 +161,65 @@ namespace QuestShade
         }
 
         private static Matrix4x4 Inv(Matrix4x4 proj, Matrix4x4 view) => (GL.GetGPUProjectionMatrix(proj, true) * view).inverse;
+
+        // Flashlight shadows: a perspective map from the held flashlight (only while one is on). Drawn with the same caster
+        // copies; the near clip starts past the flashlight and the hand holding it so they don't block the whole beam.
+        private static void RenderFlash(Config cfg, int bit)
+        {
+            Light l = null;
+            if (cfg.FlashlightShadows) { try { l = Flashlights.ActiveSpot(); } catch { } }
+            if (l == null) { _flStrength = 0f; Shader.SetGlobalVector(FLPosId, Vector4.zero); if (_flCam != null) _flCam.enabled = false; return; }
+            int res = 1024;
+            if (_flRt == null)
+            {
+                var fmt = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RHalf) ? RenderTextureFormat.RHalf : RenderTextureFormat.RFloat;
+                _flRt = new RenderTexture(res, res, 16, fmt, RenderTextureReadWrite.Linear)
+                { name = "QuestShade_FlashShadowMap", filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp, useMipMap = false, hideFlags = HideFlags.HideAndDontSave };
+                _flRt.Create();
+            }
+            if (_flCam == null)
+            {
+                var go = new GameObject("QuestShade_FlashCam");
+                UnityEngine.Object.DontDestroyOnLoad(go);
+                go.hideFlags = HideFlags.HideAndDontSave;
+                _flCam = go.AddComponent<Camera>();
+                _flCam.enabled = false;
+                _flCam.aspect = 1f;
+                _flCam.clearFlags = CameraClearFlags.SolidColor;
+                _flCam.backgroundColor = new Color(1000f, 0f, 0f, 1f);
+                _flCam.depth = -101f;
+                _flCam.allowHDR = false; _flCam.allowMSAA = false; _flCam.useOcclusionCulling = false;
+                _flCam.stereoTargetEye = StereoTargetEyeMask.None;
+                _flCam.targetTexture = _flRt;
+                try
+                {
+                    var d = go.AddComponent<UniversalAdditionalCameraData>();
+                    d.renderShadows = false; d.requiresDepthTexture = false; d.requiresColorTexture = false; d.renderPostProcessing = false; d.antialiasing = AntialiasingMode.None;
+                }
+                catch { }
+            }
+            var t = l.transform;
+            float spot = Mathf.Clamp(l.spotAngle, 10f, 150f), range = Mathf.Clamp(l.range, 2f, 25f);
+            _flCam.cullingMask = bit;
+            _flCam.transform.SetPositionAndRotation(t.position, t.rotation);
+            _flCam.fieldOfView = spot + 4f;
+            _flCam.nearClipPlane = 0.25f;
+            _flCam.farClipPlane = range;
+            _flPos = t.position;
+            var fwd = t.forward;
+            Shader.SetGlobalVector(OriginId, new Vector4(_flPos.x, _flPos.y, _flPos.z, 0f));
+            Shader.SetGlobalVector(DirId, new Vector4(fwd.x, fwd.y, fwd.z, 0f));
+            Shader.SetGlobalFloat(ModeId, 1f);
+            try { _flCam.Render(); } catch { _flStrength = 0f; return; }
+            float inner = l.innerSpotAngle > 1f ? l.innerSpotAngle : spot * 0.6f;
+            Shader.SetGlobalTexture(FLTexId, _flRt);
+            Shader.SetGlobalMatrix(FLMId, _flCam.projectionMatrix * _flCam.worldToCameraMatrix);
+            Shader.SetGlobalVector(FLDirId, new Vector4(fwd.x, fwd.y, fwd.z, Mathf.Cos(spot * 0.5f * Mathf.Deg2Rad)));
+            Shader.SetGlobalVector(FLParamsId, new Vector4(range, 1f / res, Mathf.Cos(inner * 0.5f * Mathf.Deg2Rad), 0.03f));
+            _flStrength = Mathf.Clamp01(cfg.FlashShadowDarkness);
+            if (!_flLogged) { _flLogged = true; Mod.Log.Msg($"Flashlight shadows on ({spot:0} deg, {range:0} m)"); }
+        }
+        private static bool _flLogged;
 
         private static void Ensure(int res)
         {
