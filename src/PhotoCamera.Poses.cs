@@ -15,6 +15,7 @@ namespace QuestShade
         private float _handBack;
         private bool _handNear;
         private bool _vertical, _photoVertical;
+        private int _orientOverride; // 0 = follow the Vertical setting, 1 = landscape, 2 = vertical (set while livestreaming)
         private Vector4 _portraitSet = new Vector4(-1f, 0f, 0f, 0f);
         private static readonly int PortraitId = Shader.PropertyToID("_QS_Portrait");
 
@@ -154,7 +155,7 @@ namespace QuestShade
                     }
                     break;
             }
-            _vertical = cfg.Vertical;
+            _vertical = _orientOverride == 0 ? cfg.Vertical : _orientOverride == 2; // a livestream picks its own orientation
             if (_vertical) lr *= Quaternion.Euler(0f, 0f, 90f);
             bool onDevice = Mode == CamMode.Hand || Mode == CamMode.Selfie;
             float lk = onDevice && _held < 0 ? 1f : SmoothK(cfg, dt);

@@ -15,6 +15,12 @@ namespace QuestShade
         public int Rotation;
         public string FilePath { get; private set; }
         public float Seconds => Recording ? Time.realtimeSinceStartup - _t0 : 0f;
+        // Livestream (beta): set before Start() and the encoded video/audio go to this RTMP client instead of an MP4 file.
+        public RtmpClient Stream;
+        public bool Streaming => Recording && Stream != null;
+        public bool PortraitStream; // vertical stream: the sideways-rendered picture is turned upright during the NV12 conversion
+        private int _stride, _slice;
+        private bool _vCfg, _aCfg;
 
         private IntPtr _codec, _audio, _muxer;
         private FileStream _file;
@@ -94,24 +100,35 @@ namespace QuestShade
         private readonly List<(bool video, byte[] data, BufferInfo info)> _early = new List<(bool, byte[], BufferInfo)>();
 
         private const int COLOR_FormatYUV420SemiPlanar = 21;
-        private const uint FLAG_CODEC_CONFIG = 2, FLAG_END_OF_STREAM = 4;
+        private const uint FLAG_KEY_FRAME = 1, FLAG_CODEC_CONFIG = 2, FLAG_END_OF_STREAM = 4;
+
+        private static byte[] Csd(IntPtr fmt, string name)
+        {
+            if (fmt == IntPtr.Zero || !Ndk.AMediaFormat_getBuffer(fmt, name, out var p, out var n) || p == IntPtr.Zero || (long)n <= 0) return null;
+            var b = new byte[(int)(long)n]; Marshal.Copy(p, b, 0, b.Length); return b;
+        }
         private const long INFO_TRY_AGAIN_LATER = -1, INFO_OUTPUT_FORMAT_CHANGED = -2;
 
         public bool Start(int w, int h, int fps, int bitrate, string folder, Config cfg)
         {
             if (Recording) return true;
             if (ShaderPack.Yuv == null) { Mod.Log.Error("Recording: YUV shader unavailable on this GPU"); return false; }
-            Width = w & ~15; Height = h & ~1;
+            bool stream = Stream != null;
+            Width = stream ? w & ~7 : w & ~15; Height = h & ~1; // streams keep 1080-wide portrait frames (1080 isn't a multiple of 16)
             try
             {
-                Directory.CreateDirectory(folder);
-                FilePath = Path.Combine(folder, MediaScan.QuestName("mp4", DateTime.Now));
+                if (stream) { FilePath = null; Rotation = 0; } // RTMP has no rotation flag: streams are always landscape
+                else
+                {
+                    Directory.CreateDirectory(folder);
+                    FilePath = Path.Combine(folder, MediaScan.QuestName("mp4", DateTime.Now));
+                }
 
-                Diag($"start {Width}x{Height}@{fps} {bitrate / 1000} kbps on {Device.Name}", true);
-                Mod.Log.Msg("Recording: creating encoder");
-                _fps = fps; _lastPts = -1;
-                _codec = CreateVideoEncoder(fps, bitrate, false);
-                if (_codec == IntPtr.Zero) throw new Exception("no video encoder (HEVC / H.264)");
+                Diag($"{(stream ? "stream" : "start")} {Width}x{Height}@{fps} {bitrate / 1000} kbps on {Device.Name}", true);
+                Mod.Log.Msg(stream ? "Stream: creating encoder" : "Recording: creating encoder");
+                _fps = fps; _lastPts = -1; _vCfg = _aCfg = false;
+                _codec = CreateVideoEncoder(fps, bitrate, stream);
+                if (_codec == IntPtr.Zero) throw new Exception(stream ? "no H.264 encoder" : "no video encoder (HEVC / H.264)");
 
                 int stride = 0, slice = 0;
                 var inFmt = Ndk.AMediaCodec_getInputFormat(_codec);
@@ -136,24 +153,36 @@ namespace QuestShade
                     else { _cap.Stop(); _cap = null; Mod.Log.Msg("Recording: no audio source available, video only"); }
                 }
 
-                Mod.Log.Msg("Recording: creating muxer");
-                _file = new FileStream(FilePath, FileMode.Create, FileAccess.ReadWrite, FileShare.Read);
-                int fd = (int)_file.SafeFileHandle.DangerousGetHandle();
-                _muxer = Ndk.AMediaMuxer_new(fd, 0 );
-                if (_muxer == IntPtr.Zero) throw new Exception("muxer create failed");
-                if (Rotation != 0) { int hint = Ndk.AMediaMuxer_setOrientationHint(_muxer, Rotation); Mod.Log.Msg($"Recording: portrait video (rotation {Rotation}, status {hint})"); }
+                if (!stream)
+                {
+                    Mod.Log.Msg("Recording: creating muxer");
+                    _file = new FileStream(FilePath, FileMode.Create, FileAccess.ReadWrite, FileShare.Read);
+                    int fd = (int)_file.SafeFileHandle.DangerousGetHandle();
+                    _muxer = Ndk.AMediaMuxer_new(fd, 0 );
+                    if (_muxer == IntPtr.Zero) throw new Exception("muxer create failed");
+                    if (Rotation != 0) { int hint = Ndk.AMediaMuxer_setOrientationHint(_muxer, Rotation); Mod.Log.Msg($"Recording: portrait video (rotation {Rotation}, status {hint})"); }
+                }
+                _stride = stride; _slice = slice;
 
                 _yuv = new RenderTexture(stride, slice * 3 / 2, 0, RenderTextureFormat.R8, RenderTextureReadWrite.Linear)
                 { name = "QuestShade_NV12", useMipMap = false, filterMode = FilterMode.Point, hideFlags = HideFlags.HideAndDontSave };
                 _yuv.Create();
                 _yuvMat = new Material(ShaderPack.Yuv) { hideFlags = HideFlags.HideAndDontSave };
                 _yuvMat.SetVector("_QS_YUVSize", new Vector4(Width, Height, slice * 1.5f, 1));
-                _yuvMat.SetVector("_QS_YUVLayout", new Vector4(slice, stride, 0, 0));
+                _yuvMat.SetVector("_QS_YUVLayout", new Vector4(slice, stride, stream && PortraitStream ? 1 : 0, 0));
 
                 _vTrack = _aTrack = -1; _muxStarted = _vEos = _aEos = _aEosQueued = false; _step = 0; _frames = 0; _dropped = 0;
                 _pcmLen = 0; _aFrames = 0; _early.Clear();
                 _t0 = Time.realtimeSinceStartup; _nextBeat = 1f;
                 Recording = true;
+                if (stream)
+                {
+                    Stream.Configure(Width, Height, fps, bitrate / 1000, cfg.AudioBitrateKbps, _cap?.Rate ?? 48000);
+                    Stream.Start();
+                    Diag($"streaming: audio={(_audio != IntPtr.Zero ? _cap.Status : "none")}");
+                    Mod.Log.Msg($"Stream {Width}x{Height}@{fps} {bitrate / 1000} kbps H.264{(_audio != IntPtr.Zero ? " + audio" : "")}");
+                    return true;
+                }
                 SetMarker(FilePath);
                 Diag($"recording: audio={(_audio != IntPtr.Zero ? _cap.Status : "none")}");
                 Mod.Log.Msg($"Recording {Width}x{Height}@{fps} {bitrate / 1000} kbps (NV12 {stride}x{slice}){(_audio != IntPtr.Zero ? " + audio" : "")} -> {FilePath}");
@@ -161,18 +190,21 @@ namespace QuestShade
             }
             catch (Exception e)
             {
-                Mod.Log.Error("Recording failed to start: " + e.Message);
+                Mod.Log.Error((stream ? "Stream" : "Recording") + " failed to start: " + e.Message);
                 Release();
-                try { if (File.Exists(FilePath)) File.Delete(FilePath); } catch { }
+                try { if (FilePath != null && File.Exists(FilePath)) File.Delete(FilePath); } catch { }
                 return false;
             }
         }
 
         public string Codec { get; private set; } = "";
 
-        private IntPtr CreateVideoEncoder(int fps, int bitrate, bool high)
+        private IntPtr CreateVideoEncoder(int fps, int bitrate, bool stream)
         {
-            foreach (var (mime, name, br) in new[] { ("video/hevc", "HEVC", bitrate), ("video/avc", "H.264", (int)(bitrate * 1.6f)) })
+            // Streams: H.264 only (what Twitch / YouTube / Kick take over RTMP), constant bitrate, the bitrate as set.
+            var choices = stream ? new[] { ("video/avc", "H.264", bitrate) }
+                                 : new[] { ("video/hevc", "HEVC", bitrate), ("video/avc", "H.264", (int)(bitrate * 1.6f)) };
+            foreach (var (mime, name, br) in choices)
             {
                 IntPtr fmt = Ndk.AMediaFormat_new(), codec = IntPtr.Zero;
                 try
@@ -188,6 +220,7 @@ namespace QuestShade
                     Ndk.AMediaFormat_setInt32(fmt, "color-range", 2);
                     Ndk.AMediaFormat_setInt32(fmt, "color-transfer", 3);
                     if (mime == "video/hevc") Ndk.AMediaFormat_setInt32(fmt, "profile", 1);
+                    if (stream) Ndk.AMediaFormat_setInt32(fmt, "bitrate-mode", 2); // CBR: steady upload, what streaming sites expect
                     codec = Ndk.AMediaCodec_createEncoderByType(mime);
                     if (codec == IntPtr.Zero) continue;
                     if (Ndk.AMediaCodec_configure(codec, fmt, IntPtr.Zero, IntPtr.Zero, 1) != 0 || Ndk.AMediaCodec_start(codec) != 0)
@@ -284,6 +317,7 @@ namespace QuestShade
                 if (dst == IntPtr.Zero || cap <= 0) { Ndk.AMediaCodec_queueInputBuffer(_codec, (UIntPtr)idx, 0, UIntPtr.Zero, (ulong)Math.Max(0, pts), 0); _dropped++; return; }
                 int n = (int)Math.Min(size, cap);
                 Buffer.MemoryCopy((void*)data, (void*)dst, cap, n);
+                if (Stream != null) StreamWatermark.Apply((byte*)dst, n, Width, Height, _stride, _slice);
                 size = n;
                 _frames++;
             }
@@ -322,6 +356,22 @@ namespace QuestShade
             {
                 long o = (long)Ndk.AMediaCodec_dequeueOutputBuffer(codec, out var info, untilEos ? 10_000L : 0L);
                 if (o == INFO_TRY_AGAIN_LATER) { if (untilEos) continue; return; }
+                if (o == INFO_OUTPUT_FORMAT_CHANGED && Stream != null)
+                {
+                    // Codec config can arrive here (csd-0 / csd-1) instead of as a codec-config buffer.
+                    var f = Ndk.AMediaCodec_getOutputFormat(codec);
+                    try
+                    {
+                        if (video && !_vCfg)
+                        {
+                            var a = Csd(f, "csd-0"); var b = Csd(f, "csd-1");
+                            if (a != null && b != null) { var all = new byte[a.Length + b.Length]; Buffer.BlockCopy(a, 0, all, 0, a.Length); Buffer.BlockCopy(b, 0, all, a.Length, b.Length); Stream.VideoConfig(all); _vCfg = true; }
+                        }
+                        else if (!video && !_aCfg) { var a = Csd(f, "csd-0"); if (a != null) { Stream.AudioConfig(a); _aCfg = true; } }
+                    }
+                    finally { Ndk.AMediaFormat_delete(f); }
+                    continue;
+                }
                 if (o == INFO_OUTPUT_FORMAT_CHANGED)
                 {
                     var f = Ndk.AMediaCodec_getOutputFormat(codec);
@@ -333,7 +383,25 @@ namespace QuestShade
                     continue;
                 }
                 if (o < 0) continue;
-                if ((info.flags & FLAG_CODEC_CONFIG) == 0 && info.size > 0)
+                if (Stream != null)
+                {
+                    if (info.size > 0)
+                    {
+                        var buf = Ndk.AMediaCodec_getOutputBuffer(codec, (UIntPtr)o, out _);
+                        if (buf != IntPtr.Zero)
+                        {
+                            var bytes = new byte[info.size];
+                            Marshal.Copy(IntPtr.Add(buf, info.offset), bytes, 0, info.size);
+                            if ((info.flags & FLAG_CODEC_CONFIG) != 0)
+                            {
+                                if (video) { Stream.VideoConfig(bytes); _vCfg = true; } else { Stream.AudioConfig(bytes); _aCfg = true; }
+                            }
+                            else if (video) Stream.Video(bytes, info.presentationTimeUs, (info.flags & FLAG_KEY_FRAME) != 0);
+                            else Stream.Audio(bytes, info.presentationTimeUs);
+                        }
+                    }
+                }
+                else if ((info.flags & FLAG_CODEC_CONFIG) == 0 && info.size > 0)
                 {
                     var buf = Ndk.AMediaCodec_getOutputBuffer(codec, (UIntPtr)o, out _);
                     if (buf != IntPtr.Zero) Write(video, buf, info);
@@ -345,7 +413,7 @@ namespace QuestShade
 
         private void TryStartMuxer()
         {
-            if (_muxStarted || _vTrack < 0 || (_audio != IntPtr.Zero && _aTrack < 0)) return;
+            if (_muxer == IntPtr.Zero || _muxStarted || _vTrack < 0 || (_audio != IntPtr.Zero && _aTrack < 0)) return;
             Ok(Ndk.AMediaMuxer_start(_muxer), "muxer start");
             _muxStarted = true;
             Step(8, "muxer started");
@@ -371,6 +439,16 @@ namespace QuestShade
         public string Stop()
         {
             if (!Recording) return null;
+            if (Stream != null)
+            {
+                // Livestream: nothing to save; just stop the encoders and hang up.
+                Recording = false;
+                var st = Stream;
+                Mod.Log.Msg($"Stream stopped ({_frames} frames, {_dropped} dropped here, {st.Dropped} dropped for bandwidth, {st.BytesSent / 1048576f:0.0} MB sent)");
+                Diag("stream stopped");
+                Release();
+                return null;
+            }
             Recording = false;
             string file = FilePath;
             try
@@ -410,6 +488,8 @@ namespace QuestShade
             Recording = false;
             _pending.Clear();
             _early.Clear();
+            try { Stream?.Dispose(); } catch { }
+            Stream = null;
             try { _cap?.Stop(); } catch { }
             _cap = null;
             try { if (_muxer != IntPtr.Zero) Ndk.AMediaMuxer_delete(_muxer); } catch { }
@@ -438,6 +518,7 @@ namespace QuestShade
             [DllImport(Lib)] public static extern void AMediaFormat_setInt32(IntPtr fmt, [MarshalAs(UnmanagedType.LPStr)] string name, int value);
             [DllImport(Lib)] public static extern void AMediaFormat_setString(IntPtr fmt, [MarshalAs(UnmanagedType.LPStr)] string name, [MarshalAs(UnmanagedType.LPStr)] string value);
             [DllImport(Lib)] [return: MarshalAs(UnmanagedType.U1)] public static extern bool AMediaFormat_getInt32(IntPtr fmt, [MarshalAs(UnmanagedType.LPStr)] string name, out int value);
+            [DllImport(Lib)] [return: MarshalAs(UnmanagedType.U1)] public static extern bool AMediaFormat_getBuffer(IntPtr fmt, [MarshalAs(UnmanagedType.LPStr)] string name, out IntPtr data, out UIntPtr size);
 
             [DllImport(Lib)] public static extern IntPtr AMediaCodec_createEncoderByType([MarshalAs(UnmanagedType.LPStr)] string mime);
             [DllImport(Lib)] public static extern int AMediaCodec_configure(IntPtr codec, IntPtr format, IntPtr surface, IntPtr crypto, uint flags);

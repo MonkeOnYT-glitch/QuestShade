@@ -75,6 +75,35 @@ namespace QuestShade
         public float GameVolume = 1f, MicVolume = 1f;
         internal bool _audioMigrated, _micMigrated;
         public int AudioBitrateKbps = 128;
+        // Livestream (beta, Testers only): RTMP server + stream key from Twitch / YouTube / Kick.
+        public string StreamServer = "rtmp://live.twitch.tv/app", StreamKey = "";
+        public int StreamWidth = 1280, StreamHeight = 720, StreamFps = 30, StreamBitrateKbps = 4500; // landscape size; Vertical swaps it (1080x1920 etc.)
+        public bool StreamVertical; // 9:16 stream for TikTok Live / YouTube Shorts
+        public bool BetaOverride; // [Beta] Enabled = true shows beta features without the test-builds updater
+
+        // Writes a [Stream] section people can fill in (only once someone opens the livestream page).
+        public void EnsureStreamSection()
+        {
+            try
+            {
+                if (File.Exists(MainIniPath) && File.ReadAllText(MainIniPath).IndexOf("[Stream]", StringComparison.OrdinalIgnoreCase) >= 0) return;
+                File.AppendAllText(MainIniPath,
+                    "\n[Stream]\n" +
+                    "; Livestream (beta). Server + stream key from your streaming site:\n" +
+                    ";   Twitch:  rtmp://live.twitch.tv/app            (key: dashboard.twitch.tv > Settings > Stream)\n" +
+                    ";   YouTube: rtmp://a.rtmp.youtube.com/live2      (key: YouTube Studio > Go live > Stream)\n" +
+                    ";   Kick:    the rtmps:// server from Kick > Settings > Stream\n" +
+                    "; Never share your stream key: anyone with it can stream to your channel.\n" +
+                    $"Server = {StreamServer}\n" +
+                    "Key = \n" +
+                    "Quality = 720p   ; 480p, 720p or 1080p\n" +
+                    "Vertical = false ; true = 9:16 (e.g. 1080x1920) for TikTok Live / YouTube Shorts\n" +
+                    "Fps = 30\n" +
+                    "Bitrate = auto   ; kbps, auto = 480p 2500, 720p 4500, 1080p 6000\n");
+                _mainTime = Mtime(MainIniPath);
+            }
+            catch (Exception e) { Mod.Log.Warning("Couldn't add the [Stream] settings: " + e.Message); }
+        }
 
         public Ini Preset { get; private set; }
         public string PresetFile { get; private set; }
@@ -169,6 +198,16 @@ namespace QuestShade
             ShareAuthor = ini.Str("Sharing", "Author", "") ?? "";
             ShareClientId = ini.Str("Sharing", "ClientId", "") ?? "";
             if (ShareClientId.Length < 16) { ShareClientId = Guid.NewGuid().ToString("N"); _pendingClientId = true; }
+            StreamServer = (ini.Str("Stream", "Server", "rtmp://live.twitch.tv/app") ?? "").Trim();
+            StreamKey = (ini.Str("Stream", "Key", "") ?? "").Trim();
+            var sq = (ini.Str("Stream", "Quality", "720p") ?? "720p").Trim().ToLowerInvariant();
+            int sAuto;
+            (StreamWidth, StreamHeight, sAuto) = sq switch { "480p" => (848, 480, 2500), "1080p" => (1920, 1080, 6000), _ => (1280, 720, 4500) };
+            StreamFps = Mathf.Clamp((int)ini.Float("Stream", "Fps", 30), 20, 60);
+            StreamVertical = ini.Bool("Stream", "Vertical", false);
+            var sb = (ini.Str("Stream", "Bitrate", "auto") ?? "auto").Trim();
+            StreamBitrateKbps = int.TryParse(sb, out int skb) ? Mathf.Clamp(skb, 800, 8000) : sAuto;
+            BetaOverride = ini.Bool("Beta", "Enabled", false);
             BloomDofHeadset = ini.Bool("General", "BloomDofHeadset", false);
             BloomDofPreview = ini.Bool("General", "BloomDofPreview", true);
             BloomDofCapture = ini.Bool("General", "BloomDofPhotosVideo", true);

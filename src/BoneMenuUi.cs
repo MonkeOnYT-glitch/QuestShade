@@ -29,6 +29,28 @@ namespace QuestShade
             shoot.CreateFunction("Take photo", Color.cyan, () => mod.TakePhoto());
             shoot.CreateFunction("Record / stop", Color.red, () => mod.ToggleRecording());
             shoot.CreateInt("Photo timer (s)", Color.white, cfg.PhotoTimer, 1, 0, 10, v => cfg.PhotoTimer = v);
+            if (mod.Beta)
+            {
+                // Livestream (beta, Testers only): streams the camera view to Twitch / YouTube / Kick over RTMP.
+                var live = cam.CreatePage("Livestream (beta)", new Color(1f, 0.3f, 0.35f), 8, true);
+                live.CreateFunction("Go live / end stream", Color.red, () => mod.ToggleStreaming());
+                live.CreateFunction("Stream status", Color.white, () => Notify(mod.StreamStatus, 3f));
+                live.CreateFunction(string.IsNullOrWhiteSpace(cfg.StreamKey) ? "Stream key: NOT SET (press for how)" : "Stream key: set", string.IsNullOrWhiteSpace(cfg.StreamKey) ? Color.yellow : Color.green,
+                    () => { cfg.EnsureStreamSection(); Notify("Open UserData/QuestShade/QuestShade.ini, find [Stream], paste your Server + Key, save. It reloads by itself.", 7f); });
+                live.CreateBool("Vertical 9:16 (TikTok / Shorts)", Color.white, cfg.StreamVertical, v =>
+                {
+                    if (mod.Streaming) { Notify("End the stream first, then switch", 2f); return; }
+                    cfg.StreamVertical = v; cfg.EnsureStreamSection(); cfg.SetKey("Stream", "Vertical", v ? "true" : "false");
+                    Notify(v ? $"Vertical stream: {cfg.StreamHeight}x{cfg.StreamWidth}" : $"Landscape stream: {cfg.StreamWidth}x{cfg.StreamHeight}", 2f);
+                });
+                live.CreateFunction("Quality / size", Color.gray, () =>
+                {
+                    int sw = cfg.StreamVertical ? cfg.StreamHeight : cfg.StreamWidth, sh = cfg.StreamVertical ? cfg.StreamWidth : cfg.StreamHeight;
+                    Notify($"{sw}x{sh} {cfg.StreamFps}fps {cfg.StreamBitrateKbps} kbps. Change Quality / Fps / Bitrate under [Stream] in QuestShade.ini (lower it if the stream falls behind).", 6f);
+                });
+                live.CreateFunction("Streams show a QuestShade watermark", Color.gray, () => Notify("Only on the stream, never in your headset or saved videos.", 3f));
+                cfg.EnsureStreamSection();
+            }
             var view = cam.CreatePage("View", Color.white, 8, true);
             view.CreateEnum("Mode", Color.white, cfg.DefaultMode, v => mod.SetCameraMode((CamMode)v));
             view.CreateFunction("Flip camera", Color.white, () => mod.FlipCamera());

@@ -9,8 +9,11 @@
     <OutputPath Condition="'$(QSStore)' == 'true'">bin/$(QSTarget)-Store/</OutputPath>
     <AssemblyName>QuestShade</AssemblyName>
     <DefineConstants Condition="'$(ShadowDebug)' == 'true'">$(DefineConstants);QS_SHADOW_DEBUG</DefineConstants>
-    <Version>1.7.81</Version>
-    <Version Condition="'$(ShadowDebug)' == 'true'">1.7.82</Version>
+    <!-- dotnet build -p:QSBeta=true : beta build (GitHub pre-release), beta features always on -->
+    <DefineConstants Condition="'$(QSBeta)' == 'true'">$(DefineConstants);QS_BETA</DefineConstants>
+    <OutputPath Condition="'$(QSBeta)' == 'true'">bin\$(QSTarget)-Beta\</OutputPath>
+    <Version>1.7.82</Version>
+    <Version Condition="'$(ShadowDebug)' == 'true'">1.7.83</Version>
     <RootNamespace>QuestShade</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
@@ -68,6 +71,7 @@
     <EmbeddedResource Include="Defaults\**\*" LogicalName="QuestShade.Defaults.%(RecursiveDir)%(Filename)%(Extension)" />
     <EmbeddedResource Include="Ports\*.ini" LogicalName="QuestShade.Ports.%(Filename)%(Extension)" />
     <EmbeddedResource Include="Luts\*.bin" LogicalName="QuestShade.Luts.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Assets\watermark.bin" LogicalName="QuestShade.Assets.watermark.bin" />
   </ItemGroup>
 
   <!-- A DLL without the shader pack loads but renders nothing (that is how 1.7.45 shipped). Refuse to build one. -->

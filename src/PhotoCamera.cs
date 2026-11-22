@@ -708,7 +708,7 @@ namespace QuestShade
                 }
                 _rec.Tick();
                 _recAccum += dt;
-                float rstep = 1f / cfg.RecordFps;
+                float rstep = 1f / _recFps;
                 bool rrender = _recAccum >= rstep;
                 if (rrender) SetFar(_fullFar);
                 if (rrender) { _recAccum = Mathf.Min(_recAccum - rstep, rstep); _recRendered = true; }

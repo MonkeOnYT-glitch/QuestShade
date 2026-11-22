@@ -11,21 +11,51 @@ namespace QuestShade
 {
     internal sealed partial class PhotoCamera
     {
-        public bool StartRecording(Config cfg, out string error)
+        public bool Streaming => _rec.Streaming;
+        public RtmpClient Stream => _rec.Stream;
+
+        // Livestream (beta): the same pipeline as recording, but the encoded picture goes to RTMP instead of a file.
+        public bool StartStreaming(Config cfg, out string error)
+        {
+            error = null;
+            if (Recording) { error = Streaming ? null : "Stop recording first"; return Streaming; }
+            if (string.IsNullOrWhiteSpace(cfg.StreamKey)) { error = "Add your stream key in QuestShade.ini under [Stream] first"; return false; }
+            _rec.Stream = new RtmpClient(cfg.StreamServer, cfg.StreamKey);
+            // Vertical streams render sideways exactly like vertical recordings (same preview, timestamp and framing);
+            // the NV12 conversion turns the picture upright since RTMP can't carry a rotation flag.
+            _rec.PortraitStream = cfg.StreamVertical;
+            _orientOverride = cfg.StreamVertical ? 2 : 1;
+            _vertical = cfg.StreamVertical;
+            if (StartRecording(cfg, out error, true)) return true;
+            try { _rec.Stream?.Dispose(); } catch { }
+            _rec.Stream = null; _rec.PortraitStream = false; _orientOverride = 0;
+            return false;
+        }
+
+        public bool StartRecording(Config cfg, out string error) => StartRecording(cfg, out error, false);
+
+        private int _recFps = 30;
+
+        private bool StartRecording(Config cfg, out string error, bool stream)
         {
             error = null;
             if (!Open) { error = "Open the camera first"; return false; }
             if (Recording) return true;
             if (PhotoBusy) { error = "Wait for the photo to finish"; return false; }
-            int w = cfg.RecordWidth & ~15, h = cfg.RecordHeight & ~1;
+            int w = (stream ? cfg.StreamWidth : cfg.RecordWidth) & ~15, h = (stream ? cfg.StreamHeight : cfg.RecordHeight) & ~1;
+            _recFps = stream ? cfg.StreamFps : cfg.RecordFps;
+            int kbps = stream ? cfg.StreamBitrateKbps : cfg.RecordBitrateKbps;
+            // The picture is always rendered landscape; a vertical stream's encoder gets it turned upright (e.g. 1080x1920).
+            bool portrait = stream && cfg.StreamVertical;
+            int encW = portrait ? cfg.StreamHeight : w, encH = portrait ? cfg.StreamWidth : h;
             _recRT = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
             { name = "QuestShade_Record", antiAliasing = 1, useMipMap = false, hideFlags = HideFlags.HideAndDontSave };
             _recRT.Create();
             _rec.Rotation = _vertical ? 270 : 0;
-            if (!_rec.Start(w, h, cfg.RecordFps, cfg.RecordBitrateKbps * 1000, PhotoSaver.RecordFolder, cfg))
+            if (!_rec.Start(encW, encH, _recFps, kbps * 1000, PhotoSaver.RecordFolder, cfg))
             {
                 _recRT.Release(); UnityEngine.Object.Destroy(_recRT); _recRT = null;
-                error = "Recording failed to start (see log)";
+                error = stream ? "Stream failed to start (see log)" : "Recording failed to start (see log)";
                 return false;
             }
             LeavePreviewHQ();
@@ -57,6 +87,7 @@ namespace QuestShade
         {
             if (!Recording) return null;
             var file = _rec.Stop();
+            _rec.PortraitStream = false; _orientOverride = 0;
             PhotoSaver.PublishVideo(file);
             if (_cam != null) { _cam.targetTexture = _previewRT; _cam.enabled = false; }
             if (_camData != null) _camData.renderShadows = false;

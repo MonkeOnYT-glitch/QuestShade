@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.82-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.83-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.81", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.82", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -168,6 +168,7 @@ namespace QuestShade
                 var head = _fx.BoundCamera;
                 _fx.PhotoCamera = _cam.Open ? _cam.LensCamera : null;
                 _cam.LateTick(_cfg, head, Time.unscaledDeltaTime, _ctl.GripL, _ctl.GripR);
+                StreamTick();
                 if (!_cam.Open)
                 {
                     _cam.PrewarmTick(_cfg, head);
@@ -438,8 +439,80 @@ namespace QuestShade
             else Log.Msg("Photo skipped (busy)");
         }
 
+        // ---------- Livestream (beta) ----------
+        // Beta features show for Testers: people running the test-builds updater, or with [Beta] Enabled = true.
+        private static bool? _testUpdater;
+        internal bool Beta
+        {
+            get
+            {
+#if QS_BETA
+                return true; // beta build (pre-release)
+#endif
+                if (_cfg != null && _cfg.BetaOverride) return true;
+                if (_testUpdater == null)
+                {
+                    _testUpdater = false;
+                    try { foreach (var m in MelonBase.RegisteredMelons) if (m?.Info?.Name != null && m.Info.Name.Contains("(test builds)")) { _testUpdater = true; break; } } catch { }
+                    Log.Msg(_testUpdater == true ? "Beta features on (test-builds updater found)" : "Beta features off");
+                }
+                return _testUpdater == true;
+            }
+        }
+
+        internal bool Streaming => _cam != null && _cam.Streaming;
+        internal string StreamStatus
+        {
+            get
+            {
+                if (!Streaming) return "Not streaming";
+                var s = _cam.Stream;
+                if (s.Live) return $"LIVE {(int)_cam.RecordSeconds / 60}:{(int)_cam.RecordSeconds % 60:00}{(s.SecondsBehind > 1f ? $", {s.SecondsBehind:0}s behind (slow Wi-Fi)" : "")}";
+                return "Connecting: " + s.Status;
+            }
+        }
+
+        private bool _wasLive;
+
+        internal void ToggleStreaming()
+        {
+            if (!Beta) return;
+            if (Streaming)
+            {
+                _cam.StopRecording(); _wasLive = false;
+                _ctl.Buzz(_cfg, false, 0.6f, 0.1f);
+                Notify("Stream ended", 2f);
+                return;
+            }
+            if (_cam.Recording) { Notify("Stop recording first", 2f); return; }
+            if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+            if (_cam.StartStreaming(_cfg, out var err))
+            {
+                _wasLive = false;
+                _ctl.Buzz(_cfg, false, 0.8f, 0.1f);
+                Notify("Going live... connecting", 2f);
+            }
+            else Notify(err ?? "Stream failed to start (see log)", 3f);
+        }
+
+        private void StreamTick()
+        {
+            if (!Streaming) { _wasLive = false; return; }
+            var s = _cam.Stream;
+            if (s.Failed)
+            {
+                string why = s.Error ?? "unknown error";
+                _cam.StopRecording(); _wasLive = false;
+                _ctl.Buzz(_cfg, false, 1f, 0.3f);
+                Notify("Stream stopped: " + why, 5f);
+                return;
+            }
+            if (s.Live && !_wasLive) { _wasLive = true; _ctl.Buzz(_cfg, true, 0.8f, 0.15f); Notify("You're LIVE!", 2.5f); }
+        }
+
         internal void ToggleRecording()
         {
+            if (Streaming) { Notify("You're streaming: stop it in BoneMenu > Camera > Livestream", 2.5f); return; }
             if (_cam.Recording)
             {
                 var file = _cam.StopRecording();

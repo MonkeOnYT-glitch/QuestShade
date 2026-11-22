@@ -32,6 +32,10 @@ Shader "Hidden/QuestShade/YUV"
 
             half3 Src(float2 uvTopDown)
             {
+                // _QS_YUVLayout.z = 1: vertical stream. The picture is rendered sideways (like vertical recordings, which an
+                // MP4 flags as "rotate 270 clockwise"); RTMP has no such flag, so turn it 90 degrees counter-clockwise here
+                // into a real portrait frame.
+                if (_QS_YUVLayout.z > 0.5) uvTopDown = float2(1 - uvTopDown.y, uvTopDown.x);
                 float2 uv = float2(uvTopDown.x, _QS_YUVSize.w > 0.5 ? 1 - uvTopDown.y : uvTopDown.y);
                 return LinearToSRGB(saturate(SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv, 0).rgb));
             }
