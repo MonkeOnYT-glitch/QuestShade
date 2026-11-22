@@ -173,6 +173,13 @@ namespace QuestShade
             return c != null ? c.GetThumbStickAxis() : new Vector2(float.NaN, float.NaN);
         }
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static bool GameStickTouch(int hand)
+        {
+            var c = hand == 1 ? BoneLib.Player.LeftController : BoneLib.Player.RightController;
+            return c != null && c.GetThumbStickTouch();
+        }
+
         // Controls debug: what a hand holds and how it's attached.
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static string HandState(int hand)

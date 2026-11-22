@@ -14,7 +14,8 @@ namespace QuestShade
         public static bool On = true;
         public static Func<int, string> HandState; // what a hand holds / is attached to (from BoneMenuUi, needs BoneLib)
         public static Func<string> CameraState;
-        public static Func<int, Vector2> GameStick; // BONELAB's own reading of the stick
+        public static Func<int, Vector2> GameStick;
+        public static Func<int, bool> GameTouch; // BONELAB's own thumb-on-stick reading
 
         private static readonly Queue<string> _events = new Queue<string>();
         private static Vector3 _lastPos; private static float _lastYaw, _speed, _yawRate, _lastT, _fileAt, _stuckLogAt, _leftPushed, _rightPushed;
@@ -68,7 +69,7 @@ namespace QuestShade
                 _fileAt = now + (_leftPushed > 0f || _rightPushed > 0f ? 0.25f : 1f);
                 Append($"L({l.x:+0.00;-0.00},{l.y:+0.00;-0.00}) click={B(ctl.LeftClick)} grip={B(ctl.GripL)} trig={B(ctl.Trigger(true))} | " +
                        $"R({r.x:+0.00;-0.00},{r.y:+0.00;-0.00}) click={B(ctl.RightClick)} grip={B(ctl.GripR)} trig={B(ctl.Trigger(false))} | " +
-                       $"game L{GS(1)} R{GS(2)} | move {_speed:0.00} m/s turn {_yawRate:0} deg/s | held L={Hand(1)} R={Hand(2)} | cam {Cam()}");
+                       $"touch raw L={B(ctl.LeftTouch)} R={B(ctl.RightTouch)} game L={GT(1)} R={GT(2)} | game L{GS(1)} R{GS(2)} | move {_speed:0.00} m/s turn {_yawRate:0} deg/s | held L={Hand(1)} R={Hand(2)} | cam {Cam()}");
             }
 
             bool moveStuck = _leftPushed > 0.4f && _speed < 0.15f;
@@ -90,6 +91,7 @@ namespace QuestShade
         }
 
         private static string B(bool b) => b ? "1" : "0";
+        private static string GT(int h) { try { return GameTouch == null ? "?" : (GameTouch(h) ? "1" : "0"); } catch { return "err"; } }
         private static string GS(int h) { try { if (GameStick == null) return "(?)"; var v = GameStick(h); return $"({v.x:+0.00;-0.00},{v.y:+0.00;-0.00})"; } catch { return "(err)"; } }
         private static string Hand(int h) { try { return HandState != null ? HandState(h) : "?"; } catch (Exception e) { return "err " + e.Message; } }
         private static string Cam() { try { return CameraState != null ? CameraState() : "?"; } catch { return "?"; } }
