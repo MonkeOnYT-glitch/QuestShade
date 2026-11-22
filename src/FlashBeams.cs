@@ -85,7 +85,9 @@ namespace QuestShade
             go.transform.localRotation = Quaternion.identity;
             go.transform.localScale = new Vector3(rad / Safe(s.x), rad / Safe(s.y), len / Safe(s.z));
             var c = l.color;
-            float k = Mathf.Clamp(l.intensity * 0.05f, 0.05f, 0.3f);
+            // A faint haze, not a white wall: bloom (especially on the camera) multiplies whatever the beam adds, and pointed into
+            // fog or the sky a strong beam washed the whole picture out.
+            float k = Mathf.Clamp(l.intensity * 0.015f, 0.02f, 0.07f);
             _mpb.SetColor(ColorId, new Color(c.r, c.g, c.b, k));
             r.SetPropertyBlock(_mpb);
         }
