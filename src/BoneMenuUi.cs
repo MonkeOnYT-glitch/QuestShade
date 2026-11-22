@@ -165,12 +165,25 @@ namespace QuestShade
             return 0;
         }
 
+        // Controls debug: what a hand holds and how it's attached.
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static string HandState(int hand)
+        {
+            var h = hand == 1 ? BoneLib.Player.LeftHand : BoneLib.Player.RightHand;
+            if (h == null) return "no hand";
+            var go = h.m_CurrentAttachedGO;
+            string held = go != null ? go.name : "nothing";
+            GameObject obj = null; try { obj = HeldObject(hand); } catch { }
+            return $"{held}{(obj != null && obj.name != held ? " (object " + obj.name + ")" : "")}";
+        }
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static bool Attach(int hand, GameObject root)
         {
             var h = hand == 1 ? BoneLib.Player.LeftHand : BoneLib.Player.RightHand;
-            if (h == null || root == null || h.m_CurrentAttachedGO != null) return false;
+            if (h == null || root == null || h.m_CurrentAttachedGO != null) { ControlsDebug.Event($"attach to {(hand == 1 ? "left" : "right")} hand skipped (hand busy: {(h != null && h.m_CurrentAttachedGO != null ? h.m_CurrentAttachedGO.name : "-")})"); return false; }
             var grip = root.GetComponentInChildren<Il2CppSLZ.Marrow.Grip>();
+            ControlsDebug.Event($"QuestShade attached {root.name} to the {(hand == 1 ? "left" : "right")} hand (grip {(grip != null ? grip.name : "none")})");
             h.AttachObject(grip != null ? grip.gameObject : root);
             return true;
         }

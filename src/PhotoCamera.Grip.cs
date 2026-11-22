@@ -88,6 +88,7 @@ namespace QuestShade
             _pinned = false;
             _grabAt = Time.unscaledTime;
             _grabCheckUntil = _grabAt + 0.3f;
+            ControlsDebug.Event($"camera grabbed by {(h == 0 ? "left" : "right")} hand");
             Mod.Log.Msg($"Camera grabbed ({(h == 0 ? "left" : "right")} hand, {(handle == 1 ? "left" : "right")} handle{(_grabOnHand ? "" : ", controller pose")})");
             Feedback?.Invoke(null, h == 0);
         }
@@ -99,6 +100,7 @@ namespace QuestShade
             _pinned = true;
             if (cancel) { _devPos = _blendPos; _devRot = _blendRot; Mod.Log.Msg("Camera grab skipped (your hand took an item)"); return; }
             Mod.Log.Msg("Camera placed");
+            ControlsDebug.Event("camera placed");
             Feedback?.Invoke(null, left);
         }
 

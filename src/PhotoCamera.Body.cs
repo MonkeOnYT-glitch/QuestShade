@@ -129,6 +129,7 @@ namespace QuestShade
             else if (cfg.FreezeOnRelease) { _prop.SetFrozen(true); SetAnchor(); _cupAt = -1; _braked = false; }
             else { _prop.Brake(false); _braked = false; }
             Mod.Log.Msg(held ? "Camera grabbed" : (cfg.FreezeOnRelease ? "Camera placed" : "Camera dropped"));
+            ControlsDebug.Event(held ? "camera prop grabbed" : (cfg.FreezeOnRelease ? "camera prop placed (freeze on release)" : "camera prop dropped"));
             Feedback?.Invoke(null, false);
         }
 

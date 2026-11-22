@@ -97,6 +97,7 @@ namespace QuestShade
         public void Brake(bool on)
         {
             if (Body == null) return;
+            ControlsDebug.Event($"camera prop brake {(on ? "on" : "off")}");
             try
             {
                 if (_drag < 0f) { _drag = Body.drag; _angDrag = Body.angularDrag; }
@@ -111,6 +112,7 @@ namespace QuestShade
         public void SetFrozen(bool frozen)
         {
             if (Body == null || frozen == Frozen) return;
+            ControlsDebug.Event($"camera prop {(frozen ? "frozen in place" : "unfrozen")}");
             try
             {
                 if (_drag < 0f) { _drag = Body.drag; _angDrag = Body.angularDrag; }
@@ -127,6 +129,7 @@ namespace QuestShade
         public void IgnoreCollisions(Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<Collider> others, bool quiet = false)
         {
             if (Root == null || others == null) return;
+            if (!quiet) ControlsDebug.Event("camera prop set to ignore collisions with your body");
             int n = 0;
             try
             {

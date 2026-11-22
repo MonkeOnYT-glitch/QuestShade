@@ -70,6 +70,8 @@ namespace QuestShade
         private bool _bothFired;
         private bool _keyboardOk = true;
         private bool _lGrip, _rGrip;
+        public Vector2 LeftStick, RightStick;
+        public bool LeftClick, RightClick;
         public bool GripL => _lGrip;
         public bool GripR => _rGrip;
         private bool _lTrig, _rTrig;
@@ -99,6 +101,7 @@ namespace QuestShade
             Vector2 la = default, ra = default;
             if (_left.isValid) _left.TryGetFeatureValue(CommonUsages.primary2DAxis, out la);
             if (_right.isValid) _right.TryGetFeatureValue(CommonUsages.primary2DAxis, out ra);
+            LeftStick = la; RightStick = ra; LeftClick = l; RightClick = r;
             if (_l.Down && la.sqrMagnitude > 0.16f) _l.Consume();
             if (_r.Down && ra.sqrMagnitude > 0.16f) _r.Consume();
 
