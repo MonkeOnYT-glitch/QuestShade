@@ -61,6 +61,27 @@ namespace QuestShade
             _have = true; _lastPos = p; _lastYaw = yaw;
 
             Vector2 l = ctl.LeftStick, r = ctl.RightStick;
+            // Full-rate history (last ~4 s) for frozen-input detection and the manual marker.
+            Vector2 gl = Vector2.zero, gr = Vector2.zero;
+            try { if (GameStick != null) { gl = GameStick(1); gr = GameStick(2); } } catch { }
+            _ring[_ringW] = new Sample { T = now, L = l, R = r, GL = gl, GR = gr, Grip = (ctl.GripL ? 1 : 0) | (ctl.GripR ? 2 : 0), Speed = _speed };
+            _ringW = (_ringW + 1) % _ring.Length; if (_ringN < _ring.Length) _ringN++;
+            // Frozen input: the controller reports the exact same pushed value for over 1.5 s (a thumb can't hold it that still).
+            if (l.magnitude > 0.3f && l == _frozenVal) _frozenFor += dt; else { _frozenFor = 0f; _frozenVal = l; }
+            if (r.magnitude > 0.3f && r == _frozenValR) _frozenForR += dt; else { _frozenForR = 0f; _frozenValR = r; }
+            bool mismatch = (l - gl).magnitude > 0.3f; // left only: after a snap turn BONELAB holds the right stick at zero on purpose
+            _mismatchFor = mismatch ? _mismatchFor + dt : 0f;
+            // Manual marker: hold both triggers and both grips for 1 s.
+            bool mark = ctl.GripL && ctl.GripR && ctl.Trigger(true) && ctl.Trigger(false);
+            _markFor = mark ? _markFor + dt : 0f;
+            if (now >= _dumpAt)
+            {
+                string why = _markFor > 1f ? "MANUAL MARK (both triggers + grips)" :
+                             _frozenFor > 1.5f ? $"LEFT STICK FROZEN at ({l.x:0.000},{l.y:0.000}) for {_frozenFor:0.0}s" :
+                             _frozenForR > 1.5f ? $"RIGHT STICK FROZEN at ({r.x:0.000},{r.y:0.000}) for {_frozenForR:0.0}s" :
+                             _mismatchFor > 0.5f ? "BONELAB DISAGREES with the controller (left stick) for 0.5s" : null;
+                if (why != null) { _dumpAt = now + 6f; Dump(why, ctl); }
+            }
             _leftPushed = l.magnitude > 0.5f ? _leftPushed + dt : 0f;
             _rightPushed = Mathf.Abs(r.x) > 0.5f ? _rightPushed + dt : 0f;
 
@@ -88,6 +109,30 @@ namespace QuestShade
                 Mod.Log.Warning(sb.ToString().TrimEnd());
                 Append(sb.ToString().TrimEnd());
             }
+        }
+
+        private struct Sample { public float T, Speed; public Vector2 L, R, GL, GR; public int Grip; }
+        private static readonly Sample[] _ring = new Sample[360];
+        private static int _ringW, _ringN;
+        private static Vector2 _frozenVal, _frozenValR;
+        private static float _frozenFor, _frozenForR, _mismatchFor, _markFor, _dumpAt;
+
+        private static void Dump(string why, Controls ctl)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append($"[Controls] {why} - last {_ringN} frames (raw controller vs what BONELAB sees):\n");
+            sb.Append($"    left hand: {Hand(1)} | right hand: {Hand(2)} | touch raw L={B(ctl.LeftTouch)} R={B(ctl.RightTouch)} game L={GT(1)} R={GT(2)} | camera: {Cam()}\n");
+            int start = (_ringW - _ringN + _ring.Length) % _ring.Length;
+            float t0 = _ring[start].T;
+            for (int i = 0; i < _ringN; i += 3) // every 3rd frame keeps it readable (~24 lines per second)
+            {
+                var s = _ring[(start + i) % _ring.Length];
+                sb.Append($"    {s.T - t0:0.00}s L({s.L.x:+0.000;-0.000},{s.L.y:+0.000;-0.000}) game({s.GL.x:+0.00;-0.00},{s.GL.y:+0.00;-0.00})  R({s.R.x:+0.000;-0.000},{s.R.y:+0.000;-0.000}) game({s.GR.x:+0.00;-0.00},{s.GR.y:+0.00;-0.00})  grip {(s.Grip & 1)}{(s.Grip >> 1)}  move {s.Speed:0.00}\n");
+            }
+            sb.Append("    recent QuestShade events:\n");
+            foreach (var e in _events) sb.Append("      ").Append(e).Append('\n');
+            Mod.Log.Warning(sb.ToString().TrimEnd());
+            Append(sb.ToString().TrimEnd());
         }
 
         private static string B(bool b) => b ? "1" : "0";
