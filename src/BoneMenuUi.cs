@@ -112,27 +112,21 @@ namespace QuestShade
                 slow.CreateBool("Cinematic zoom on the camera", Color.white, cfg.SlowMoZoom, v => { cfg.SlowMoZoom = v; cfg.SaveMenuSettings(); });
 
                 var tl = beta.CreatePage("Camera timeline", Color.white, 8, true);
-                // Timeline mod support: record your scene in Timeline, press Play there, and QuestShade films the replay.
-                var tlm = tl.CreatePage("Timeline mod (record + replay)", new Color(0.45f, 0.9f, 1f), 8, true);
+                // Timeline director: shots pinned to moments of a Timeline mod recording, controlled from a panel you can scrub.
+                tl.CreateFunction("Open / close Timeline director", new Color(1f, 0.62f, 0.15f), () => mod.OpenDirector());
+                tl.CreateFunction("Show people (Timeline)", new Color(0.45f, 0.9f, 1f), () => mod.ShowTimelinePeople());
+                var tlm = tl.CreatePage("Timeline mod settings", new Color(0.45f, 0.9f, 1f), 8, true);
                 tlm.CreateFunction("Status", Color.white, () => Notify(mod.TimelineModStatus, 4f));
-                tlm.CreateFunction("How it works", info, () => Notify("Record your scene with the Timeline mod, then press Play in Timeline. QuestShade's camera follows Timeline's camera keyframes and records the replay with your preset, bloom and shadows.", 8f));
-                tlm.CreateBool("Film Timeline playback (follow its camera)", Color.green, cfg.TimelineFilm, v => { cfg.TimelineFilm = v; cfg.SaveMenuSettings(); });
+                tlm.CreateFunction("How it works", info, () => Notify("Record your scene with the Timeline mod. Open the director, scrub to a moment, add shots (free cam, first person, third person, chest or Timeline's camera). Press Play: QuestShade films each shot at exactly its time.", 9f));
+                tlm.CreateBool("Film Timeline playback", Color.green, cfg.TimelineFilm, v => { cfg.TimelineFilm = v; cfg.SaveMenuSettings(); });
                 tlm.CreateBool("Record video while Timeline plays", Color.white, cfg.TimelineAutoRecord, v => { cfg.TimelineAutoRecord = v; cfg.SaveMenuSettings(); });
-                tl.CreateFunction("How it works", info, () => Notify("Record a move: press Record, move the camera around, Stop, then Play it back. Or add keyframes and the camera flies smoothly between them.", 7f));
+                tl.CreateFunction("How it works", info, () => Notify("Director: pin camera shots to moments of a Timeline recording. Record a move: press Record, move the camera around, Stop, then Play it back.", 7f));
                 var mv = tl.CreatePage("Record a camera move", Color.white, 8, true);
                 _moveRecBtn = mv.CreateFunction("Record move", Color.red, () => mod.MoveRecord());
                 mv.CreateFunction("Play move", Color.cyan, () => mod.MovePlay(false));
                 mv.CreateFunction("Play move + record video", new Color(1f, 0.45f, 0.45f), () => mod.MovePlay(true));
                 mv.CreateFunction("Stop", Color.white, () => mod.TimelineStop());
-                var kf = tl.CreatePage("Keyframes", Color.white, 8, true);
-                kf.CreateFunction("Add keyframe (camera's current view)", Color.green, () => mod.TimelineAdd());
-                kf.CreateFunction("Play", Color.cyan, () => mod.TimelinePlay(false));
-                kf.CreateFunction("Play + record video", new Color(1f, 0.45f, 0.45f), () => mod.TimelinePlay(true));
-                kf.CreateFunction("Stop", Color.white, () => mod.TimelineStop());
-                kf.CreateFunction("Remove last keyframe", Color.white, () => mod.TimelineUndo());
-                kf.CreateFunction("Clear keyframes", Color.yellow, () => mod.TimelineClear());
-                kf.CreateFloat("Seconds between keyframes", Color.white, cfg.TimelineSeconds, 0.5f, 0.5f, 30f, v => { cfg.TimelineSeconds = v; cfg.SaveMenuSettings(); });
-                // Zoom for the current camera mode, live: each keyframe and recorded move keeps the zoom it had.
+                // Zoom for the current camera mode, live: each shot and recorded move keeps the zoom it had.
                 tl.CreateFloat("Camera zoom (field of view)", Color.white, mod.LiveFov, 5f, 10f, 150f, v => mod.SetLiveFov(v));
 
                 var cams = beta.CreatePage("New camera styles", Color.white, 8, true);
@@ -313,6 +307,25 @@ namespace QuestShade
         {
             var rig = BoneLib.Player.PhysicsRig;
             return rig != null ? rig.m_chest : null;
+        }
+
+        // Your live avatar's humanoid head bone (used to learn which way that avatar's head bone faces).
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static Transform LiveAvatarHead()
+        {
+            var av = BoneLib.Player.Avatar;
+            var an = av != null ? av.animator : null;
+            return an != null ? an.GetBoneTransform(HumanBodyBones.Head) : null;
+        }
+
+        // The physics body's head / chest: these go limp with the body when you ragdoll (Ragdoll mod or dying),
+        // unlike the headset, which stays where your real head is.
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static Transform BodyBone(bool head)
+        {
+            var rig = BoneLib.Player.PhysicsRig;
+            if (rig == null) return null;
+            return head ? rig.m_head : rig.m_chest;
         }
 
         private static readonly System.Collections.Generic.List<(Renderer r, bool was)> _hidden = new System.Collections.Generic.List<(Renderer, bool)>();

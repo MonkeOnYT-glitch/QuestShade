@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.91-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.92-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.90", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.91", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -39,6 +39,8 @@ namespace QuestShade
                 BetaOn = Beta; // before the saved camera mode is applied (beta-only modes)
                 if (_cfg._audioMigrated) { _cfg._audioMigrated = false; _cfg.SaveMenuSettings(); Log.Msg("Game audio + mic in recordings: on (new default)"); }
                 Sharing.Init(_cfg);
+                DirectorPanel.Notify = (m, s) => Notify(m, s); DirectorPanel.AddShot = DirectorAddShot;
+                DirectorPanel.RecordVideoOn = () => _cfg.TimelineAutoRecord; DirectorPanel.ToggleRecordVideo = () => { _cfg.TimelineAutoRecord = !_cfg.TimelineAutoRecord; _cfg.SaveMenuSettings(); };
                 PhotoSaver.ResolveFolder(_cfg.SaveFolder);
                 _cam.SetMode(_cfg.DefaultMode);
                 _cam.Fx = _fx;
@@ -61,7 +63,7 @@ namespace QuestShade
             if (_boneLib)
             {
                 try { BoneMenuUi.Build(this, _cfg); _cam.ChestProvider = BoneMenuUi.Chest; Focus.PlayerRoot = BoneMenuUi.PlayerRoot; _cam.HideHead = BoneMenuUi.HideHead; _cam.RestoreHead = BoneMenuUi.RestoreHead; _cam.UiLayerMask = BoneMenuUi.UiLayerMask; _cam.ActorPose = BoneMenuUi.ActorPose; _cam.HideHeadOf = BoneMenuUi.HideHeadOf; _cam.HeadToLayer = BoneMenuUi.HeadToLayer; Effects.LensHide = BoneMenuUi.LensHide; _cam.HeadRestore = BoneMenuUi.RestoreHeadLayer; _cam.OwnBodyToLayer = BoneMenuUi.OwnBodyToLayer;
-                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; FlashBeams.HeadsetLayer = () => _cam.LensHiddenLayer; FlashBeams.LensLayer = () => _cam.LensOnlyLayer; NullGlow.HeadsetLayer = () => _cam.LensHiddenLayer; NullGlow.LensLayer = () => _cam.LensOnlyLayer; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Shadows.Avatar = BoneMenuUi.AvatarRoot; Shadows.PlayerRoot = BoneMenuUi.PlayerRoot; ControlsDebug.HandState = BoneMenuUi.HandState; ControlsDebug.GameStick = BoneMenuUi.GameStick; ControlsDebug.GameTouch = BoneMenuUi.GameStickTouch; Shadows.Held = BoneMenuUi.HeldObject; Shadows.ItemRoot = BoneMenuUi.ItemRoot; Shadows.PlayerLayers = BoneMenuUi.PlayerLayerMask; Log.Msg("BoneMenu page added"); }
+                    _cam.SpawnCrate = BoneMenuUi.SpawnCrate; _cam.IsHeldBy = BoneMenuUi.IsHeld; _cam.AttachToHand = BoneMenuUi.Attach; _cam.PlayerColliders = BoneMenuUi.PlayerColliders; _cam.HandTransform = BoneMenuUi.HandTransform; _cam.HandBusy = BoneMenuUi.HandBusy; Flashlights.Held = BoneMenuUi.HeldObject; FlashBeams.HeadsetLayer = () => _cam.LensHiddenLayer; FlashBeams.LensLayer = () => _cam.LensOnlyLayer; NullGlow.HeadsetLayer = () => _cam.LensHiddenLayer; DirectorPanel.HiddenLayer = () => _cam.LensHiddenLayer; Director.LiveHead = BoneMenuUi.LiveAvatarHead; _cam.BodyBone = BoneMenuUi.BodyBone; _cam.PlayerDying = () => _dyingNow; NullGlow.LensLayer = () => _cam.LensOnlyLayer; Flashlights.ItemRoot = BoneMenuUi.ItemRoot; Shadows.Avatar = BoneMenuUi.AvatarRoot; Shadows.PlayerRoot = BoneMenuUi.PlayerRoot; ControlsDebug.HandState = BoneMenuUi.HandState; ControlsDebug.GameStick = BoneMenuUi.GameStick; ControlsDebug.GameTouch = BoneMenuUi.GameStickTouch; Shadows.Held = BoneMenuUi.HeldObject; Shadows.ItemRoot = BoneMenuUi.ItemRoot; Shadows.PlayerLayers = BoneMenuUi.PlayerLayerMask; Log.Msg("BoneMenu page added"); }
                 catch (Exception e) { _boneLib = false; Log.Warning("BoneLib found but menu failed (gestures still work): " + e.Message); }
             }
             else Log.Msg("BoneLib not found - using controller gestures only");
@@ -80,6 +82,7 @@ namespace QuestShade
             Lighting.OnLevel();
             Shadows.OnLevel();
             NullGlow.OnLevel();
+            DirectorPanel.OnLevel(); Director.Clear();
             SlowMo.OnLevel();
             _fx.ResetCalibration();
             if (_startNotice != null) _noticeAt = Time.unscaledTime + 6f;
@@ -630,8 +633,53 @@ namespace QuestShade
             _tlFilming ? (_cam.FollowCamera != null ? "Filming Timeline playback through its camera" : "Filming Timeline playback (no Timeline camera: QuestShade camera stays put)") :
             TimelineLink.Recording ? "Timeline is recording" : "Timeline found: press Play in Timeline and QuestShade films it";
 
+        // ---------- Timeline director (beta) ----------
+        internal void OpenDirector()
+        {
+            if (!TimelineLink.Installed) { Notify("The director needs the Timeline mod installed", 2.5f); return; }
+            if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+            DirectorPanel.Toggle(_fx.BoundCamera);
+        }
+
+        internal void ShowTimelinePeople()
+        {
+            if (!TimelineLink.Installed) { Notify("The Timeline mod isn't installed", 2f); return; }
+            TimelineLink.ShowPeople(); Notify("Showing the recorded people", 1.5f);
+        }
+
+        private void DirectorAddShot(ShotKind kind)
+        {
+            if (!TimelineLink.Installed) { Notify("The director needs the Timeline mod", 2f); return; }
+            if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+            float t = TimelineLink.PlayHead;
+            var lt = _cam.LensTransform;
+            Vector3 p = lt != null ? lt.position : Vector3.zero;
+            Quaternion r = lt != null ? lt.rotation : Quaternion.identity;
+            if (_cam.VerticalNow) r *= Quaternion.Euler(0f, 0f, -90f); // stored upright; vertical video adds its roll back
+            if (kind == ShotKind.FreeCam && lt == null) { Notify("Open the camera and aim it first", 2f); return; }
+            Director.Add(kind, t, p, r, _cam.LensFov);
+            _ctl.Buzz(_cfg, true, 0.5f, 0.05f);
+            Log.Msg($"Director: {Director.KindName[(int)kind]} shot at {Director.Clock(t)}");
+            Notify($"{Director.KindName[(int)kind]} shot at {Director.Clock(t)}", 1.5f);
+        }
+
+        private bool DirectorLens(out Vector3 p, out Quaternion r, out float fov)
+            => Director.Eval(TimelineLink.PlayHead, _cfg, TimelineLink.PlaybackCamera(), out p, out r, out fov);
+
+        private void DirectorTick()
+        {
+            var head = _fx.BoundCamera;
+            if (head != null) Director.LearnHeadFix(head.transform, _dyingNow || _cam.RagdollLocked);
+            DirectorPanel.Tick(_cam, head, _ctl.Trigger(false));
+            // Shots drive the camera while Timeline plays (or while previewing on the panel).
+            bool drive = Director.Shots.Count > 0 && TimelineLink.Installed && TimelineLink.PeopleShown
+                         && ((TimelineLink.Playing && !TimelineLink.Paused) || (DirectorPanel.Preview && DirectorPanel.IsOpen));
+            _cam.ExternalLens = drive ? DirectorLens : null;
+        }
+
         private void TimelineModTick()
         {
+            if (BetaOn) DirectorTick();
             bool play = BetaOn && _cfg.TimelineFilm && TimelineLink.Installed && TimelineLink.Playing;
             if (play && !_tlFilming)
             {
@@ -760,6 +808,7 @@ namespace QuestShade
         private float _hurt, _hurtNext; private float _hurtTarget; private IntPtr _overlayPtr; private bool _hurtLogged, _hurtErrLogged;
         // PCVR-style headset effects: a red pulse that grows as health drops, a quick flash on every hit, colour drains on death.
         private float _headHurt, _headHurtTarget, _death, _deathTarget, _hitFlash, _lastHp = 1f;
+        private bool _dyingNow; // for the camera: lock to the body while dying
         private void TickHurt()
         {
             float now = Time.unscaledTime;
@@ -778,7 +827,7 @@ namespace QuestShade
                             if (!dying && hp < _lastHp - 0.02f) _hitFlash = Mathf.Min(1f, _hitFlash + 0.35f + (_lastHp - hp) * 2f);
                         }
                         if (dying && BetaOn && (_cfg.HeadsetHurt || _cfg.HurtEffect)) _deathTarget = 1f;
-                        _lastHp = hp;
+                        _lastHp = hp; _dyingNow = dying;
                         if (!_hurtLogged && _hurtTarget > 0.2f) { _hurtLogged = true; Log.Msg($"Hurt effect on (health {hp * 100f:0}%, dying {dying})"); }
                         int layer = _cam.LensHiddenLayer;
                         if (overlay != null && layer >= 0 && (overlay.Pointer != _overlayPtr || overlay.layer != layer))

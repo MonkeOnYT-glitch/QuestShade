@@ -35,6 +35,14 @@ namespace QuestShade
                     _playing = wp?.GetField("playing", S); _recording = wp?.GetField("recording", S); _paused = wp?.GetField("paused", S);
                     _ccType = asm.GetType("Timeline.CameraRelated.CameraController");
                     _ccCamera = _ccType?.GetField("camera", I);
+                    // Director controls: play / pause / scrub, the take length, and the recorded you (playback avatar).
+                    _playHead = wp?.GetField("playHead", S); _instance = wp?.GetField("Instance", S);
+                    _length = wp?.GetField("totalSceneLength", I);
+                    _play = wp?.GetMethod("Play", I); _pause = wp?.GetMethod("Pause", I); _updateScene = wp?.GetMethod("UpdateScene", I);
+                    _rigRec = wp?.GetField("currentRigmanagerRecorder", S);
+                    var rr = asm.GetType("Timeline.WorldRecording.Recorders.RigmanagerRecorder");
+                    _getBone = rr?.GetMethod("GetBoneTransform", I);
+                    _playbackAvatar = rr?.GetField("currentPlaybackAvatar", I);
                     _found = _playing != null;
                     break;
                 }
@@ -44,6 +52,80 @@ namespace QuestShade
             Mod.Log.Msg(_found ? $"Timeline support: Timeline found{(_ccCamera != null ? " (with its camera)" : "")}" : "Timeline support: Timeline not installed");
             return _found;
         }
+
+        private static FieldInfo _playHead, _instance, _length, _rigRec, _playbackAvatar;
+        private static MethodInfo _play, _pause, _updateScene, _getBone;
+        private static object Instance { get { try { return _instance?.GetValue(null); } catch { return null; } } }
+
+        public static bool CanDirect => Find() && _playHead != null && _play != null && _pause != null && _updateScene != null;
+
+        public static float PlayHead
+        {
+            get { try { return _playHead != null ? (float)_playHead.GetValue(null) : 0f; } catch { return 0f; } }
+        }
+
+        public static float Length
+        {
+            get { try { var w = Instance; return w != null && _length != null ? (float)_length.GetValue(w) : 0f; } catch { return 0f; } }
+        }
+
+        // The recorded people only exist while playback is set up; "show people" plays and pauses straight away.
+        public static bool PeopleShown => Playing || Paused;
+
+        public static void PlayFrom(float t)
+        {
+            try { var w = Instance; if (w != null) _play.Invoke(w, new object[] { t, true, null }); }
+            catch (Exception e) { Mod.Log.Warning("Timeline support: play failed: " + Inner(e)); }
+        }
+
+        public static void Pause()
+        {
+            try { var w = Instance; if (w != null) _pause.Invoke(w, null); }
+            catch (Exception e) { Mod.Log.Warning("Timeline support: pause failed: " + Inner(e)); }
+        }
+
+        public static void ShowPeople()
+        {
+            if (PeopleShown) return;
+            float t = PlayHead;
+            PlayFrom(t);
+            Pause();
+            Scrub(t);
+        }
+
+        // Jump to a moment: the recorded people and objects pose themselves there (paused).
+        public static void Scrub(float t)
+        {
+            try
+            {
+                var w = Instance; if (w == null) return;
+                if (!PeopleShown) { PlayFrom(t); Pause(); }
+                else if (Playing && !Paused) Pause();
+                t = Mathf.Clamp(t, 0f, Mathf.Max(0f, Length));
+                _playHead.SetValue(null, t);
+                _updateScene.Invoke(w, new object[] { t });
+            }
+            catch (Exception e) { Mod.Log.Warning("Timeline support: scrub failed: " + Inner(e)); }
+        }
+
+        // A bone of the recorded you (Timeline's playback avatar), or null if there isn't one right now.
+        public const int Head = 10, Chest = 8; // Unity HumanBodyBones values
+        public static Transform PlaybackBone(int bone)
+        {
+            try
+            {
+                if (_rigRec == null || _getBone == null) return null;
+                var rr = _rigRec.GetValue(null);
+                if (rr == null) return null;
+                if (_playbackAvatar != null && _playbackAvatar.GetValue(rr) == null) return null;
+                var p = _getBone.GetParameters();
+                object arg = p.Length == 1 && p[0].ParameterType.IsEnum ? Enum.ToObject(p[0].ParameterType, bone) : (object)bone;
+                return _getBone.Invoke(rr, new[] { arg }) as Transform;
+            }
+            catch { return null; }
+        }
+
+        private static string Inner(Exception e) => (e.InnerException ?? e).Message;
 
         private static bool Flag(FieldInfo f) { try { return f != null && (bool)f.GetValue(null); } catch { return false; } }
         public static bool Playing => Find() && Flag(_playing);

@@ -172,6 +172,7 @@ namespace QuestShade
                     }
                     break;
             }
+            RagdollLock(head.transform, dt, ref lp, ref lr); // ragdolled / dying: stay locked to the body bone
             _vertical = _orientOverride == 0 ? cfg.Vertical : _orientOverride == 2; // a livestream picks its own orientation
             if (_vertical) lr *= Quaternion.Euler(0f, 0f, 90f);
             bool onDevice = Mode == CamMode.Hand || Mode == CamMode.Selfie;
@@ -185,6 +186,11 @@ namespace QuestShade
             if (_moveRecording) SampleMove(_lensPos, _lensRot, (_appliedFov > 0f ? _appliedFov : _cam.fieldOfView) / _zoomNow);
             if (_pathPlaying) EvalPath(cfg, dt, ref _lensPos, ref _lensRot, ref pathFov);
             else if (_movePlaying) EvalMove(Time.unscaledDeltaTime, ref _lensPos, ref _lensRot, ref pathFov);
+            else if (ExternalLens != null && ExternalLens(out var exP, out var exR, out var exF))
+            {
+                // Timeline director: the shot pinned to this moment of the Timeline recording.
+                _lensPos = exP; _lensRot = exR * (_vertical ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.identity); if (exF > 0f) pathFov = exF;
+            }
             else if (FollowCamera != null)
             {
                 // Timeline mod playback: ride along with Timeline's keyframed camera (position, rotation and zoom).

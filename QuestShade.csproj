@@ -12,8 +12,8 @@
     <!-- dotnet build -p:QSBeta=true : beta build (GitHub pre-release), beta features always on -->
     <DefineConstants Condition="'$(QSBeta)' == 'true'">$(DefineConstants);QS_BETA</DefineConstants>
     <OutputPath Condition="'$(QSBeta)' == 'true'">bin\$(QSTarget)-Beta\</OutputPath>
-    <Version>1.7.90</Version>
-    <Version Condition="'$(ShadowDebug)' == 'true'">1.7.91</Version>
+    <Version>1.7.91</Version>
+    <Version Condition="'$(ShadowDebug)' == 'true'">1.7.92</Version>
     <RootNamespace>QuestShade</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
@@ -40,6 +40,7 @@
     <Reference Include="Il2Cppmscorlib"><HintPath>$(IA)\Il2Cppmscorlib.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(IA)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.XRModule"><HintPath>$(IA)\UnityEngine.XRModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.AnimationModule"><HintPath>$(IA)\UnityEngine.AnimationModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.VRModule"><HintPath>$(IA)\UnityEngine.VRModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.InputLegacyModule"><HintPath>$(IA)\UnityEngine.InputLegacyModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.ImageConversionModule"><HintPath>$(IA)\UnityEngine.ImageConversionModule.dll</HintPath><Private>false</Private></Reference>

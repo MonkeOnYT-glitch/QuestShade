@@ -39,6 +39,13 @@ namespace QuestShade
         public void TimelineStop() { _pathPlaying = false; _movePlaying = false; _moveRecording = false; }
         public bool AnyPlayback => _pathPlaying || _movePlaying;
         public Camera FollowCamera; // set while the Timeline mod plays back: the lens follows its camera
+        public delegate bool LensDriver(out Vector3 pos, out Quaternion rot, out float fov);
+        public LensDriver ExternalLens; // Timeline director shots (take priority over FollowCamera)
+        public bool VerticalNow => _vertical;
+        public bool RagdollLocked => _boneLocked;
+        public bool PointerPose(Camera head, out Vector3 pos, out Quaternion rot) => TryHandPose(head, UnityEngine.XR.XRNode.RightHand, out pos, out rot);
+        public Transform LensTransform => _lensGo != null ? _lensGo.transform : null;
+        public float LensFov => _cam != null ? _cam.fieldOfView / _zoomNow : 0f;
 
         private void EvalPath(Config cfg, float dt, ref Vector3 pos, ref Quaternion rot, ref float fov)
         {
