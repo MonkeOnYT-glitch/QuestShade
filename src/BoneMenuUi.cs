@@ -391,6 +391,10 @@ namespace QuestShade
                 bool above = along > -0.06f && size < 0.9f;
                 bool toNeck = along + size * 0.5f > -0.04f && size < 0.7f;
                 above |= toNeck;
+                // Never hide a mesh that hangs well below the neck: that's the body. On small or single-mesh avatars the whole body
+                // looked "near the head" and vanished from chest / head-cam recordings.
+                bool body = along - size * 0.5f < -0.35f;
+                above &= !body;
                 if (above && near && !hands) { _headKnown.Add(r.Pointer); Move(r); if (sb != null) sb.Append($" +{r.name}"); }
                 else if (sb != null && along + size * 0.5f > -0.06f && near)
                     sb.Append($" -{r.name}(centre {along:+0.00;-0.00} m along the neck, size {size:0.00} m)");
@@ -715,6 +719,17 @@ namespace QuestShade
             }
             int n = 0; foreach (var p in cfg.Presets) if (p.EndsWith(ReShadeImport.Suffix)) n++;
             _importPage.CreateFunction($"{n} imported - pick them in Presets > Choose preset", Color.white, () => Notify("Imported ReShade presets end in (ReShade) in Presets > Choose preset.", 3f));
+            if (ReShadeImport.LastSkipped.Count > 0)
+            {
+                var sk = string.Join(", ", ReShadeImport.LastSkipped);
+                _importPage.CreateFunction($"{ReShadeImport.LastSkipped.Count} of {ReShadeImport.LastFound} .ini skipped: not ReShade presets", Color.yellow,
+                    () => Notify($"Skipped (no Techniques= line, so not a ReShade preset): {sk}. Use the preset .ini ReShade saves, not ReShade.ini or a settings file.", 8f));
+            }
+            if (ReShadeImport.LastFailed.Count > 0)
+            {
+                var fl = string.Join(", ", ReShadeImport.LastFailed);
+                _importPage.CreateFunction($"{ReShadeImport.LastFailed.Count} failed to import (see log)", Color.red, () => Notify($"Failed: {fl}. Post your MelonLoader Latest.log in #help.", 6f));
+            }
             _importPage.CreateFunction("How to add: UserData/QuestShade/ReShade", Color.gray, () => Notify("Copy a ReShade .ini into UserData/QuestShade/ReShade, then Reload. No .fx files needed.", 6f));
             _importPage.CreateFunction("Reload", Color.yellow, () => _mod.ReloadAll());
             if (pending.Count > 0 && _asked.Add(pending[0])) Notify($"[{pending[0].Replace(ReShadeImport.Suffix, "")}] Was Too Heavy To Run. Would You Like To Compress It? (Presets > ReShade imports)", 6f);

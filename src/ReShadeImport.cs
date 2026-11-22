@@ -22,6 +22,10 @@ namespace QuestShade
             "Splitscreen", "BeforeAfter", "Compare", "Cursor", "Mouse", "Vectorscope", "Waveform", "ZebraLines", "Stats", "Depth_Tool", "Template",
             "HotsamplingHelper", "Hotsampling", "CanvasMask", "ColorMask", "Composition", "AspectRatio", "GoldenRatio", "VRS_Map", "DownsampleSSAA", "Frequency" };
 
+        // What the last scan saw, for the ReShade imports page (so "0 imported" always comes with a reason).
+        public static int LastFound;
+        public static readonly List<string> LastSkipped = new List<string>(), LastFailed = new List<string>();
+
         public static void Run()
         {
             try
@@ -34,10 +38,12 @@ namespace QuestShade
                     "prod80's Cinetools and Bonus LUT packs are built in.\n" +
                     "Each preset shows up in the menu as \"<name> (ReShade)\".\n";
                 try { if (!File.Exists(readme) || File.ReadAllText(readme) != text) File.WriteAllText(readme, text); } catch { }
+                LastFound = 0; LastSkipped.Clear(); LastFailed.Clear();
                 foreach (var file in Directory.GetFiles(Dir, "*.ini", SearchOption.AllDirectories))
                 {
-                    try { if (IsPreset(file)) ImportOne(file); }
-                    catch (Exception e) { Mod.Log.Warning($"ReShade import of {Path.GetFileName(file)} failed: {e.Message}"); }
+                    LastFound++;
+                    try { if (IsPreset(file)) ImportOne(file); else { LastSkipped.Add(Path.GetFileName(file)); Mod.Log.Msg($"ReShade: skipped {Path.GetFileName(file)} (no Techniques= line, so it isn't a ReShade preset)"); } }
+                    catch (Exception e) { LastFailed.Add(Path.GetFileName(file)); Mod.Log.Warning($"ReShade import of {Path.GetFileName(file)} failed: {e.Message}"); }
                 }
             }
             catch (Exception e) { Mod.Log.Warning("ReShade import folder unavailable: " + e.Message); }
