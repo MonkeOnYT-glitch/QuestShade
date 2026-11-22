@@ -112,6 +112,12 @@ namespace QuestShade
                 slow.CreateBool("Cinematic zoom on the camera", Color.white, cfg.SlowMoZoom, v => { cfg.SlowMoZoom = v; cfg.SaveMenuSettings(); });
 
                 var tl = beta.CreatePage("Camera timeline", Color.white, 8, true);
+                // Timeline mod support: record your scene in Timeline, press Play there, and QuestShade films the replay.
+                var tlm = tl.CreatePage("Timeline mod (record + replay)", new Color(0.45f, 0.9f, 1f), 8, true);
+                tlm.CreateFunction("Status", Color.white, () => Notify(mod.TimelineModStatus, 4f));
+                tlm.CreateFunction("How it works", info, () => Notify("Record your scene with the Timeline mod, then press Play in Timeline. QuestShade's camera follows Timeline's camera keyframes and records the replay with your preset, bloom and shadows.", 8f));
+                tlm.CreateBool("Film Timeline playback (follow its camera)", Color.green, cfg.TimelineFilm, v => { cfg.TimelineFilm = v; cfg.SaveMenuSettings(); });
+                tlm.CreateBool("Record video while Timeline plays", Color.white, cfg.TimelineAutoRecord, v => { cfg.TimelineAutoRecord = v; cfg.SaveMenuSettings(); });
                 tl.CreateFunction("How it works", info, () => Notify("Record a move: press Record, move the camera around, Stop, then Play it back. Or add keyframes and the camera flies smoothly between them.", 7f));
                 var mv = tl.CreatePage("Record a camera move", Color.white, 8, true);
                 _moveRecBtn = mv.CreateFunction("Record move", Color.red, () => mod.MoveRecord());

@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.90-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.91-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.89", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.90", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -623,9 +623,39 @@ namespace QuestShade
             _cfg.SaveMenuSettings();
         }
 
+        // ---------- Timeline mod support (beta) ----------
+        private bool _tlFilming, _tlRec;
+        internal string TimelineModStatus =>
+            !TimelineLink.Installed ? "Timeline mod not installed" :
+            _tlFilming ? (_cam.FollowCamera != null ? "Filming Timeline playback through its camera" : "Filming Timeline playback (no Timeline camera: QuestShade camera stays put)") :
+            TimelineLink.Recording ? "Timeline is recording" : "Timeline found: press Play in Timeline and QuestShade films it";
+
+        private void TimelineModTick()
+        {
+            bool play = BetaOn && _cfg.TimelineFilm && TimelineLink.Installed && TimelineLink.Playing;
+            if (play && !_tlFilming)
+            {
+                _tlFilming = true;
+                if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
+                _cam.FollowCamera = TimelineLink.PlaybackCamera();
+                if (_cfg.TimelineAutoRecord && !_cam.Recording && !Streaming) { ToggleRecording(); _tlRec = _cam.Recording; }
+                Log.Msg($"Timeline support: playback started, {(_cam.FollowCamera != null ? "following Timeline's camera" : "no Timeline camera found")}{(_tlRec ? ", recording" : "")}");
+                Notify(_tlRec ? "Timeline playing: QuestShade is filming it" : "Timeline playing", 1.8f);
+            }
+            else if (play && _cam.FollowCamera == null) _cam.FollowCamera = TimelineLink.PlaybackCamera();
+            else if (!play && _tlFilming)
+            {
+                _tlFilming = false;
+                _cam.FollowCamera = null;
+                if (_tlRec) { _tlRec = false; if (_cam.Recording && !Streaming) ToggleRecording(); }
+                Log.Msg("Timeline support: playback ended");
+            }
+        }
+
         private float _betaMarkAt;
         private void TimelineTick()
         {
+            TimelineModTick();
             // "Play + record": stop the recording when the move ends.
             if (_timelineRec && !_cam.AnyPlayback) { _timelineRec = false; if (_cam.Recording && !Streaming) ToggleRecording(); }
             // Keep the beta menu's highlights (active slow-mo / camera style, record button) in step, also after gestures.

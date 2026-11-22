@@ -185,6 +185,12 @@ namespace QuestShade
             if (_moveRecording) SampleMove(_lensPos, _lensRot, (_appliedFov > 0f ? _appliedFov : _cam.fieldOfView) / _zoomNow);
             if (_pathPlaying) EvalPath(cfg, dt, ref _lensPos, ref _lensRot, ref pathFov);
             else if (_movePlaying) EvalMove(Time.unscaledDeltaTime, ref _lensPos, ref _lensRot, ref pathFov);
+            else if (FollowCamera != null)
+            {
+                // Timeline mod playback: ride along with Timeline's keyframed camera (position, rotation and zoom).
+                try { var ft = FollowCamera.transform; _lensPos = ft.position; _lensRot = ft.rotation * (_vertical ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.identity); pathFov = FollowCamera.fieldOfView; }
+                catch { FollowCamera = null; }
+            }
             _lensGo.transform.SetPositionAndRotation(_lensPos, _lensRot);
             if (_hoverMat != null && _hoverWanted)
             {

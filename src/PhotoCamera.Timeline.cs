@@ -38,6 +38,7 @@ namespace QuestShade
 
         public void TimelineStop() { _pathPlaying = false; _movePlaying = false; _moveRecording = false; }
         public bool AnyPlayback => _pathPlaying || _movePlaying;
+        public Camera FollowCamera; // set while the Timeline mod plays back: the lens follows its camera
 
         private void EvalPath(Config cfg, float dt, ref Vector3 pos, ref Quaternion rot, ref float fov)
         {

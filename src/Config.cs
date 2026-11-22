@@ -41,6 +41,7 @@ namespace QuestShade
         public bool LampShadows = true;                  // the nearest map lamp casts shadows of you, props and NPCs
         public bool SlowMoZoom = true;                   // cinematic auto zoom on the camera while slow-mo is on
         public float TimelineSeconds = 3f;               // seconds between camera timeline keyframes
+        public bool TimelineFilm = true, TimelineAutoRecord = true; // Timeline mod: follow its camera during playback, and record it
 #if QS_SHADOW_DEBUG
         public const bool ShadowDebug = true;
 #else
@@ -233,6 +234,8 @@ namespace QuestShade
             LampShadows = ini.Bool("Lighting", "LampShadows", true);
             SlowMoZoom = ini.Bool("Camera", "SlowMoZoom", true);
             TimelineSeconds = Mathf.Clamp(ini.Float("Camera", "TimelineSeconds", 3f), 0.5f, 30f);
+            TimelineFilm = ini.Bool("Camera", "TimelineFilm", true);
+            TimelineAutoRecord = ini.Bool("Camera", "TimelineAutoRecord", true);
             RealLights = ini.Bool("Lighting", "RealLights", true);
             LessShine = Mathf.Clamp01(ini.Float("Lighting", "LessShine", 0.6f));
             FlashlightBeams = ini.Bool("Lighting", "FlashlightBeams", true);
@@ -631,6 +634,8 @@ namespace QuestShade
             SetKey("Lighting", "LampShadows", LampShadows ? "true" : "false");
             SetKey("Camera", "SlowMoZoom", SlowMoZoom ? "true" : "false");
             SetKey("Camera", "TimelineSeconds", F(TimelineSeconds));
+            SetKey("Camera", "TimelineFilm", TimelineFilm ? "true" : "false");
+            SetKey("Camera", "TimelineAutoRecord", TimelineAutoRecord ? "true" : "false");
             SetKey("Lighting", "RealLights", RealLights ? "true" : "false");
             SetKey("Lighting", "FlashlightBeams", FlashlightBeams ? "true" : "false");
             SetKey("Lighting", "BodyShadow3", Shadows ? "true" : "false");
