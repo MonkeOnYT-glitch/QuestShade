@@ -110,7 +110,8 @@ namespace QuestShade
                 float cur = _dim.TryGetValue(key, out var have) && have > 0f ? have : 1f;
                 cur = Mathf.Lerp(cur, target, target < cur ? 0.6f : 0.3f);
                 _dim[key] = cur;
-                l.intensity = o.I * (1f + Mathf.Max(0f, boost)) * cur;
+                // Scale too: this runs 20x a second and used to overwrite the dimmed brightness with the full one.
+                l.intensity = o.I * (1f + Mathf.Max(0f, boost)) * cur * Scale;
             }
         }
 
