@@ -11,7 +11,7 @@ namespace QuestShade
     //  - "STUCK": a stick pushed for over 1 s while you don't move (left) or turn (right) -> full snapshot in the main log
     internal static class ControlsDebug
     {
-        public static bool On = true;
+        public static bool On = false; // debug tool: turn on to trace controls (off in releases)
         public static Func<int, string> HandState; // what a hand holds / is attached to (from BoneMenuUi, needs BoneLib)
         public static Func<string> CameraState;
         public static Func<int, Vector2> GameStick;
