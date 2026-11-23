@@ -135,6 +135,7 @@ namespace QuestShade
 
         private void BuildLabel(Config cfg)
         {
+            _labelKey = (-2, -1, -1, false, null, null); // a new label needs its text set again
             _labelWanted = cfg.CameraLabel;
             try
             {
@@ -187,11 +188,16 @@ namespace QuestShade
             Fx.SetCaptureFocus(_focus);
         }
 
+        private (int, int, int, bool, string, string) _labelKey = (-2, -1, -1, false, null, null);
         private void UpdateLabel()
         {
             if (_labelTmp == null || !_labelWanted || Hidden) return;
-            string line1, line2;
             int hand = HoldingHand;
+            // Only rebuild the text when something it shows changed (it used to build ~6 strings every frame).
+            var key = (Recording ? (int)RecordSeconds : -1, hand, (int)Mode, MicOn, LabelExtra, ControlsHint);
+            if (key.Equals(_labelKey)) return;
+            _labelKey = key;
+            string line1, line2;
             if (Recording)
             {
                 int s = (int)RecordSeconds;
@@ -609,7 +615,12 @@ namespace QuestShade
             if (headData != null) _camData.volumeLayerMask = headData.volumeLayerMask;
 
             _fullMask = head.cullingMask;
-            _screenLayer = (_fullMask & (1 << 5)) != 0 ? 5 : PickLayer(_fullMask);
+            _seesMenu = cfg.CameraSeesMenu;
+            // Normally the headset-only layer is the UI layer, which also keeps BONELAB / BoneMenu menus off the camera.
+            // With "camera sees the menu" on, use an empty layer instead so the menus show while our own bits stay hidden.
+            int free = _seesMenu ? FreeHeadsetLayer() : -1;
+            if (free >= 0) { _fullMask |= 1 << free; head.cullingMask |= 1 << free; }
+            _screenLayer = free >= 0 ? free : (_fullMask & (1 << 5)) != 0 ? 5 : PickLayer(_fullMask);
             if (_screenLayer >= 0)
             {
                 _screen.layer = _screenLayer; _bezel.layer = _screenLayer;
@@ -640,6 +651,22 @@ namespace QuestShade
                 Mod.Log.Msg("Camera: BONELAB's VRS pixel mask switched off for the in-game camera");
             }
             catch (Exception e) { Mod.Log.Warning("Camera: couldn't override VRS (photos may get a black band): " + e.Message); }
+        }
+
+        private bool _seesMenu;
+
+        // Second-highest unnamed layer (the highest is the lens-only overlay layer, the lowest the shadow casters).
+        private static int FreeHeadsetLayer()
+        {
+            bool skipped = false;
+            int shadow = ShadowMap.Layer;
+            for (int l = 31; l >= 8; l--)
+            {
+                if (!string.IsNullOrEmpty(LayerMask.LayerToName(l)) || l == shadow) continue;
+                if (!skipped) { skipped = true; continue; }
+                return l;
+            }
+            return -1;
         }
 
         private static int PickLayer(int mask)
@@ -709,18 +736,20 @@ namespace QuestShade
             {
                 if (_recRendered)
                 {
+                    long tq = Prof.Now;
                     if (_recHQ) Fx.ProcessHQ(_rawRecRT, _recRT, _recExtras && Perf.RecordingExtras, motionBlur: true);
                     else if (_recSS) Graphics.Blit(_rawRecRT, _recRT);
+                    Prof.Add("cam: video effects", tq);
                     var frame = _recRT;
                     if (cfg.MatchPreview && Fx != null)
                     {
                         _gradeRT ??= new RenderTexture(_recRT.width, _recRT.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB) { name = "QuestShade_RecordGraded", hideFlags = HideFlags.HideAndDontSave };
                         if (Fx.GradeAgain(_recRT, _gradeRT)) frame = _gradeRT;
                     }
-                    _rec.SubmitFrame(frame);
+                    { long ts = Prof.Now; _rec.SubmitFrame(frame); Prof.Add("cam: frame to encoder", ts); }
                     _recRendered = false;
                 }
-                _rec.Tick();
+                { long tr = Prof.Now; _rec.Tick(); Prof.Add("cam: encode + send", tr); }
                 _recAccum += dt;
                 float rstep = 1f / _recFps;
                 bool rrender = _recAccum >= rstep;

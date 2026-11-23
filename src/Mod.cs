@@ -4,9 +4,9 @@ using MelonLoader;
 using UnityEngine;
 
 #if QS_SHADOW_DEBUG
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.93-debug", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.94-debug", "QuestShade")]
 #else
-[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.92", "QuestShade")]
+[assembly: MelonInfo(typeof(QuestShade.Mod), "QuestShade", "1.7.93", "QuestShade")]
 #endif
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
@@ -79,7 +79,7 @@ namespace QuestShade
             Flashlights.Reset();
             Lighting.OnLevel();
             Shadows.OnLevel();
-            NullGlow.OnLevel();
+            NullGlow.OnLevel(); WristChat.OnLevel();
             Director.Clear(); _tlManual = _tlRender = false;
             SlowMo.OnLevel();
             _fx.ResetCalibration();
@@ -105,15 +105,16 @@ namespace QuestShade
                     if (!first) { _fx.ResetCalibration(); _fx.MarkDirty(); _calibTries = 0; _nextCalibAt = now + 0.5f; }
                 }
                 if (now >= _nextCamCheck) { _nextCamCheck = now + 1f; _fx.EnsureCamera(_cfg); }
-                _fx.Tick(_cfg);
+                { long t0 = Prof.Now; _fx.Tick(_cfg); Prof.Add("effects", t0); }
                 // With QuestShade's own flashlight light on, BONELAB's flashlight is turned down: it only lights some materials, and the two
                 // stacked made those surfaces blow out to white next to dull ones. QuestShade's light treats every surface the same.
                 bool ownLight = _cfg.ShadowMap && _cfg.FlashlightShadows && _cfg.FlashlightLight > 0.01f && ShadowMap.Available;
                 Flashlights.Scale = ownLight ? 0.25f : 1f;
                 Flashlights.Tick(_cfg.FlashlightBoost, _cfg.FlashlightBeams);
-                Lighting.Tick(_cfg);
-                try { var hc = _fx.BoundCamera; if (hc != null) NullGlow.Tick(_cfg, hc.transform.position, BetaOn); } catch { }
+                { long t0 = Prof.Now; Lighting.Tick(_cfg); Prof.Add("lighting", t0); }
+                { long t0 = Prof.Now; try { var hc = _fx.BoundCamera; if (hc != null) NullGlow.Tick(_cfg, hc.transform.position, BetaOn); } catch { } Prof.Add("nullbody glow", t0); }
                 BetaOn = Beta;
+                { long t0 = Prof.Now; TickChat(); Prof.Add("wrist chat", t0); }
                 SlowMo.Tick(Time.unscaledDeltaTime);
                 {
                     // Slow-mo effects: ease in as the game slows down, ease back out as it speeds up.
@@ -122,11 +123,11 @@ namespace QuestShade
                     try { _fx.SetSlowMoFx(_slowFx < 0.003f && sfx == 0f ? 0f : _slowFx, _cfg); } catch { }
                 }
                 _fx.SetFisheye(_cam.Mode == CamMode.PoliceCam ? Mathf.Max(0.35f, _cfg.Fisheye) : _cfg.Fisheye);
-                if (_boneLib) TickHurt();
+                if (_boneLib) { long t0 = Prof.Now; TickHurt(); Prof.Add("hurt", t0); }
                 _fx.TickHeadsetFocus(Time.unscaledDeltaTime);
 
                 _ctl.Update(_cfg, now);
-                HandleInput();
+                { long t0 = Prof.Now; HandleInput(); Prof.Add("input", t0); }
                 _ctl.EndFrame();
 
                 TimerTick(now);
@@ -184,9 +185,12 @@ namespace QuestShade
             {
                 var head = _fx.BoundCamera;
                 _fx.PhotoCamera = _cam.Open ? _cam.LensCamera : null;
-                _cam.LateTick(_cfg, head, Time.unscaledDeltaTime, _ctl.GripL, _ctl.GripR);
-                StreamTick();
-                TimelineTick();
+                // A level starting to load takes the headset camera away for a moment, and the in-game camera closes when
+                // that happens, which used to end the livestream. Hold the stream first; it comes back once the level is up.
+                if (head == null && _cam.Streaming) { ParkStreamForLevel(); if (_parked != null) Log.Msg("Stream: headset camera gone (level loading), holding the stream"); }
+                { long t0 = Prof.Now; _cam.LateTick(_cfg, head, Time.unscaledDeltaTime, _ctl.GripL, _ctl.GripR); Prof.Add("camera", t0); }
+                { long t0 = Prof.Now; StreamTick(); Prof.Add("stream", t0); }
+                { long t0 = Prof.Now; TimelineTick(); Prof.Add("timeline+menus", t0); }
                 if (!_cam.Open)
                 {
                     _cam.PrewarmTick(_cfg, head);
@@ -197,7 +201,7 @@ namespace QuestShade
                 Shadows.CameraOpen = _cam.Open;
                 Shadows.Lens = _cam.Open ? _cam.LensCamera : null;
                 Shadows.CameraProp = _cam.PropRoot;
-                Shadows.Tick(_cfg, head);
+                { long t0 = Prof.Now; Shadows.Tick(_cfg, head); Prof.Add("shadows", t0); }
                 if (ControlsDebug.CameraState == null) { ControlsDebug.Start(); ControlsDebug.CameraState = () => $"open={_cam.Open} mode={_cam.Mode} recording={_cam.Recording}"; }
                 ControlsDebug.Tick(_ctl, head);
                 _toast.LateTick(head);
@@ -207,11 +211,12 @@ namespace QuestShade
                 }
                 _cam.ToastObject = _toast.Object;
             }
-            catch (Exception e) { _cam.Close(); Guard(e); }
+            catch (Exception e) { try { if (_cam.Streaming) ParkStreamForLevel(); } catch { } _cam.Close(); Guard(e); }
             _ownMs += _sw.Elapsed.TotalMilliseconds;
             if (_ownMs > _ownMax) _ownMax = _ownMs;
             SpikeWatch();
             Perf.Tick(Time.unscaledDeltaTime);
+            Prof.EndFrame();
             _ownMs = 0;
         }
 
@@ -548,7 +553,7 @@ namespace QuestShade
                 if (now - _parkedSince > 120f) { EndParked("Stream stopped: the level took too long to load"); return; }
                 if (now < _resumeAt) return;
                 _resumeAt = now + 2f; // try again shortly if the camera isn't ready yet
-                if (_cam.Recording) return;
+                if (_cam.Recording || _fx.BoundCamera == null) return; // wait for the new level's headset camera
                 try
                 {
                     if (!_cam.Open) _cam.Toggle(_cfg, _fx.BoundCamera);
@@ -954,6 +959,24 @@ namespace QuestShade
             if (!_cam.Open) { Notify("Open the camera first", 1f); return; }
             _cam.SetHidden(!_cam.Hidden);
             Notify(_cam.Hidden ? (_cam.Recording ? "Camera hidden (still recording)" : "Camera hidden") : "Camera visible", 1f);
+        }
+
+        private string _chatYt, _chatTw;
+        private void TickChat()
+        {
+            try
+            {
+                bool want = BetaOn && _cfg.ChatOnWrist;
+                string yt = want ? _cfg.ChatYouTube ?? "" : "", tw = want ? _cfg.ChatTwitch ?? "" : "";
+                if (yt != _chatYt || tw != _chatTw)
+                {
+                    _chatYt = yt; _chatTw = tw;
+                    if (yt.Length == 0 && tw.Length == 0) ChatReader.Stop(); else ChatReader.Restart(tw, yt);
+                }
+                if (WristChat.Hand == null) { WristChat.Hand = BoneMenuUi.HandTransform; WristChat.HiddenLayer = () => _cam.LensHiddenLayer; }
+                WristChat.Tick(_cfg, _fx.BoundCamera, want);
+            }
+            catch { }
         }
 
         internal void RefreshCamera() => _cam.Refresh(_cfg, _fx.BoundCamera);

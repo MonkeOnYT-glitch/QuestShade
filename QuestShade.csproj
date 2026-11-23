@@ -12,7 +12,7 @@
     <!-- dotnet build -p:QSBeta=true : beta build (GitHub pre-release), beta features always on -->
     <DefineConstants Condition="'$(QSBeta)' == 'true'">$(DefineConstants);QS_BETA</DefineConstants>
     <OutputPath Condition="'$(QSBeta)' == 'true'">bin\$(QSTarget)-Beta\</OutputPath>
-    <Version>1.7.92</Version>
+    <Version>1.7.93</Version>
     <Version Condition="'$(ShadowDebug)' == 'true'">1.7.93</Version>
     <RootNamespace>QuestShade</RootNamespace>
     <LangVersion>latest</LangVersion>

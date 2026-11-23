@@ -14,11 +14,11 @@ namespace QuestShade
         public static Func<int> HeadsetLayer, LensLayer;
         private const int MaxNpcs = 6;
 
-        private sealed class Glow { public Poolee Npc; public readonly List<(SkinnedMeshRenderer head, SkinnedMeshRenderer lens)> Copies = new List<(SkinnedMeshRenderer, SkinnedMeshRenderer)>(); }
+        private sealed class Glow { public Transform Npc; public readonly List<(SkinnedMeshRenderer head, SkinnedMeshRenderer lens)> Copies = new List<(SkinnedMeshRenderer, SkinnedMeshRenderer)>(); }
         private static readonly Dictionary<IntPtr, Glow> _glows = new Dictionary<IntPtr, Glow>();
         private static Material _matHead, _matLens;
         private static float _nextScan;
-        private static bool _on, _logged;
+        private static bool _on, _logged, _namesLogged;
         private static Color _color;
 
         public static void OnLevel() { _glows.Clear(); _nextScan = Time.unscaledTime + 4f; }
@@ -55,13 +55,30 @@ namespace QuestShade
             return true;
         }
 
-        private static bool IsNullbody(Poolee p)
+        private static bool Named(string s)
         {
-            string n = null;
-            try { n = p.SpawnableCrate != null ? p.SpawnableCrate.Barcode.ID : null; } catch { }
-            if (string.IsNullOrEmpty(n)) { try { n = p.gameObject.name; } catch { return false; } }
-            n = n.ToLowerInvariant();
-            return n.Contains("nullbody") || n.Contains("null body") || n.Contains("null_body");
+            if (string.IsNullOrEmpty(s)) return false;
+            s = s.ToLowerInvariant();
+            return s.Contains("nullbody") || s.Contains("null body") || s.Contains("null_body") || s.Contains("null-body");
+        }
+
+        // BONELAB barcodes are mostly ID strings, not names, so check everything that can carry the name: the object,
+        // the crate's barcode and title, and the body's mesh names.
+        private static bool IsNullbody(Transform root, Poolee p)
+        {
+            try
+            {
+                if (Named(root.name)) return true;
+                if (p != null)
+                {
+                    if (Named(p.gameObject.name)) return true;
+                    try { var crate = p.SpawnableCrate; if (crate != null && (Named(crate.Barcode.ID) || Named(crate.Title))) return true; } catch { }
+                }
+                foreach (var smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+                    if (smr != null && smr.sharedMesh != null && (Named(smr.sharedMesh.name) || Named(smr.gameObject.name))) return true;
+            }
+            catch { }
+            return false;
         }
 
         private static void Scan(Vector3 player, int hl, int ll)
@@ -73,19 +90,31 @@ namespace QuestShade
                 foreach (var kv in _glows) { bool dead; try { dead = kv.Value.Npc == null; } catch { dead = true; } if (dead) (gone ??= new List<IntPtr>()).Add(kv.Key); }
                 if (gone != null) foreach (var k in gone) _glows.Remove(k);
 
-                var found = new List<(Poolee p, float d)>();
-                foreach (var p in UnityEngine.Object.FindObjectsOfType<Poolee>())
+                // Only NPCs have an AI brain: far fewer objects to look through than every pooled item in the level.
+                var found = new List<(Transform root, Poolee p, float d)>();
+                var seen = new HashSet<IntPtr>();
+                foreach (var brain in UnityEngine.Object.FindObjectsOfType<Il2CppSLZ.Marrow.AI.AIBrain>())
                 {
-                    if (p == null || !p.gameObject.activeInHierarchy || _glows.ContainsKey(p.Pointer)) continue;
-                    if (!IsNullbody(p)) continue;
-                    found.Add((p, (p.transform.position - player).sqrMagnitude));
+                    if (brain == null || !brain.gameObject.activeInHierarchy) continue;
+                    var p = brain.GetComponentInParent<Poolee>();
+                    var root = p != null ? p.transform : brain.transform.root;
+                    if (root == null || !seen.Add(root.Pointer) || _glows.ContainsKey(root.Pointer)) continue;
+                    if (!IsNullbody(root, p)) continue;
+                    found.Add((root, p, (root.position - player).sqrMagnitude));
+                }
+                if (found.Count == 0 && seen.Count > 0 && !_namesLogged)
+                {
+                    _namesLogged = true;
+                    var names = new List<string>();
+                    foreach (var brain in UnityEngine.Object.FindObjectsOfType<Il2CppSLZ.Marrow.AI.AIBrain>()) { if (brain == null) continue; var pp = brain.GetComponentInParent<Poolee>(); names.Add(pp != null ? pp.gameObject.name : brain.transform.root.name); if (names.Count >= 8) break; }
+                    Mod.Log.Msg("Nullbody glow: NPCs nearby but none look like a Nullbody: " + string.Join(", ", names));
                 }
                 found.Sort((a, b) => a.d.CompareTo(b.d));
-                foreach (var (p, _) in found)
+                foreach (var (root, p, _) in found)
                 {
                     if (_glows.Count >= MaxNpcs) break;
-                    var g = new Glow { Npc = p };
-                    foreach (var smr in p.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+                    var g = new Glow { Npc = root };
+                    foreach (var smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(false))
                     {
                         if (smr == null || smr.sharedMesh == null || !smr.enabled) continue;
                         var head = Copy(smr, _matHead, hl >= 0 ? hl : smr.gameObject.layer);
@@ -94,8 +123,8 @@ namespace QuestShade
                     }
                     if (g.Copies.Count > 0)
                     {
-                        _glows[p.Pointer] = g;
-                        if (!_logged) { _logged = true; Mod.Log.Msg($"Nullbody glow on ({g.Copies.Count} mesh(es) on '{p.gameObject.name}')"); }
+                        _glows[root.Pointer] = g;
+                        if (!_logged) { _logged = true; Mod.Log.Msg($"Nullbody glow on ({g.Copies.Count} mesh(es) on '{root.name}')"); }
                     }
                 }
             }

@@ -132,7 +132,7 @@ namespace QuestShade
             {
                 _matGrade ??= new Material(_matMono) { name = "QuestShade_GradeAgain", hideFlags = HideFlags.HideAndDontSave };
                 _matGrade.CopyPropertiesFromMaterial(_matMono);
-                foreach (var id in new[] { ID.Vignette, ID.Sharpen, ID.CA, ID.Distort, ID.Grain, ID.Scan, ID.Glitch, ID.Noise, ID.Posterize, ID.Curve, ID.Hurt })
+                foreach (var id in GradeZeroIds)
                     _matGrade.SetVector(id, Vector4.zero);
                 _matGrade.SetVector(ID.Texel, new Vector4(1f / dst.width, 1f / dst.height, dst.width, dst.height));
                 _matGrade.SetTexture(SourceTexId, src);
@@ -637,12 +637,14 @@ namespace QuestShade
         private readonly System.Collections.Generic.Dictionary<IntPtr, (Vector4 ca, Vector4 grain, Vector4 vig, Vector4 vigC)> _slowBases =
             new System.Collections.Generic.Dictionary<IntPtr, (Vector4, Vector4, Vector4, Vector4)>();
 
+        private static readonly int[] GradeZeroIds = { ID.Vignette, ID.Sharpen, ID.CA, ID.Distort, ID.Grain, ID.Scan, ID.Glitch, ID.Noise, ID.Posterize, ID.Curve, ID.Hurt };
+        private readonly Material[] _slowMats = new Material[4];
         public void SetSlowMoFx(float k, Config cfg)
         {
             if (k < 0.003f) k = 0f;
             if (k == 0f && _slowApplied == 0f) return;
             if (_slowBase && Mathf.Abs(k - _slowApplied) < 0.004f && k > 0f) return;
-            var mats = new[] { _mat, _matMono, _matPre, _post };
+            var mats = _slowMats; mats[0] = _mat; mats[1] = _matMono; mats[2] = _matPre; mats[3] = _post;
             if (!_slowBase)
             {
                 _slowBases.Clear();

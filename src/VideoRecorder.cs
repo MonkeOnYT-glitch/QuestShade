@@ -18,6 +18,7 @@ namespace QuestShade
         // Livestream: set before Start() and the encoded video/audio go to this RTMP client instead of an MP4 file.
         public RtmpClient Stream;
         public bool Streaming => Recording && Stream != null;
+        private byte[] _scratch; // reused for every encoded frame sent to the stream
         public bool PortraitStream; // vertical stream: the sideways-rendered picture is turned upright during the NV12 conversion
         private int _stride, _slice;
         private bool _vCfg, _aCfg;
@@ -390,14 +391,20 @@ namespace QuestShade
                         var buf = Ndk.AMediaCodec_getOutputBuffer(codec, (UIntPtr)o, out _);
                         if (buf != IntPtr.Zero)
                         {
-                            var bytes = new byte[info.size];
-                            Marshal.Copy(IntPtr.Add(buf, info.offset), bytes, 0, info.size);
                             if ((info.flags & FLAG_CODEC_CONFIG) != 0)
                             {
-                                if (video) { Stream.VideoConfig(bytes); _vCfg = true; } else { Stream.AudioConfig(bytes); _aCfg = true; }
+                                var cfgBytes = new byte[info.size]; // rare: once per encoder start
+                                Marshal.Copy(IntPtr.Add(buf, info.offset), cfgBytes, 0, info.size);
+                                if (video) { Stream.VideoConfig(cfgBytes); _vCfg = true; } else { Stream.AudioConfig(cfgBytes); _aCfg = true; }
                             }
-                            else if (video) Stream.Video(bytes, info.presentationTimeUs, (info.flags & FLAG_KEY_FRAME) != 0);
-                            else Stream.Audio(bytes, info.presentationTimeUs);
+                            else
+                            {
+                                // One reusable scratch buffer; the stream copies what it needs into pooled packets.
+                                if (_scratch == null || _scratch.Length < info.size) _scratch = new byte[Math.Max(info.size, 64 * 1024) * 2];
+                                Marshal.Copy(IntPtr.Add(buf, info.offset), _scratch, 0, info.size);
+                                if (video) Stream.Video(_scratch, info.size, info.presentationTimeUs, (info.flags & FLAG_KEY_FRAME) != 0);
+                                else Stream.Audio(_scratch, info.size, info.presentationTimeUs);
+                            }
                         }
                     }
                 }

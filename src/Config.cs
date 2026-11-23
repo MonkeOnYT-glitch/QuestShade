@@ -87,6 +87,8 @@ namespace QuestShade
         public string StreamServer = "rtmp://live.twitch.tv/app", StreamKey = "";
         public int StreamWidth = 1280, StreamHeight = 720, StreamFps = 30, StreamBitrateKbps = 4500; // landscape size; Vertical swaps it (1080x1920 etc.)
         public bool StreamVertical; // 9:16 stream for TikTok Live / YouTube Shorts
+        public bool CameraSeesMenu; // camera shows the BoneMenu / BONELAB menus (beta)
+        public bool ChatOnWrist = true, ChatRightWrist; public int ChatLines = 6; public string ChatYouTube = "", ChatTwitch = ""; // wrist chat (beta)
         public bool BetaOverride; // [Beta] Enabled = true shows beta features without the test-builds updater
 
         // Writes a [Stream] section people can fill in (only once someone opens the livestream page).
@@ -213,6 +215,12 @@ namespace QuestShade
             (StreamWidth, StreamHeight, sAuto) = sq switch { "480p" => (848, 480, 2500), "1080p" => (1920, 1080, 6000), _ => (1280, 720, 4500) };
             StreamFps = Mathf.Clamp((int)ini.Float("Stream", "Fps", 30), 20, 60);
             StreamVertical = ini.Bool("Stream", "Vertical", false);
+            CameraSeesMenu = ini.Bool("Camera", "CameraSeesMenu", false);
+            ChatOnWrist = ini.Bool("Stream", "ChatOnWrist", true);
+            ChatRightWrist = string.Equals((ini.Str("Stream", "ChatWrist", "Left") ?? "").Trim(), "Right", StringComparison.OrdinalIgnoreCase);
+            ChatLines = Mathf.Clamp((int)ini.Float("Stream", "ChatLines", 6), 2, 12);
+            ChatYouTube = (ini.Str("Stream", "ChatYouTube", "") ?? "").Trim();
+            ChatTwitch = (ini.Str("Stream", "ChatTwitch", "") ?? "").Trim();
             var sb = (ini.Str("Stream", "Bitrate", "auto") ?? "auto").Trim();
             StreamBitrateKbps = int.TryParse(sb, out int skb) ? Mathf.Clamp(skb, 800, 8000) : sAuto;
             BetaOverride = ini.Bool("Beta", "Enabled", false);
@@ -639,6 +647,8 @@ namespace QuestShade
             SetKey("Lighting", "NullbodyGlow", NullbodyGlow ? "true" : "false");
             SetKey("Lighting", "LampShadows", LampShadows ? "true" : "false");
             SetKey("Camera", "SlowMoZoom", SlowMoZoom ? "true" : "false");
+            SetKey("Camera", "CameraSeesMenu", CameraSeesMenu ? "true" : "false");
+            SetKey("Stream", "ChatOnWrist", ChatOnWrist ? "true" : "false"); SetKey("Stream", "ChatWrist", ChatRightWrist ? "Right" : "Left"); SetKey("Stream", "ChatLines", ChatLines.ToString());
             SetKey("Camera", "TimelineSeconds", F(TimelineSeconds));
             SetKey("Camera", "TimelineFilm", TimelineFilm ? "true" : "false");
             SetKey("Camera", "TimelineAutoRecord", TimelineAutoRecord ? "true" : "false");

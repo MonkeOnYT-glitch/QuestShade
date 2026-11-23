@@ -107,6 +107,22 @@ namespace QuestShade
                 var beta = root.CreatePage("Beta features", new Color(0.45f, 0.9f, 1f), 8, true);
                 beta.CreateFunction("New in this beta: try them and tell us!", info, () => Notify("Slow-mo, camera timeline, helmet + shoulder cams, hurt/death effects, glowing Nullbodies and lamp shadows. Feedback in #public-feedback.", 6f));
 
+                beta.CreateBool("Camera can see the BoneMenu", Color.white, cfg.CameraSeesMenu, v =>
+                {
+                    cfg.CameraSeesMenu = v; cfg.SaveMenuSettings(); mod.RefreshCamera();
+                    Notify(v ? "The camera now shows BoneMenu and the game menus (wrist chat stays hidden)" : "Menus are hidden from the camera again", 3f);
+                });
+
+                // Wrist chat: your live chat floating over a wrist. Only you see it, never the stream or recordings.
+                var chat = beta.CreatePage("Wrist chat (livestream)", new Color(1f, 0.45f, 0.5f), 8, true);
+                chat.CreateBool("Show chat on wrist", Color.white, cfg.ChatOnWrist, v => { cfg.ChatOnWrist = v; cfg.SaveMenuSettings(); });
+                _chatLeft = chat.CreateFunction("Left wrist", cfg.ChatRightWrist ? Color.white : Color.green, () => { cfg.ChatRightWrist = false; cfg.SaveMenuSettings(); MarkChat(cfg); });
+                _chatRight = chat.CreateFunction("Right wrist", cfg.ChatRightWrist ? Color.green : Color.white, () => { cfg.ChatRightWrist = true; cfg.SaveMenuSettings(); MarkChat(cfg); });
+                chat.CreateInt("Lines shown", Color.white, cfg.ChatLines, 1, 2, 12, v => { cfg.ChatLines = v; cfg.SaveMenuSettings(); });
+                chat.CreateFunction("Status", Color.white, () => Notify("YouTube: " + ChatReader.YouTubeStatus + "  |  Twitch: " + ChatReader.TwitchStatus, 4f));
+                chat.CreateFunction("Reconnect", Color.white, () => { ChatReader.Restart(cfg.ChatTwitch, cfg.ChatYouTube); Notify("Reconnecting chat", 2f); });
+                chat.CreateFunction("How to set it up", info, () => { cfg.EnsureStreamSection(); Notify("In QuestShade.ini under [Stream]: ChatYouTube = your @handle (or the stream link), ChatTwitch = your channel name. Save, it reloads by itself.", 8f); });
+
                 var slow = beta.CreatePage("Slow-mo", Color.white, 8, true);
                 for (int i = 0; i < 4; i++) { int lvl = i; _slowBtns[i] = slow.CreateFunction(SlowMo.Names[i], i == 0 ? Color.green : Color.white, () => mod.SetSlowMo(lvl)); }
                 slow.CreateBool("Camera zooms in on NPCs / objects", Color.white, cfg.SlowMoZoom, v => { cfg.SlowMoZoom = v; cfg.SaveMenuSettings(); });
@@ -281,6 +297,12 @@ namespace QuestShade
             ControlsDebug.Event($"QuestShade attached {root.name} to the {(hand == 1 ? "left" : "right")} hand (grip {(grip != null ? grip.name : "none")})");
             h.AttachObject(grip != null ? grip.gameObject : root);
             return true;
+        }
+
+        private static FunctionElement _chatLeft, _chatRight;
+        private static void MarkChat(Config cfg)
+        {
+            try { if (_chatLeft != null) _chatLeft.ElementColor = cfg.ChatRightWrist ? Color.white : Color.green; if (_chatRight != null) _chatRight.ElementColor = cfg.ChatRightWrist ? Color.green : Color.white; } catch { }
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

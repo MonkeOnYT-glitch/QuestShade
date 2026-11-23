@@ -49,7 +49,7 @@ namespace QuestShade
             Mod.Log.Msg("Stream: resuming after the level change");
         }
 
-        private struct Packet { public byte Type; public uint Ts; public byte[] Body; }
+        private struct Packet { public byte Type; public uint Ts; public byte[] Body; public int Len; public bool Pooled; }
 
         private const int CS_CONTROL = 2, CS_COMMAND = 3, CS_AUDIO = 4, CS_DATA = 5, CS_VIDEO = 6;
 
@@ -92,33 +92,45 @@ namespace QuestShade
             lock (_qlock) { _aacSeq = b; _sentAacSeq = false; }
         }
 
-        public void Video(byte[] annexB, long ptsUs, bool key)
+        public void Video(byte[] annexB, long ptsUs, bool key) => Video(annexB, annexB.Length, ptsUs, key);
+
+        // Packets borrow their buffers from a pool and give them back once sent, so streaming doesn't make garbage
+        // (it used to copy every frame into three new arrays, which showed up as GC hitches).
+        private static readonly System.Buffers.ArrayPool<byte> Pool = System.Buffers.ArrayPool<byte>.Shared;
+
+        public void Video(byte[] annexB, int len, long ptsUs, bool key)
         {
             if (_stop || Failed) return;
             // Annex-B -> AVCC (4-byte lengths); drop SPS/PPS/AUD that some encoders repeat inline.
-            var ms = new MemoryStream(annexB.Length + 16);
-            bool idr = false;
-            ms.Write(new byte[] { 0, 1, 0, 0, 0 }); // frame type / packet type 1 / cts 0 (filled below)
-            foreach (var nal in SplitAnnexB(annexB, 0, annexB.Length))
+            var body = Pool.Rent(len + 64);
+            int n = 5; bool idr = false;
+            body[1] = 1; body[2] = body[3] = body[4] = 0; // packet type 1 (NALUs), cts 0; byte 0 (frame type) set below
+            foreach (var nal in SplitAnnexB(annexB, 0, len))
             {
                 int t = annexB[nal.off] & 0x1f;
                 if (t == 7 || t == 8 || t == 9) continue;
                 if (t == 5) idr = true;
-                U32(ms, nal.len); ms.Write(annexB, nal.off, nal.len);
+                if (n + 4 + nal.len > body.Length) { var bigger = Pool.Rent((n + 4 + nal.len) * 2); Buffer.BlockCopy(body, 0, bigger, 0, n); Pool.Return(body); body = bigger; }
+                body[n] = (byte)(nal.len >> 24); body[n + 1] = (byte)(nal.len >> 16); body[n + 2] = (byte)(nal.len >> 8); body[n + 3] = (byte)nal.len;
+                Buffer.BlockCopy(annexB, nal.off, body, n + 4, nal.len);
+                n += 4 + nal.len;
             }
             key |= idr;
-            var body = ms.ToArray();
-            if (body.Length <= 5) return;
+            if (n <= 5) { Pool.Return(body); return; }
             body[0] = (byte)(key ? 0x17 : 0x27);
-            Enqueue(new Packet { Type = 9, Ts = Ms(ptsUs), Body = body }, true, key);
+            Enqueue(new Packet { Type = 9, Ts = Ms(ptsUs), Body = body, Len = n, Pooled = true }, true, key);
         }
 
-        public void Audio(byte[] aac, long ptsUs)
+        public void Audio(byte[] aac, long ptsUs) => Audio(aac, aac.Length, ptsUs);
+
+        public void Audio(byte[] aac, int len, long ptsUs)
         {
             if (_stop || Failed) return;
-            var b = new byte[2 + aac.Length]; b[0] = 0xAF; b[1] = 0x01; Buffer.BlockCopy(aac, 0, b, 2, aac.Length);
-            Enqueue(new Packet { Type = 8, Ts = Ms(ptsUs), Body = b }, false, false);
+            var b = Pool.Rent(2 + len); b[0] = 0xAF; b[1] = 0x01; Buffer.BlockCopy(aac, 0, b, 2, len);
+            Enqueue(new Packet { Type = 8, Ts = Ms(ptsUs), Body = b, Len = 2 + len, Pooled = true }, false, false);
         }
+
+        private static void Release(Packet p) { if (p.Pooled && p.Body != null) Pool.Return(p.Body); }
 
         private uint Ms(long us) => (uint)Math.Max(0, us / 1000 + _tsBase);
 
@@ -130,13 +142,13 @@ namespace QuestShade
                 if (video)
                 {
                     if (_qBytes > max) _waitKey = true;
-                    if (_waitKey && !key) { Dropped++; return; }
+                    if (_waitKey && !key) { Dropped++; Release(p); return; }
                     if (key) _waitKey = false;
                 }
-                else if (_qBytes > max * 2) { Dropped++; return; }
+                else if (_qBytes > max * 2) { Dropped++; Release(p); return; }
                 if (p.Ts > _lastTs) _lastTs = p.Ts;
-                if (video && key) _lastKey = p.Body;
-                _q.Enqueue(p); _qBytes += p.Body.Length;
+                if (video && key) { var k = new byte[p.Len]; Buffer.BlockCopy(p.Body, 0, k, 0, p.Len); _lastKey = k; } // own copy: the packet's buffer goes back to the pool
+                _q.Enqueue(p); _qBytes += p.Len;
                 Monitor.Pulse(_qlock);
             }
         }
@@ -161,20 +173,20 @@ namespace QuestShade
                             if (_parked && _lastKey != null && _sentAvcSeq)
                             {
                                 long nowMs = Environment.TickCount64;
-                                if (nowMs >= _nextHold) { _nextHold = nowMs + 500; _lastTs += 500; p = new Packet { Type = 9, Ts = _lastTs, Body = _lastKey }; hold = true; break; }
+                                if (nowMs >= _nextHold) { _nextHold = nowMs + 500; _lastTs += 500; p = new Packet { Type = 9, Ts = _lastTs, Body = _lastKey, Len = _lastKey.Length }; hold = true; break; }
                             }
                             Monitor.Wait(_qlock, 250);
                         }
                         if (_stop) break;
-                        if (!hold) { p = _q.Dequeue(); _qBytes -= p.Body.Length; }
+                        if (!hold) { p = _q.Dequeue(); _qBytes -= p.Len; }
                         if (p.Type == 9 && !_sentAvcSeq && _avcSeq != null) { avc = _avcSeq; _sentAvcSeq = true; }
                         if (p.Type == 8 && !_sentAacSeq && _aacSeq != null) { aac = _aacSeq; _sentAacSeq = true; }
                     }
-                    if (p.Type == 9 && avc == null && !_sentAvcSeq) continue; // no SPS/PPS yet: a decoder can't use this frame
-                    if (p.Type == 8 && aac == null && !_sentAacSeq) continue;
+                    if (p.Type == 9 && avc == null && !_sentAvcSeq) { Release(p); continue; } // no SPS/PPS yet: a decoder can't use this frame
+                    if (p.Type == 8 && aac == null && !_sentAacSeq) { Release(p); continue; }
                     if (avc != null) WriteMessage(CS_VIDEO, 9, p.Ts, _streamId, avc);
                     if (aac != null) WriteMessage(CS_AUDIO, 8, p.Ts, _streamId, aac);
-                    WriteMessage(p.Type == 9 ? CS_VIDEO : CS_AUDIO, p.Type, p.Ts, _streamId, p.Body);
+                    try { WriteMessage(p.Type == 9 ? CS_VIDEO : CS_AUDIO, p.Type, p.Ts, _streamId, p.Body, p.Len); } finally { Release(p); }
                 }
                 try { if (_net != null) { SendCommand(CS_COMMAND, _streamId, "FCUnpublish", 6, null, _key); SendCommand(CS_COMMAND, 0, "deleteStream", 7, null, (double)_streamId); } } catch { }
             }
@@ -406,7 +418,9 @@ namespace QuestShade
 
         private readonly MemoryStream _wbuf = new MemoryStream(1 << 16);
 
-        private void WriteMessage(int csid, byte type, uint ts, uint streamId, byte[] payload)
+        private void WriteMessage(int csid, byte type, uint ts, uint streamId, byte[] payload) => WriteMessage(csid, type, ts, streamId, payload, payload.Length);
+
+        private void WriteMessage(int csid, byte type, uint ts, uint streamId, byte[] payload, int payloadLen)
         {
             lock (_wlock)
             {
@@ -415,7 +429,7 @@ namespace QuestShade
                 o.WriteByte((byte)(csid & 0x3f)); // fmt 0
                 uint t3 = ext ? 0xFFFFFF : ts;
                 o.WriteByte((byte)(t3 >> 16)); o.WriteByte((byte)(t3 >> 8)); o.WriteByte((byte)t3);
-                int len = payload.Length;
+                int len = payloadLen;
                 o.WriteByte((byte)(len >> 16)); o.WriteByte((byte)(len >> 8)); o.WriteByte((byte)len);
                 o.WriteByte(type);
                 o.WriteByte((byte)streamId); o.WriteByte((byte)(streamId >> 8)); o.WriteByte((byte)(streamId >> 16)); o.WriteByte((byte)(streamId >> 24));

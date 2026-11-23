@@ -130,7 +130,7 @@ namespace QuestShade
             _layoutMode = (int)Mode;
 
             bool hide = Detached && _screenLayer >= 0;
-            _cam.cullingMask = ((_screenLayer >= 0 ? _fullMask & ~(1 << _screenLayer) : _fullMask) & ~UiLayers) | OverlayMask;
+            _cam.cullingMask = ((_screenLayer >= 0 ? _fullMask & ~(1 << _screenLayer) : _fullMask) & (_seesMenu ? ~0 : ~UiLayers)) | OverlayMask;
 
             bool selfie = Mode == CamMode.Selfie;
             if (_model != null)
